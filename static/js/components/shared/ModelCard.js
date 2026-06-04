@@ -168,7 +168,8 @@ function handleSendToWorkflow(card, replaceMode, modelType) {
         const usageTips = JSON.parse(card.dataset.usage_tips || '{}');
         const folder = card.dataset.folder || '';
         const loraName = folder ? `${folder}/${card.dataset.file_name}` : card.dataset.file_name;
-        const loraSyntax = buildLoraSyntax(loraName, usageTips);
+        // Force the full relative path so the Lora Loader widget can sort/group by folder.
+        const loraSyntax = buildLoraSyntax(loraName, usageTips, { forceFullPath: true });
         sendLoraToWorkflow(loraSyntax, replaceMode, 'lora');
     } else if (modelType === MODEL_TYPES.CHECKPOINT) {
         const modelPath = card.dataset.filepath;

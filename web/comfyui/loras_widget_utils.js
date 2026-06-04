@@ -6,6 +6,7 @@ export const CLIP_ENTRY_HEIGHT = 40; // Height of a clip entry
 export const HEADER_HEIGHT = 32; // Height of the header section
 export const CONTAINER_PADDING = 12; // Top and bottom padding
 export const EMPTY_CONTAINER_HEIGHT = 100; // Height when no loras are present
+export const FOLDER_HEADER_HEIGHT = 22; // Height of a folder separator row in the list
 
 // Parse LoRA entries from value
 export function parseLoraValue(value) {
@@ -228,7 +229,7 @@ export function moveLoraByDirection(loras, loraName, direction) {
 export function getDropTargetIndex(container, clientY) {
   const entries = container.querySelectorAll('.lm-lora-entry');
   let targetIndex = entries.length;
-  
+
   for (let i = 0; i < entries.length; i++) {
     const rect = entries[i].getBoundingClientRect();
     if (clientY < rect.top + rect.height / 2) {
@@ -236,6 +237,54 @@ export function getDropTargetIndex(container, clientY) {
       break;
     }
   }
-  
+
   return targetIndex;
+}
+
+/**
+ * Extract the folder (directory) portion of a lora name/path.
+ * The lora name may embed a relative path (e.g. "characters/anime/myLora");
+ * loras added with the legacy basename-only syntax have no folder.
+ * @param {string} name - The lora name (possibly a relative path)
+ * @returns {string} - The directory portion, or "" when there is none
+ */
+export function getLoraFolder(name) {
+  if (!name || typeof name !== "string") return "";
+  const normalized = name.replace(/\\/g, "/");
+  const idx = normalized.lastIndexOf("/");
+  return idx >= 0 ? normalized.slice(0, idx) : "";
+}
+
+/**
+ * Extract the base file name (without folder) from a lora name/path.
+ * The full path stays the lora's identity; this is only for display.
+ * @param {string} name - The lora name (possibly a relative path)
+ * @returns {string} - The file name portion
+ */
+export function getLoraBasename(name) {
+  if (!name || typeof name !== "string") return name || "";
+  const normalized = name.replace(/\\/g, "/");
+  const idx = normalized.lastIndexOf("/");
+  return idx >= 0 ? normalized.slice(idx + 1) : normalized;
+}
+
+/**
+ * Return a new array with the loras ordered by folder, then by file name.
+ * Folder-less ("root") entries group under "" and sort first. Comparison is
+ * case-insensitive and natural-number aware. The lora objects are preserved.
+ * @param {Array} loras - Array of LoRA objects
+ * @returns {Array} - New, sorted array
+ */
+export function sortLorasByFolder(loras) {
+  const collator = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
+  const baseName = (name) => {
+    const normalized = (name || "").replace(/\\/g, "/");
+    const idx = normalized.lastIndexOf("/");
+    return idx >= 0 ? normalized.slice(idx + 1) : normalized;
+  };
+  return [...loras].sort((a, b) => {
+    const folderCompare = collator.compare(getLoraFolder(a.name), getLoraFolder(b.name));
+    if (folderCompare !== 0) return folderCompare;
+    return collator.compare(baseName(a.name), baseName(b.name));
+  });
 }

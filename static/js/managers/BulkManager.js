@@ -388,6 +388,7 @@ export class BulkManager {
             fileName: card.dataset.file_name ?? existing.fileName,
             usageTips: card.dataset.usage_tips ?? existing.usageTips,
             modelName: card.dataset.name ?? existing.modelName,
+            folder: card.dataset.folder ?? existing.folder ?? '',
         };
 
         if (modelId !== null) {
@@ -522,7 +523,10 @@ export class BulkManager {
 
             if (metadata) {
                 const usageTips = JSON.parse(metadata.usageTips || '{}');
-                loraSyntaxes.push(buildLoraSyntax(metadata.fileName, usageTips));
+                const folder = metadata.folder || '';
+                const loraName = folder ? `${folder}/${metadata.fileName}` : metadata.fileName;
+                // Force the full relative path so the Lora Loader widget can sort/group by folder.
+                loraSyntaxes.push(buildLoraSyntax(loraName, usageTips, { forceFullPath: true }));
             } else {
                 missingLoras.push(filepath);
             }
@@ -637,6 +641,7 @@ export class BulkManager {
                         fileName: item.file_name,
                         usageTips: item.usage_tips || '{}',
                         modelName: item.name || item.file_name,
+                        folder: item.folder || '',
                         ...(modelId !== null ? { modelId } : {})
                     });
                 }

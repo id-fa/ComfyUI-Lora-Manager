@@ -8,7 +8,11 @@ import {
   LORA_ENTRY_HEIGHT,
   HEADER_HEIGHT,
   CONTAINER_PADDING,
-  EMPTY_CONTAINER_HEIGHT
+  EMPTY_CONTAINER_HEIGHT,
+  FOLDER_HEADER_HEIGHT,
+  getLoraFolder,
+  getLoraBasename,
+  sortLorasByFolder
 } from "./loras_widget_utils.js";
 import { initDrag, createContextMenu, initHeaderDrag, initReorderDrag, handleKeyboardNavigation } from "./loras_widget_events.js";
 import { forwardMiddleMouseToCanvas, forwardWheelToCanvas, enableListWheelScroll } from "./utils.js";
@@ -234,6 +238,26 @@ export function addLorasWidget(node, name, opts, callback) {
     toggleContainer.appendChild(toggleAll);
     toggleContainer.appendChild(toggleLabel);
 
+    // Sort-by-folder button: reorders the list once by folder, then by name.
+    // Manual drag reordering still works afterwards.
+    const sortButton = document.createElement("button");
+    sortButton.type = "button";
+    sortButton.className = "lm-sort-folder-button";
+    sortButton.title = "Sort by folder";
+    sortButton.innerHTML =
+      '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" ' +
+      'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M3 7h6l2 2h10v9a1 1 0 0 1-1 1H3z"/>' +
+      '<path d="M16 6l2.5-2.5L21 6"/><path d="M18.5 3.5V11"/></svg>';
+    // Prevent the header's strength-drag from starting on the button.
+    sortButton.addEventListener("pointerdown", (e) => e.stopPropagation());
+    sortButton.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const sorted = sortLorasByFolder(parseLoraValue(widget.value));
+      widget.value = formatLoraValue(sorted);
+    });
+
     // Strength label with drag hint
     const strengthLabel = document.createElement("div");
     strengthLabel.textContent = "Strength";
@@ -246,6 +270,7 @@ export function addLorasWidget(node, name, opts, callback) {
     strengthLabel.appendChild(dragHint);
 
     header.appendChild(toggleContainer);
+    header.appendChild(sortButton);
     header.appendChild(strengthLabel);
     container.appendChild(header);
     
@@ -255,10 +280,30 @@ export function addLorasWidget(node, name, opts, callback) {
     // Track the total visible entries for height calculation
     let totalVisibleEntries = lorasData.length;
 
+    // Folder separators: only shown when the list spans more than one folder.
+    const distinctFolders = new Set(lorasData.map((lora) => getLoraFolder(lora.name)));
+    const showFolderHeaders = distinctFolders.size > 1;
+    let prevFolder = null;
+    let folderHeaderCount = 0;
+
     // Render each lora entry
     lorasData.forEach((loraData) => {
       const { name, strength, clipStrength, active } = loraData;
-      
+
+      // Insert a folder separator whenever the folder changes between entries.
+      if (showFolderHeaders) {
+        const folder = getLoraFolder(name);
+        if (folder !== prevFolder) {
+          prevFolder = folder;
+          folderHeaderCount++;
+          const folderHeader = document.createElement("div");
+          folderHeader.className = "lm-loras-folder-header";
+          folderHeader.textContent = folder || "(root)";
+          folderHeader.title = folder || "(root)";
+          container.appendChild(folderHeader);
+        }
+      }
+
       // Determine expansion state using our helper function
       const isExpanded = shouldShowClipEntry(loraData);
       const strengthFocusEntry = createFocusEntry(name, "strength");
@@ -359,9 +404,11 @@ export function addLorasWidget(node, name, opts, callback) {
         }
       });
 
-      // Create name display
+      // Create name display (show only the base file name; the full path
+      // remains the lora's identity and is available on hover via the title).
       const nameEl = document.createElement("div");
-      nameEl.textContent = name;
+      nameEl.textContent = getLoraBasename(name);
+      nameEl.title = name;
       nameEl.className = "lm-lora-name";
 
       // Move preview tooltip events to nameEl instead of loraEl
@@ -536,7 +583,8 @@ export function addLorasWidget(node, name, opts, callback) {
 
         // Create clip name display
         const clipNameEl = document.createElement("div");
-        clipNameEl.textContent = "[clip] " + name;
+        clipNameEl.textContent = "[clip] " + getLoraBasename(name);
+        clipNameEl.title = name;
         clipNameEl.className = "lm-lora-name";
 
         // Create clip strength control
@@ -651,7 +699,9 @@ export function addLorasWidget(node, name, opts, callback) {
     });
     
     // Calculate height based on number of loras and fixed sizes
-    const calculatedHeight = CONTAINER_PADDING + HEADER_HEIGHT + (Math.min(totalVisibleEntries, 12) * LORA_ENTRY_HEIGHT);
+    const calculatedHeight = CONTAINER_PADDING + HEADER_HEIGHT
+      + (Math.min(totalVisibleEntries, 12) * LORA_ENTRY_HEIGHT)
+      + (folderHeaderCount * FOLDER_HEADER_HEIGHT);
     currentContentHeight = updateWidgetHeight(container, calculatedHeight, defaultHeight, node);
 
     // After all LoRA elements are created, apply selection state as the last step

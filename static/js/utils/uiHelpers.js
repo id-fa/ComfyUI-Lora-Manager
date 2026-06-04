@@ -417,12 +417,15 @@ export function getLoraStrengthsFromUsageTips(usageTips = {}) {
   };
 }
 
-export function buildLoraSyntax(fileName, usageTips = {}) {
+export function buildLoraSyntax(fileName, usageTips = {}, options = {}) {
   const { strength, hasStrength, clipStrength, hasClipStrength } = getLoraStrengthsFromUsageTips(usageTips);
 
-  const effectiveName = state.global.settings?.lora_syntax_format === 'legacy'
-    ? fileName.split('/').pop()
-    : fileName;
+  // When sending to a workflow we keep the full relative path so the Lora Loader
+  // widget can group/sort by folder. Clipboard copy still honours the 'legacy'
+  // (basename-only) preference.
+  const useLegacy = !options.forceFullPath
+    && state.global.settings?.lora_syntax_format === 'legacy';
+  const effectiveName = useLegacy ? fileName.split('/').pop() : fileName;
 
   if (hasClipStrength) {
     const modelStrength = hasStrength ? strength : 1;

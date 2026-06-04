@@ -635,6 +635,7 @@ export async function showModelModal(model, modelType) {
     const activeModalElement = document.getElementById(modalId);
     if (activeModalElement) {
         activeModalElement.dataset.filePath = modelWithFullData.file_path || '';
+        activeModalElement.dataset.folder = modelWithFullData.folder || '';
         // Store usage_tips for LoRA models
         if (modelType === 'loras' && modelWithFullData.usage_tips) {
             activeModalElement.dataset.usageTips = modelWithFullData.usage_tips;
@@ -1082,7 +1083,10 @@ async function handleSendToWorkflow(target, modelType) {
         // For LoRA: Build syntax from usage tips and send
         const usageTipsData = modalElement?.dataset?.usageTips;
         const usageTips = usageTipsData ? JSON.parse(usageTipsData) : {};
-        const loraSyntax = buildLoraSyntax(currentFileName, usageTips);
+        const folder = modalElement?.dataset?.folder || '';
+        const loraName = folder ? `${folder}/${currentFileName}` : currentFileName;
+        // Force the full relative path so the Lora Loader widget can sort/group by folder.
+        const loraSyntax = buildLoraSyntax(loraName, usageTips, { forceFullPath: true });
         await sendLoraToWorkflow(loraSyntax, false, 'lora');
     } else if (modelType === 'checkpoints') {
         // For Checkpoint: Send model path
