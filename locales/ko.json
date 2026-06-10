@@ -16,7 +16,9 @@
             "help": "도움말",
             "add": "추가",
             "close": "닫기",
-            "menu": "메뉴"
+            "menu": "메뉴",
+            "remove": "제거",
+            "change": "변경"
         },
         "status": {
             "loading": "로딩 중...",
@@ -1014,9 +1016,9 @@
         "download": {
             "title": "URL에서 모델 다운로드",
             "titleWithType": "URL에서 {type} 다운로드",
-            "url": "Civitai URL",
             "civitaiUrl": "Civitai URL:",
             "placeholder": "https://civitai.com/models/...",
+            "urlHint": "한 줄에 하나의 CivitAI 또는 CivArchive URL을 입력하세요. 여러 URL을 일괄 다운로드할 수 있습니다.",
             "locationPreview": "다운로드 위치 미리보기",
             "useDefaultPath": "기본 경로 사용",
             "useDefaultPathTooltip": "활성화하면 구성된 경로 템플릿을 사용하여 파일이 자동으로 정리됩니다",
@@ -1225,7 +1227,9 @@
             },
             "notes": {
                 "saved": "메모가 성공적으로 저장됨",
-                "saveFailed": "메모 저장 실패"
+                "saveFailed": "메모 저장 실패",
+                "showMore": "더 보기",
+                "showLess": "접기"
             },
             "usageTips": {
                 "addPresetParameter": "프리셋 매개변수 추가...",

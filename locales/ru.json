@@ -16,7 +16,9 @@
             "help": "Справка",
             "add": "Добавить",
             "close": "Закрыть",
-            "menu": "Меню"
+            "menu": "Меню",
+            "remove": "Удалить",
+            "change": "Изменить"
         },
         "status": {
             "loading": "Загрузка...",
@@ -1014,9 +1016,9 @@
         "download": {
             "title": "Скачать модель по URL",
             "titleWithType": "Скачать {type} по URL",
-            "url": "Civitai URL",
             "civitaiUrl": "Civitai URL:",
             "placeholder": "https://civitai.com/models/...",
+            "urlHint": "Введите один URL CivitAI или CivArchive в каждой строке. Поддерживается пакетная загрузка нескольких URL.",
             "locationPreview": "Предпросмотр места загрузки",
             "useDefaultPath": "Использовать путь по умолчанию",
             "useDefaultPathTooltip": "При включении файлы автоматически организуются с использованием настроенных шаблонов путей",
@@ -1225,7 +1227,9 @@
             },
             "notes": {
                 "saved": "Заметки успешно сохранены",
-                "saveFailed": "Не удалось сохранить заметки"
+                "saveFailed": "Не удалось сохранить заметки",
+                "showMore": "Показать больше",
+                "showLess": "Свернуть"
             },
             "usageTips": {
                 "addPresetParameter": "Добавить предустановленный параметр...",

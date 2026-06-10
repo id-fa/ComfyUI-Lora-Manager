@@ -18,7 +18,7 @@ import { initDrag, createContextMenu, initHeaderDrag, initReorderDrag, handleKey
 import { forwardMiddleMouseToCanvas, forwardWheelToCanvas, enableListWheelScroll } from "./utils.js";
 import { PreviewTooltip } from "./preview_tooltip.js";
 import { ensureLmStyles } from "./lm_styles_loader.js";
-import { getStrengthStepPreference } from "./settings.js";
+import { getStrengthStepPreference, getLoraWidgetMaxVisibleLoras } from "./settings.js";
 
 export function addLorasWidget(node, name, opts, callback) {
   ensureLmStyles();
@@ -28,17 +28,24 @@ export function addLorasWidget(node, name, opts, callback) {
   container.className = "lm-loras-container";
 
   forwardMiddleMouseToCanvas(container);
-  // Capture-phase handler: scroll the list with the wheel when it overflows.
-  // Falls through to forwardWheelToCanvas (canvas zoom) when the list is short.
-  enableListWheelScroll(container);
   forwardWheelToCanvas(container);
 
   // Set initial height using CSS variables approach
   const defaultHeight = 200;
 
-  // Content height (capped at 12 rows by renderLoras), kept up to date and used
-  // to fix the widget/node height in both Canvas and Nodes 2.0 (Vue) modes.
-  let currentContentHeight = defaultHeight;
+  // In Vue/node-2.0 mode, cap the widget height so it shows at most N entries.
+  // This prevents content from driving the node size beyond the cap.
+  // canvas/legacy mode is unaffected.
+  if (typeof LiteGraph !== 'undefined' && LiteGraph.vueNodesMode) {
+    const maxLoras = getLoraWidgetMaxVisibleLoras();
+    const gap = 5; // flex gap from .lm-loras-container CSS
+    const maxH = CONTAINER_PADDING + HEADER_HEIGHT + maxLoras * LORA_ENTRY_HEIGHT + maxLoras * gap;
+    container.style.maxHeight = `${maxH}px`;
+    container.style.setProperty('--comfy-widget-max-height', `${maxH}px`);
+    // Window capture-phase hook: scroll the widget instead of zooming the canvas
+    // when the wheel is over a scrollable loras list.
+    enableListWheelScroll(container);
+  }
 
   // Check if this is a randomizer node (lock button instead of drag handle)
   const isRandomizerNode = opts?.isRandomizerNode === true;
@@ -209,7 +216,7 @@ export function addLorasWidget(node, name, opts, callback) {
       container.appendChild(emptyMessage);
       
       // Set fixed height for empty state
-      currentContentHeight = updateWidgetHeight(container, EMPTY_CONTAINER_HEIGHT, defaultHeight, node);
+      updateWidgetHeight(container, EMPTY_CONTAINER_HEIGHT, defaultHeight, node);
       return;
     }
 
@@ -702,7 +709,7 @@ export function addLorasWidget(node, name, opts, callback) {
     const calculatedHeight = CONTAINER_PADDING + HEADER_HEIGHT
       + (Math.min(totalVisibleEntries, 12) * LORA_ENTRY_HEIGHT)
       + (folderHeaderCount * FOLDER_HEADER_HEIGHT);
-    currentContentHeight = updateWidgetHeight(container, calculatedHeight, defaultHeight, node);
+    updateWidgetHeight(container, calculatedHeight, defaultHeight, node);
 
     // After all LoRA elements are created, apply selection state as the last step
     // This ensures the selection state is not overwritten
@@ -784,31 +791,12 @@ export function addLorasWidget(node, name, opts, callback) {
       widgetValue = updatedValue;
       renderLoras(widgetValue, widget);
     },
-    // The list area is capped at 12 rows (see calculatedHeight); beyond that the
-    // container scrolls. Report that capped height as both the min and preferred
-    // size so the node height stays fixed to the list, matching Canvas mode.
-    getMinHeight: () => currentContentHeight,
-    getHeight: () => currentContentHeight,
     hideOnZoom: true,
     selectOn: ['click', 'focus']
   });
 
   widget.value = defaultValue;
-
-  // Canonical LiteGraph sizing hook (Canvas mode): fix the widget to the capped
-  // content height. Rows beyond the 12-row cap scroll inside the container.
-  widget.computeSize = (width) => [width, currentContentHeight];
-
-  // Nodes 2.0 / Vue mode reads computeLayoutSize for the node's size. Pin both
-  // the min and max to the capped content height so the list area is fixed to
-  // 12 rows (scrolling beyond), matching Canvas mode, instead of the layout
-  // engine measuring the full DOM and locking the node fully expanded.
-  widget.computeLayoutSize = () => ({
-    minHeight: currentContentHeight,
-    maxHeight: currentContentHeight,
-    minWidth: 400,
-  });
-
+  
   widget.callback = callback;
 
   widget.onRemove = () => {

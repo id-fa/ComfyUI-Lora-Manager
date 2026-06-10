@@ -16,7 +16,9 @@
             "help": "Hilfe",
             "add": "Hinzufügen",
             "close": "Schließen",
-            "menu": "Menü"
+            "menu": "Menü",
+            "remove": "Entfernen",
+            "change": "Ändern"
         },
         "status": {
             "loading": "Wird geladen...",
@@ -1014,9 +1016,9 @@
         "download": {
             "title": "Modell von URL herunterladen",
             "titleWithType": "{type} von URL herunterladen",
-            "url": "Civitai URL",
             "civitaiUrl": "Civitai URL:",
             "placeholder": "https://civitai.com/models/...",
+            "urlHint": "Geben Sie eine CivitAI- oder CivArchive-URL pro Zeile ein. Unterstützt mehrere URLs für den Batch-Download.",
             "locationPreview": "Download-Speicherort Vorschau",
             "useDefaultPath": "Standardpfad verwenden",
             "useDefaultPathTooltip": "Wenn aktiviert, werden Dateien automatisch mit konfigurierten Pfadvorlagen organisiert",
@@ -1225,7 +1227,9 @@
             },
             "notes": {
                 "saved": "Notizen erfolgreich gespeichert",
-                "saveFailed": "Fehler beim Speichern der Notizen"
+                "saveFailed": "Fehler beim Speichern der Notizen",
+                "showMore": "Mehr anzeigen",
+                "showLess": "Weniger anzeigen"
             },
             "usageTips": {
                 "addPresetParameter": "Voreingestellten Parameter hinzufügen...",

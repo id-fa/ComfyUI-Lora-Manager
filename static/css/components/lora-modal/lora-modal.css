@@ -105,14 +105,14 @@
 
 .info-item {
     padding: var(--space-2);
-    background: rgba(0, 0, 0, 0.03);
+    background: var(--surface-subtle);
     border: 1px solid rgba(0, 0, 0, 0.1);
     border-radius: var(--border-radius-sm);
 }
 
-/* 调整深色主题下的样式 */
+/* Dark theme info item styles */
 [data-theme="dark"] .info-item {
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--surface-subtle);
     border: 1px solid var(--lora-border);
 }
 
@@ -140,18 +140,70 @@
 
 /* Add specific styles for notes content */
 .info-item.notes .editable-field [contenteditable] {
-    height: 60px; /* Keep initial modal layout stable regardless of note length */
-    min-height: 60px; /* Increase height for multiple lines */
-    max-height: 420px; /* Limit maximum height */
-    overflow: auto; /* Enable scrolling and resize handle for long content */
-    resize: vertical; /* Allow manual vertical resizing */
-    white-space: pre-wrap; /* Preserve line breaks */
-    line-height: 1.5; /* Improve readability */
-    padding: 8px 12px; /* Slightly increase padding */
+    min-height: 60px;
+    white-space: pre-wrap;
+    line-height: 1.5;
+    padding: 8px 12px;
+}
+
+/* Notes expand/collapse — collapsed by default; only applies when JS detects long content */
+.info-item.notes .editable-field {
+    position: relative;
+    max-height: none;
+    overflow: visible;
+}
+
+.info-item.notes .editable-field.collapsed {
+    max-height: 80px;
+    overflow: hidden;
+}
+
+/* Gradient fade overlay hint when collapsed */
+.info-item.notes .editable-field.collapsed::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 28px;
+    background: linear-gradient(transparent, var(--bg-color));
+    pointer-events: none;
+}
+
+/* Notes header row — label left, toggle button right */
+.notes-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* Toggle button — icon only, inline with the label */
+.notes-toggle-btn {
+    display: none;  /* shown by JS when content exceeds threshold */
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--lora-accent);
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.15s;
+    flex-shrink: 0;
+}
+
+.notes-toggle-btn:hover {
+    background: rgba(66, 153, 225, 0.1);
+}
+
+.notes-toggle-btn i {
+    font-size: 0.85em;
 }
 
 .file-path {
-    font-family: monospace;
+    font-family: var(--font-mono);
     font-size: 0.9em;
 }
 
@@ -219,13 +271,13 @@
     }
 }
 
-/* 修改 back-to-top 按钮样式，使其固定在 modal 内部 */
+/* Back-to-top button pinned inside modal */
 .modal-content .back-to-top {
-    position: sticky; /* 改用 sticky 定位 */
-    float: right; /* 使用 float 确保按钮在右侧 */
-    bottom: 20px; /* 距离底部的距离 */
-    margin-right: 20px; /* 右侧间距 */
-    margin-top: -56px; /* 负边距确保不占用额外空间 */
+    position: sticky;
+    float: right;
+    bottom: 20px;
+    margin-right: 20px;
+    margin-top: -56px;
     width: 36px;
     height: 36px;
     border-radius: 50%;
@@ -239,7 +291,7 @@
     opacity: 0;
     visibility: hidden;
     transform: translateY(10px);
-    transition: all 0.3s ease;
+    transition: opacity var(--transition-slow), visibility var(--transition-slow), transform var(--transition-slow);
     z-index: 10;
 }
 
@@ -282,7 +334,7 @@
     outline: none;
 }
 
-/* 合并编辑按钮样式 */
+/* Consolidated edit button styles */
 .edit-model-name-btn,
 .edit-file-name-btn,
 .edit-base-model-btn,
@@ -295,7 +347,7 @@
     cursor: pointer;
     padding: 2px 5px;
     border-radius: var(--border-radius-xs);
-    transition: all 0.2s ease;
+    transition: opacity var(--transition-base), background-color var(--transition-base);
     margin-left: var(--space-1);
 }
 
@@ -317,7 +369,7 @@
 .edit-base-model-btn:hover,
 .edit-model-description-btn:hover,
 .edit-version-name-btn:hover {
-    opacity: 0.8 !important;
+    opacity: 0.8;
     background: rgba(0, 0, 0, 0.05);
 }
 
@@ -335,7 +387,7 @@
 }
 
 .base-wrapper {
-    flex: 2;  /* 分配更多空间给base model */
+    flex: 2;  /* Allocate more space to base model */
 }
 
 /* Base model display and editing styles */
@@ -378,7 +430,7 @@
 }
 
 .size-wrapper span {
-    font-family: monospace;
+    font-family: var(--font-mono);
     font-size: 0.9em;
     opacity: 0.9;
 }
@@ -395,7 +447,7 @@
     margin: 0;
     padding: var(--space-1);
     border-radius: var(--border-radius-xs);
-    font-size: 1.5em !important;
+    font-size: 1.5em;
     font-weight: 600;
     line-height: 1.2;
     color: var(--text-color);
@@ -431,7 +483,7 @@
     color: var(--text-color);
     cursor: pointer;
     font-size: 0.95em;
-    transition: all 0.2s;
+    transition: var(--transition-base);
     opacity: 0.7;
     position: relative;
 }
@@ -836,18 +888,18 @@
     align-items: center;
     gap: 10px;
     padding: 2px 10px;
-    background: rgba(0, 0, 0, 0.03);
+    background: var(--surface-subtle);
     border: 1px solid rgba(0, 0, 0, 0.1);
     border-radius: var(--border-radius-sm);
     max-width: fit-content;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: var(--transition-base);
 }
 
 [data-theme="dark"] .creator-info,
 [data-theme="dark"] .civitai-view,
 [data-theme="dark"] .modal-send-btn {
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--surface-subtle);
     border: 1px solid var(--lora-border);
 }
 
@@ -906,14 +958,14 @@
     align-items: center;
     gap: 6px;
     padding: 6px 12px;
-    background: rgba(0, 0, 0, 0.03);
+    background: var(--surface-subtle);
     border: 1px solid rgba(0, 0, 0, 0.1);
     border-radius: var(--border-radius-sm);
     color: var(--text-color);
     cursor: pointer;
     font-weight: 500;
     font-size: 0.9em;
-    transition: all 0.2s;
+    transition: var(--transition-base);
 }
 
 .civitai-view i {
@@ -929,18 +981,18 @@
     align-items: center;
     gap: 6px;
     padding: 6px 12px;
-    background: rgba(0, 0, 0, 0.03);
+    background: var(--surface-subtle);
     border: 1px solid rgba(0, 0, 0, 0.1);
     border-radius: var(--border-radius-sm);
     color: var(--text-color);
     cursor: pointer;
     font-weight: 500;
     font-size: 0.9em;
-    transition: all 0.2s;
+    transition: var(--transition-base);
 }
 
 [data-theme="dark"] .modal-send-btn {
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--surface-subtle);
     border: 1px solid var(--lora-border);
 }
 

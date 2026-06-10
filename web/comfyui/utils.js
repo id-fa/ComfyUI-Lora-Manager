@@ -784,53 +784,45 @@ export function forwardWheelToCanvas(container, options = {}) {
     }, { passive: false });
 }
 
-// Marks elements whose wheel scrolling must win over the canvas zoom.
-const LIST_WHEEL_SCROLL_CLASS = 'lm-wheel-scrollable';
-let listWheelScrollHookInstalled = false;
+// Marks scrollable containers whose wheel scrolling must win over canvas zoom.
+const LM_WHEEL_CLASS = 'lm-wheel-scrollable';
+let lmWheelHookInstalled = false;
 
 /**
- * Keep vertical wheel scrolling inside a scrollable widget container instead of
- * letting ComfyUI zoom the canvas.
- *
- * In Nodes 2.0 / Vue mode ComfyUI's wheel→zoom handler runs on the document /
- * canvas in the capture phase, which is *outer* than the widget, so a listener
- * on the container (even in capture) fires too late. The reliable place to win
- * is a single hook on `window` in the capture phase — the very first step of
- * event dispatch. When the wheel is over a marked, scrollable element we scroll
- * it manually and fully consume the event; otherwise we leave it alone so canvas
- * zoom keeps working.
- * @param {HTMLElement} container - The scrollable element (overflow: auto)
+ * Keep vertical wheel scrolling inside a scrollable widget container, even in
+ * Nodes 2.0 / Vue mode where ComfyUI's wheel→zoom handler runs on the document
+ * in the capture phase (outer than any container-level listener).
+ * Installs a single capture-phase hook on `window` (the outermost dispatch
+ * point). When the wheel is over a marked, scrollable element, we manually
+ * scroll it and fully consume the event so canvas zoom never sees it.
  */
 export function enableListWheelScroll(container) {
     if (!container) return;
-    container.classList.add(LIST_WHEEL_SCROLL_CLASS);
+    container.classList.add(LM_WHEEL_CLASS);
 
-    if (listWheelScrollHookInstalled) return;
-    listWheelScrollHookInstalled = true;
+    if (lmWheelHookInstalled) return;
+    lmWheelHookInstalled = true;
 
     window.addEventListener('wheel', (event) => {
-        // Let pinch/zoom and horizontal gestures fall through to the canvas.
+        // Let pinch/zoom and horizontal gestures pass through.
         if (event.ctrlKey) return;
         if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
 
         const target = event.target;
         if (!target || typeof target.closest !== 'function') return;
-        const el = target.closest(`.${LIST_WHEEL_SCROLL_CLASS}`);
+        const el = target.closest(`.${LM_WHEEL_CLASS}`);
         if (!el) return;
 
         const canScrollY = el.scrollHeight > el.clientHeight + 1;
-        if (!canScrollY) return; // Nothing to scroll → allow canvas zoom.
+        if (!canScrollY) return;
 
-        // Translate the wheel delta to pixels (line / page modes → approx px).
-        const unit = event.deltaMode === 1
-            ? 16
-            : event.deltaMode === 2
-                ? el.clientHeight
-                : 1;
+        // Translate deltaMode to approximate pixels.
+        const unit = event.deltaMode === 1 ? 16
+            : event.deltaMode === 2 ? el.clientHeight
+            : 1;
 
         el.scrollTop += event.deltaY * unit;
 
-        // Consume the event so neither ComfyUI's zoom nor forwardWheelToCanvas react.
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation();

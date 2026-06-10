@@ -37,7 +37,7 @@
     border: 1px solid var(--border-color);
     border-radius: var(--border-radius-sm);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: var(--transition-base);
     background: var(--bg-color);
     margin: 1px;
     position: relative;
@@ -45,7 +45,7 @@
 
 .version-item:hover {
     border-color: var(--lora-accent);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--shadow-md);
     z-index: 1;
 }
 
@@ -156,7 +156,7 @@
     background: var(--bg-color);
     color: var(--text-color);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: var(--transition-base);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -225,7 +225,7 @@
     padding: 4px 8px;
     border-radius: var(--border-radius-xs);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: var(--transition-base);
     color: var(--text-color);
     opacity: 0.7;
     text-decoration: none;
@@ -272,7 +272,7 @@
     padding: 4px 8px;
     cursor: pointer;
     border-radius: var(--border-radius-xs);
-    transition: all 0.2s ease;
+    transition: var(--transition-base);
     position: relative;
 }
 
@@ -293,7 +293,7 @@
     justify-content: center;
     cursor: pointer;
     border-radius: 2px;
-    transition: all 0.2s ease;
+    transition: var(--transition-base);
 }
 
 .tree-expand-icon:hover {
@@ -364,7 +364,7 @@
     color: var(--text-color);
     cursor: pointer;
     font-size: 0.8em;
-    transition: all 0.2s ease;
+    transition: var(--transition-base);
 }
 
 .create-folder-form button.confirm {
@@ -404,7 +404,7 @@
 .path-display {
     padding: var(--space-1);
     color: var(--text-color);
-    font-family: monospace;
+    font-family: var(--font-mono);
     font-size: 0.9em;
     line-height: 1.4;
     white-space: pre-wrap;
@@ -453,7 +453,7 @@
     right: 0;
     bottom: 0;
     background-color: var(--border-color);
-    transition: all 0.3s ease;
+    transition: var(--transition-slow);
     border-radius: 18px;
 }
 
@@ -465,9 +465,9 @@
     left: 3px;
     bottom: 3px;
     background-color: white;
-    transition: all 0.3s ease;
+    transition: var(--transition-slow);
     border-radius: 50%;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--shadow-xs);
 }
 
 .inline-toggle-container .toggle-switch input:checked+.toggle-slider {
@@ -516,7 +516,7 @@
     font-size: inherit;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: var(--transition-base);
     border: 1px solid oklch(var(--lora-accent) / 0.35);
     user-select: none;
     box-shadow: 0 1px 2px oklch(var(--lora-accent) / 0.1);
@@ -577,13 +577,13 @@
     border: 1px solid var(--border-color);
     border-radius: var(--border-radius-sm);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: var(--transition-base);
     background: var(--bg-color);
 }
 
 .file-option:hover {
     border-color: var(--lora-accent);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    box-shadow: var(--shadow-sm);
 }
 
 .file-option.selected {
@@ -668,4 +668,157 @@
 [data-theme="dark"] .file-tag.size {
     background: oklch(0.5 0.08 160 / 0.15);
     color: oklch(0.65 0.08 160);
+}
+
+/* Textarea for multi-URL input */
+#modelUrl {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-xs);
+    background: var(--bg-color);
+    color: var(--text-color);
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    resize: vertical;
+    line-height: 1.5;
+}
+
+.input-hint {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-color);
+    opacity: 0.7;
+    font-size: 0.85em;
+    margin-top: 6px;
+}
+
+.input-hint i {
+    color: var(--lora-accent);
+}
+
+/* Batch Preview List */
+.batch-preview-list {
+    max-height: 400px;
+    overflow-y: auto;
+    margin: var(--space-2) 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: var(--border-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-sm);
+}
+
+.batch-preview-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background: var(--bg-color);
+}
+
+.batch-preview-item:first-child {
+    border-radius: var(--border-radius-sm) var(--border-radius-sm) 0 0;
+}
+
+.batch-preview-item:last-child {
+    border-radius: 0 0 var(--border-radius-sm) var(--border-radius-sm);
+}
+
+.batch-preview-item:only-child {
+    border-radius: var(--border-radius-sm);
+}
+
+.batch-preview-thumbnail {
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+    border-radius: var(--border-radius-xs);
+    overflow: hidden;
+    background: var(--lora-surface);
+}
+
+.batch-preview-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.batch-preview-icon {
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--lora-error);
+    font-size: 1.2em;
+}
+
+.batch-preview-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.batch-preview-name {
+    font-weight: 500;
+    color: var(--text-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.batch-preview-meta {
+    display: flex;
+    gap: 8px;
+    font-size: 0.85em;
+    color: var(--text-color);
+    opacity: 0.7;
+    margin-top: 2px;
+}
+
+.batch-preview-error-text {
+    color: var(--lora-error);
+    opacity: 1;
+}
+
+.batch-preview-local-badge {
+    color: var(--lora-accent);
+    opacity: 1;
+}
+
+.batch-preview-local {
+    opacity: 0.6;
+}
+
+.batch-preview-change-version {
+    flex-shrink: 0;
+    font-size: 0.85em;
+    padding: 4px 10px;
+}
+
+.batch-preview-remove {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    color: var(--text-color);
+    opacity: 0.5;
+    cursor: pointer;
+    padding: 4px 8px;
+    font-size: 1em;
+}
+
+.batch-preview-remove:hover {
+    opacity: 1;
+    color: var(--lora-error);
+}
+
+.batch-preview-error {
+    background: oklch(0.5 0.15 25 / 0.05);
+}
+
+[data-theme="dark"] .batch-preview-item {
+    background: var(--lora-surface);
 }

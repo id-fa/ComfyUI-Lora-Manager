@@ -25,6 +25,11 @@ const JSON_DISPLAY_WIDGET_MIN_WIDTH = 300
 const JSON_DISPLAY_WIDGET_MIN_HEIGHT = 200
 const AUTOCOMPLETE_TEXT_WIDGET_MIN_HEIGHT = 60
 const AUTOCOMPLETE_TEXT_WIDGET_MAX_HEIGHT = 100
+// Per-modelType min size hints for node initial sizing.
+// These are returned from the factory so ComfyUI's _initialMinSize mechanism
+// gives the node a sensible default width (and height for prompt/embeddings).
+const AUTOCOMPLETE_TEXT_MIN_WIDTH_DEFAULT = 400
+const AUTOCOMPLETE_TEXT_MIN_HEIGHT_DEFAULT = 300
 const AUTOCOMPLETE_METADATA_VERSION = 1
 const LORA_MANAGER_WIDGET_IDS_PROPERTY = '__lm_widget_ids'
 
@@ -546,6 +551,27 @@ function normalizeAutocompleteWidgetValues(node: any, info: any) {
   }
 }
 
+function applyAutocompleteTextLayoutFix(
+  widget: any,
+  container: HTMLElement | undefined,
+  isVueMode: boolean
+): void {
+  if (isVueMode) {
+    ;(widget as any).computeLayoutSize = undefined
+    widget.computeSize = (width?: number) =>
+      [width ?? 200, AUTOCOMPLETE_TEXT_WIDGET_MAX_HEIGHT - 4]
+    if (container) {
+      container.style.minHeight = `${AUTOCOMPLETE_TEXT_WIDGET_MAX_HEIGHT}px`
+    }
+  } else {
+    delete (widget as any).computeLayoutSize
+    delete (widget as any).computeSize
+    if (container) {
+      container.style.minHeight = ''
+    }
+  }
+}
+
 // Listen for Vue DOM mode setting changes and dispatch custom event
 const initVueDomModeListener = () => {
   if (app.ui?.settings?.addEventListener) {
@@ -554,7 +580,47 @@ const initVueDomModeListener = () => {
       // before we read it (the event may fire before internal state updates)
       requestAnimationFrame(() => {
         const isVueDomMode = app.ui?.settings?.getSettingValue?.('Comfy.VueNodes.Enabled') ?? false
-        // Dispatch custom event for Vue components to listen to
+
+        if (app.graph?.nodes) {
+          for (const node of app.graph.nodes) {
+            const textWidget = node.widgets?.find(
+              (w: any) => w.type === 'AUTOCOMPLETE_TEXT_LORAS'
+            )
+            if (!textWidget) continue
+            const container = (textWidget as any).element as HTMLElement | undefined
+            applyAutocompleteTextLayoutFix(textWidget, container, isVueDomMode)
+          }
+        }
+
+        requestAnimationFrame(() => {
+          for (const nodeEl of document.querySelectorAll('[data-node-id]')) {
+            const grid = nodeEl.querySelector('[data-testid="node-widgets"]') as HTMLElement | null
+            if (!grid) continue
+            const nodeId = nodeEl.getAttribute('data-node-id')
+            const node = app.graph?.getNodeById(nodeId as any)
+            if (!node) continue
+            const rows: string[] = []
+            let needsFix = false
+            for (const w of node.widgets ?? []) {
+              if (w.type === 'LORA_MANAGER_AUTOCOMPLETE_METADATA') {
+                rows.push('min-content')
+              } else if (w.name === 'loras') {
+                rows.push('auto')
+              } else if (w.name === 'text' && w.type === 'AUTOCOMPLETE_TEXT_LORAS') {
+                rows.push(isVueDomMode ? 'min-content' : 'auto')
+                needsFix = true
+              } else {
+                rows.push('auto')
+              }
+            }
+            if (needsFix) {
+              grid.style.gridTemplateRows = rows.join(' ')
+            }
+          }
+        })
+
+        app.canvas?.setDirty(true, true)
+
         document.dispatchEvent(new CustomEvent('lora-manager:vue-mode-change', {
           detail: { isVueDomMode }
         }))
@@ -678,13 +744,28 @@ function createAutocompleteTextWidgetFactory(
 
   if (maxHeight) {
     container.style.maxHeight = `${maxHeight}px`
+    container.style.minHeight = `${maxHeight}px`
+  }
+
+  if (modelType === 'loras') {
+    applyAutocompleteTextLayoutFix(
+      widget,
+      container,
+      typeof LiteGraph !== 'undefined' && LiteGraph.vueNodesMode
+    )
   }
 
   widget.onRemove = createVueWidgetCleanup(vueApp, () => {
     vueApps.delete(appKey)
   })
 
-  return { widget }
+  // Return minWidth/minHeight hints so ComfyUI's _initialMinSize mechanism
+  // sets a sensible initial node width (and height for prompt/embeddings).
+  // loras modelType retains its existing height constraints (getMaxHeight: 100).
+  const minWidth = AUTOCOMPLETE_TEXT_MIN_WIDTH_DEFAULT
+  const minHeight = modelType === 'loras' ? undefined : AUTOCOMPLETE_TEXT_MIN_HEIGHT_DEFAULT
+
+  return { widget, minWidth, minHeight }
 }
 
 app.registerExtension({

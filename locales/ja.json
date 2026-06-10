@@ -16,7 +16,9 @@
             "help": "ヘルプ",
             "add": "追加",
             "close": "閉じる",
-            "menu": "メニュー"
+            "menu": "メニュー",
+            "remove": "削除",
+            "change": "変更"
         },
         "status": {
             "loading": "読み込み中...",
@@ -1014,9 +1016,9 @@
         "download": {
             "title": "URLからモデルをダウンロード",
             "titleWithType": "URLから{type}をダウンロード",
-            "url": "Civitai URL",
             "civitaiUrl": "Civitai URL：",
             "placeholder": "https://civitai.com/models/...",
+            "urlHint": "1行に1つのCivitAIまたはCivArchive URLを入力してください。複数のURLを一括ダウンロードできます。",
             "locationPreview": "ダウンロード場所プレビュー",
             "useDefaultPath": "デフォルトパスを使用",
             "useDefaultPathTooltip": "有効にすると、設定されたパステンプレートを使用してファイルが自動的に整理されます",
@@ -1225,7 +1227,9 @@
             },
             "notes": {
                 "saved": "メモが正常に保存されました",
-                "saveFailed": "メモの保存に失敗しました"
+                "saveFailed": "メモの保存に失敗しました",
+                "showMore": "もっと見る",
+                "showLess": "折りたたむ"
             },
             "usageTips": {
                 "addPresetParameter": "プリセットパラメータを追加...",

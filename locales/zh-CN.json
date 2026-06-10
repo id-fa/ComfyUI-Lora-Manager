@@ -16,7 +16,9 @@
             "help": "帮助",
             "add": "添加",
             "close": "关闭",
-            "menu": "菜单"
+            "menu": "菜单",
+            "remove": "移除",
+            "change": "更换"
         },
         "status": {
             "loading": "加载中...",
@@ -1014,9 +1016,9 @@
         "download": {
             "title": "从 URL 下载模型",
             "titleWithType": "从 URL 下载 {type}",
-            "url": "Civitai URL",
             "civitaiUrl": "Civitai URL:",
             "placeholder": "https://civitai.com/models/...",
+            "urlHint": "每行输入一个 CivitAI 或 CivArchive URL。支持批量下载多个 URL。",
             "locationPreview": "下载位置预览",
             "useDefaultPath": "使用默认路径",
             "useDefaultPathTooltip": "启用后，文件将自动按配置的路径模板进行整理",
@@ -1225,7 +1227,9 @@
             },
             "notes": {
                 "saved": "备注保存成功",
-                "saveFailed": "备注保存失败"
+                "saveFailed": "备注保存失败",
+                "showMore": "展开",
+                "showLess": "收起"
             },
             "usageTips": {
                 "addPresetParameter": "添加预设参数...",
