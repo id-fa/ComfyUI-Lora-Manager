@@ -195,6 +195,49 @@
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
+  cursor: pointer;
+  gap: 4px;
+}
+
+.lm-loras-folder-header:hover {
+  color: rgba(226, 232, 240, 0.95);
+}
+
+/* Caret indicating the folder's collapse state (expanded = pointing down). */
+.lm-loras-folder-toggle {
+  flex-shrink: 0;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  transition: transform 0.15s ease;
+}
+
+.lm-loras-folder-header.collapsed .lm-loras-folder-toggle {
+  /* Point the caret to the right when collapsed. */
+  transform: rotate(-90deg);
+}
+
+.lm-loras-folder-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* "active/total" count for the folder, shown to the right of the name. */
+.lm-loras-folder-count {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0 5px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: rgba(148, 163, 184, 0.95);
+  background-color: rgba(226, 232, 240, 0.1);
 }
 
 .lm-lora-entry {

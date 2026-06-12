@@ -61,6 +61,8 @@ export function addLorasWidget(node, name, opts, callback) {
   
   // Selection state - only one LoRA can be selected at a time
   let selectedLora = null;
+  // Folders whose loras are collapsed (hidden). Persists across re-renders.
+  const collapsedFolders = new Set();
   let currentLorasData = parseLoraValue(defaultValue);
   let lastSelectionKey = "__none__";
   let pendingFocusTarget = null;
@@ -285,13 +287,26 @@ export function addLorasWidget(node, name, opts, callback) {
     initHeaderDrag(header, widget, renderLoras);
 
     // Track the total visible entries for height calculation
-    let totalVisibleEntries = lorasData.length;
+    let totalVisibleEntries = 0;
 
     // Folder separators: only shown when the list spans more than one folder.
     const distinctFolders = new Set(lorasData.map((lora) => getLoraFolder(lora.name)));
     const showFolderHeaders = distinctFolders.size > 1;
+    // Per-folder counts: how many loras are active vs the folder total.
+    const folderStats = new Map();
+    lorasData.forEach((lora) => {
+      const folder = getLoraFolder(lora.name);
+      const stat = folderStats.get(folder) || { total: 0, active: 0 };
+      stat.total++;
+      if (lora.active) {
+        stat.active++;
+      }
+      folderStats.set(folder, stat);
+    });
     let prevFolder = null;
     let folderHeaderCount = 0;
+    // Whether the folder currently being iterated is collapsed.
+    let currentFolderCollapsed = false;
 
     // Render each lora entry
     lorasData.forEach((loraData) => {
@@ -303,13 +318,58 @@ export function addLorasWidget(node, name, opts, callback) {
         if (folder !== prevFolder) {
           prevFolder = folder;
           folderHeaderCount++;
+          const isFolderCollapsed = collapsedFolders.has(folder);
+          currentFolderCollapsed = isFolderCollapsed;
+
           const folderHeader = document.createElement("div");
           folderHeader.className = "lm-loras-folder-header";
-          folderHeader.textContent = folder || "(root)";
+          if (isFolderCollapsed) {
+            folderHeader.classList.add("collapsed");
+          }
           folderHeader.title = folder || "(root)";
+
+          // Collapse/expand indicator
+          const folderToggleIcon = document.createElement("span");
+          folderToggleIcon.className = "lm-loras-folder-toggle";
+          folderHeader.appendChild(folderToggleIcon);
+
+          // Folder name label
+          const folderLabel = document.createElement("span");
+          folderLabel.className = "lm-loras-folder-label";
+          folderLabel.textContent = folder || "(root)";
+          folderHeader.appendChild(folderLabel);
+
+          // Count badge: active (checked) loras / folder total
+          const stat = folderStats.get(folder) || { total: 0, active: 0 };
+          const folderCount = document.createElement("span");
+          folderCount.className = "lm-loras-folder-count";
+          folderCount.textContent = `${stat.active}/${stat.total}`;
+          folderCount.title = `${stat.active} enabled / ${stat.total} in folder`;
+          folderHeader.appendChild(folderCount);
+
+          // Click the folder name to collapse/expand its loras, so the user
+          // can fold a folder away and quickly reach the next one.
+          folderHeader.addEventListener("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (collapsedFolders.has(folder)) {
+              collapsedFolders.delete(folder);
+            } else {
+              collapsedFolders.add(folder);
+            }
+            renderLoras(widget.value, widget);
+          });
+
           container.appendChild(folderHeader);
         }
       }
+
+      // Skip rendering entries that belong to a collapsed folder.
+      if (currentFolderCollapsed) {
+        return;
+      }
+
+      totalVisibleEntries++;
 
       // Determine expansion state using our helper function
       const isExpanded = shouldShowClipEntry(loraData);
