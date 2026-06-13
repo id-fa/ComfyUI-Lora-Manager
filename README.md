@@ -1,3 +1,17 @@
+> **Note: This is a fork of [willmiao/ComfyUI-Lora-Manager](https://github.com/willmiao/ComfyUI-Lora-Manager).**
+>
+> Changes in this fork (LoRA Loader widget):
+> - **Folder-aware sorting** — adds folder information so LoRAs can be sorted and grouped by folder.
+> - **Per-folder shading** — folder headers with collapse/expand and an enabled/total count badge for each folder.
+> - **Incremental search** — a filter field to narrow down LoRAs by name as you type.
+
+|LoRA Loader|LoRA Loader(app)|
+|---|---|
+|![fork sceenshot](static/images/fork_screenshot1.png)|![fork sceenshot](static/images/fork_screenshot2.png)|
+|folder sort/shading|incremental search|
+
+---
+
 # ComfyUI LoRA Manager
 
 > **Revolutionize your workflow with the ultimate LoRA companion for ComfyUI!**
