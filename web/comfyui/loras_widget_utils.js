@@ -7,6 +7,7 @@ export const HEADER_HEIGHT = 32; // Height of the header section
 export const CONTAINER_PADDING = 12; // Top and bottom padding
 export const EMPTY_CONTAINER_HEIGHT = 100; // Height when no loras are present
 export const FOLDER_HEADER_HEIGHT = 22; // Height of a folder separator row in the list
+export const SEARCH_ROW_HEIGHT = 34; // Height of the incremental search field row
 
 // Parse LoRA entries from value
 export function parseLoraValue(value) {

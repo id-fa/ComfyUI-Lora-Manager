@@ -10,6 +10,7 @@ import {
   CONTAINER_PADDING,
   EMPTY_CONTAINER_HEIGHT,
   FOLDER_HEADER_HEIGHT,
+  SEARCH_ROW_HEIGHT,
   getLoraFolder,
   getLoraBasename,
   sortLorasByFolder
@@ -39,7 +40,7 @@ export function addLorasWidget(node, name, opts, callback) {
   if (typeof LiteGraph !== 'undefined' && LiteGraph.vueNodesMode) {
     const maxLoras = getLoraWidgetMaxVisibleLoras();
     const gap = 5; // flex gap from .lm-loras-container CSS
-    const maxH = CONTAINER_PADDING + HEADER_HEIGHT + maxLoras * LORA_ENTRY_HEIGHT + maxLoras * gap;
+    const maxH = CONTAINER_PADDING + HEADER_HEIGHT + SEARCH_ROW_HEIGHT + maxLoras * LORA_ENTRY_HEIGHT + maxLoras * gap;
     container.style.maxHeight = `${maxH}px`;
     container.style.setProperty('--comfy-widget-max-height', `${maxH}px`);
     // Window capture-phase hook: scroll the widget instead of zooming the canvas
@@ -63,6 +64,10 @@ export function addLorasWidget(node, name, opts, callback) {
   let selectedLora = null;
   // Folders whose loras are collapsed (hidden). Persists across re-renders.
   const collapsedFolders = new Set();
+  // Incremental search state (display-only filter; never mutates widget.value).
+  let searchQuery = "";
+  let restoreSearchFocus = false; // re-focus the field after a search re-render
+  let searchCaret = null; // caret position to restore
   let currentLorasData = parseLoraValue(defaultValue);
   let lastSelectionKey = "__none__";
   let pendingFocusTarget = null;
@@ -286,15 +291,69 @@ export function addLorasWidget(node, name, opts, callback) {
     // Initialize the header drag functionality
     initHeaderDrag(header, widget, renderLoras);
 
+    // Incremental search field: filters the list by name (display-only).
+    const searchRow = document.createElement("div");
+    searchRow.className = "lm-loras-search-row";
+
+    const searchInput = document.createElement("input");
+    searchInput.type = "text";
+    searchInput.className = "lm-loras-search-input";
+    searchInput.placeholder = "Filter LoRAs...";
+    searchInput.value = searchQuery;
+    // Keep the header strength-drag / canvas from grabbing the pointer.
+    searchInput.addEventListener("pointerdown", (e) => e.stopPropagation());
+    // Don't let typing trigger the list's keyboard navigation.
+    searchInput.addEventListener("keydown", (e) => {
+      e.stopPropagation();
+      if (e.key === "Escape") {
+        searchInput.value = "";
+        searchQuery = "";
+        searchCaret = 0;
+        restoreSearchFocus = true;
+        renderLoras(widget.value, widget);
+        restoreSearchFocus = false;
+      }
+    });
+    searchInput.addEventListener("input", (e) => {
+      searchQuery = e.target.value;
+      searchCaret = e.target.selectionStart;
+      restoreSearchFocus = true;
+      renderLoras(widget.value, widget);
+      restoreSearchFocus = false;
+    });
+
+    searchRow.appendChild(searchInput);
+    container.appendChild(searchRow);
+
+    // Restore focus/caret after a search-triggered re-render.
+    if (restoreSearchFocus) {
+      searchInput.focus();
+      if (searchCaret != null) {
+        try {
+          searchInput.setSelectionRange(searchCaret, searchCaret);
+        } catch (_) {
+          /* ignore unsupported selection on some input states */
+        }
+      }
+    }
+
+    // Apply the search filter (display-only). While searching, folder collapse
+    // is ignored so every match is visible regardless of collapsed state.
+    const query = searchQuery.trim().toLowerCase();
+    const isSearching = query !== "";
+    const displayLoras = isSearching
+      ? lorasData.filter((lora) => String(lora.name).toLowerCase().includes(query))
+      : lorasData;
+
     // Track the total visible entries for height calculation
     let totalVisibleEntries = 0;
 
     // Folder separators: only shown when the list spans more than one folder.
-    const distinctFolders = new Set(lorasData.map((lora) => getLoraFolder(lora.name)));
+    const distinctFolders = new Set(displayLoras.map((lora) => getLoraFolder(lora.name)));
     const showFolderHeaders = distinctFolders.size > 1;
     // Per-folder counts: how many loras are active vs the folder total.
     const folderStats = new Map();
-    lorasData.forEach((lora) => {
+    displayLoras.forEach((lora) => {
       const folder = getLoraFolder(lora.name);
       const stat = folderStats.get(folder) || { total: 0, active: 0 };
       stat.total++;
@@ -309,7 +368,7 @@ export function addLorasWidget(node, name, opts, callback) {
     let currentFolderCollapsed = false;
 
     // Render each lora entry
-    lorasData.forEach((loraData) => {
+    displayLoras.forEach((loraData) => {
       const { name, strength, clipStrength, active } = loraData;
 
       // Insert a folder separator whenever the folder changes between entries.
@@ -318,7 +377,8 @@ export function addLorasWidget(node, name, opts, callback) {
         if (folder !== prevFolder) {
           prevFolder = folder;
           folderHeaderCount++;
-          const isFolderCollapsed = collapsedFolders.has(folder);
+          // While searching, force every folder open so matches stay visible.
+          const isFolderCollapsed = !isSearching && collapsedFolders.has(folder);
           currentFolderCollapsed = isFolderCollapsed;
 
           const folderHeader = document.createElement("div");
@@ -764,11 +824,21 @@ export function addLorasWidget(node, name, opts, callback) {
         container.appendChild(clipEl);
       }
     });
-    
+
+    // When the search filter matches nothing, show a hint in place of entries.
+    if (displayLoras.length === 0) {
+      const noMatch = document.createElement("div");
+      noMatch.textContent = "No matching LoRAs";
+      noMatch.className = "lm-lora-empty-state";
+      container.appendChild(noMatch);
+    }
+
     // Calculate height based on number of loras and fixed sizes
-    const calculatedHeight = CONTAINER_PADDING + HEADER_HEIGHT
-      + (Math.min(totalVisibleEntries, 12) * LORA_ENTRY_HEIGHT)
-      + (folderHeaderCount * FOLDER_HEADER_HEIGHT);
+    const calculatedHeight = CONTAINER_PADDING + HEADER_HEIGHT + SEARCH_ROW_HEIGHT
+      + (displayLoras.length === 0
+          ? LORA_ENTRY_HEIGHT
+          : (Math.min(totalVisibleEntries, 12) * LORA_ENTRY_HEIGHT)
+            + (folderHeaderCount * FOLDER_HEADER_HEIGHT));
     updateWidgetHeight(container, calculatedHeight, defaultHeight, node);
 
     // After all LoRA elements are created, apply selection state as the last step
