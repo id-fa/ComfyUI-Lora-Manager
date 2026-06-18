@@ -22,6 +22,7 @@
         },
         "status": {
             "loading": "Loading...",
+            "cancelling": "Cancelling...",
             "unknown": "Unknown",
             "date": "Date",
             "version": "Version",
@@ -113,6 +114,7 @@
             "replacePreview": "Replace Preview",
             "copyCheckpointName": "Copy checkpoint name",
             "copyEmbeddingName": "Copy embedding name",
+            "embeddingNameCopied": "Embedding syntax copied",
             "sendCheckpointToWorkflow": "Send to ComfyUI",
             "sendEmbeddingToWorkflow": "Send to ComfyUI"
         },
@@ -249,7 +251,18 @@
             "toggle": "Toggle theme",
             "switchToLight": "Switch to light theme",
             "switchToDark": "Switch to dark theme",
-            "switchToAuto": "Switch to auto theme"
+            "switchToAuto": "Switch to auto theme",
+            "presets": "Theme Presets",
+            "default": "Default",
+            "nord": "Nord",
+            "gruvbox": "Gruvbox",
+            "monokai": "Monokai",
+            "dracula": "Dracula",
+            "solarized": "Solarized",
+            "mode": "Mode",
+            "light": "Light",
+            "dark": "Dark",
+            "auto": "Auto"
         },
         "actions": {
             "checkUpdates": "Check Updates",
@@ -447,7 +460,9 @@
                 "modelName": "Model Name",
                 "fileName": "File Name"
             },
-            "modelNameDisplayHelp": "Choose what to display in the model card footer"
+            "modelNameDisplayHelp": "Choose what to display in the model card footer",
+            "cardBlurAmount": "Card Overlay Blur",
+            "cardBlurAmountHelp": "Adjust the blur intensity of the header and footer overlays on model and recipe cards (0 = no blur, 20 = maximum blur)."
         },
         "folderSettings": {
             "activeLibrary": "Active Library",
@@ -692,7 +707,7 @@
             "copyAll": "Copy Selected Syntax",
             "refreshAll": "Refresh Selected Metadata",
             "repairMetadata": "Repair Metadata for Selected",
-            "reimportMetadata": "Re-import Metadata for Selected",
+            "reimportMetadata": "Re-import from Source",
             "checkUpdates": "Check Updates for Selected",
             "moveAll": "Move Selected to Folder",
             "autoOrganize": "Auto-Organize Selected",
@@ -953,8 +968,9 @@
     "sidebar": {
         "modelRoot": "Root",
         "collapseAll": "Collapse All Folders",
-        "pinSidebar": "Pin Sidebar",
-        "unpinSidebar": "Unpin Sidebar",
+        "hideOnThisPage": "Hide sidebar on this page",
+        "showSidebar": "Show sidebar",
+        "sidebarHiddenNotification": "Folder sidebar hidden on {page} page",
         "switchToListView": "Switch to List View",
         "switchToTreeView": "Switch to Tree View",
         "recursiveOn": "Include subfolders",
@@ -1391,6 +1407,21 @@
                     "versionDeleted": "Version deleted"
                 }
             }
+        },
+        "metadataFetchSummary": {
+            "title": "Metadata Fetch Summary",
+            "statSuccess": "Success",
+            "statFailed": "Failed",
+            "statSkipped": "Skipped",
+            "statTotal": "Total Scanned",
+            "statDuration": "Duration",
+            "successMessage": "All {count} {type}s updated successfully!",
+            "failedItems": "Failed Items ({count})",
+            "close": "Close",
+            "copyReport": "Copy Report",
+            "downloadCsv": "Download CSV",
+            "columnModelName": "Model Name",
+            "columnError": "Error"
         }
     },
     "modelTags": {
@@ -1402,15 +1433,6 @@
             "maxLength": "Tag should not exceed 30 characters",
             "maxCount": "Maximum 30 tags allowed",
             "duplicate": "This tag already exists"
-        }
-    },
-    "keyboard": {
-        "navigation": "Keyboard Navigation:",
-        "shortcuts": {
-            "pageUp": "Scroll up one page",
-            "pageDown": "Scroll down one page",
-            "home": "Jump to top",
-            "end": "Jump to bottom"
         }
     },
     "initialization": {
@@ -1500,11 +1522,14 @@
             "noMatchingNodes": "No compatible nodes available in the current workflow",
             "noTargetNodeSelected": "No target node selected",
             "modelUpdated": "Model updated in workflow",
-            "modelFailed": "Failed to update model node"
+            "modelFailed": "Failed to update model node",
+            "embeddingAdded": "Embedding added to workflow",
+            "embeddingFailed": "Failed to add embedding"
         },
         "nodeSelector": {
             "recipe": "Recipe",
             "lora": "LoRA",
+            "embedding": "Embedding",
             "replace": "Replace",
             "append": "Append",
             "selectTargetNode": "Select target node",
@@ -1947,7 +1972,9 @@
             "bulkMoveSuccess": "Successfully moved {successCount} {type}s",
             "exampleImagesDownloadSuccess": "Successfully downloaded example images!",
             "exampleImagesDownloadFailed": "Failed to download example images: {message}",
-            "moveFailed": "Failed to move item: {message}"
+            "moveFailed": "Failed to move item: {message}",
+            "copiedToClipboard": "Copied to clipboard",
+            "downloadStarted": "Download started"
         }
     },
     "doctor": {

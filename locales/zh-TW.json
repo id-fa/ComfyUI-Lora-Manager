@@ -22,6 +22,7 @@
         },
         "status": {
             "loading": "載入中...",
+            "cancelling": "取消中...",
             "unknown": "未知",
             "date": "日期",
             "version": "版本",
@@ -113,6 +114,7 @@
             "replacePreview": "更換預覽圖",
             "copyCheckpointName": "複製檢查點名稱",
             "copyEmbeddingName": "複製嵌入名稱",
+            "embeddingNameCopied": "已複製 Embedding 語法",
             "sendCheckpointToWorkflow": "傳送到 ComfyUI",
             "sendEmbeddingToWorkflow": "傳送到 ComfyUI"
         },
@@ -249,7 +251,18 @@
             "toggle": "切換主題",
             "switchToLight": "切換至淺色主題",
             "switchToDark": "切換至深色主題",
-            "switchToAuto": "自動主題"
+            "switchToAuto": "自動主題",
+            "presets": "主題預設",
+            "default": "預設",
+            "nord": "Nord",
+            "gruvbox": "Gruvbox",
+            "monokai": "Monokai",
+            "dracula": "Dracula",
+            "solarized": "Solarized",
+            "mode": "模式",
+            "light": "淺色",
+            "dark": "深色",
+            "auto": "自動"
         },
         "actions": {
             "checkUpdates": "檢查更新",
@@ -447,7 +460,9 @@
                 "modelName": "模型名稱",
                 "fileName": "檔案名稱"
             },
-            "modelNameDisplayHelp": "選擇在模型卡片底部顯示的內容"
+            "modelNameDisplayHelp": "選擇在模型卡片底部顯示的內容",
+            "cardBlurAmount": "卡片疊加模糊強度",
+            "cardBlurAmountHelp": "調整模型和配方卡片上頁首和頁尾疊加層的模糊強度（0 = 無模糊，20 = 最大模糊）。"
         },
         "folderSettings": {
             "activeLibrary": "使用中的資料庫",
@@ -692,7 +707,7 @@
             "copyAll": "複製全部語法",
             "refreshAll": "刷新全部 metadata",
             "repairMetadata": "修復所選中元數據",
-            "reimportMetadata": "重新匯入所選配方元數據",
+            "reimportMetadata": "從來源重新匯入",
             "checkUpdates": "檢查所選更新",
             "moveAll": "全部移動到資料夾",
             "autoOrganize": "自動整理所選模型",
@@ -953,8 +968,9 @@
     "sidebar": {
         "modelRoot": "根目錄",
         "collapseAll": "全部摺疊資料夾",
-        "pinSidebar": "固定側邊欄",
-        "unpinSidebar": "取消固定側邊欄",
+        "hideOnThisPage": "隱藏此頁面側邊欄",
+        "showSidebar": "顯示側邊欄",
+        "sidebarHiddenNotification": "{page}頁面的資料夾側邊欄已隱藏",
         "switchToListView": "切換至列表檢視",
         "switchToTreeView": "切換到樹狀檢視",
         "recursiveOn": "包含子資料夾",
@@ -1391,6 +1407,21 @@
                     "versionDeleted": "已刪除此版本"
                 }
             }
+        },
+        "metadataFetchSummary": {
+            "title": "元資料獲取摘要",
+            "statSuccess": "成功",
+            "statFailed": "失敗",
+            "statSkipped": "已跳過",
+            "statTotal": "總計掃描",
+            "statDuration": "耗時",
+            "successMessage": "全部 {count} 個 {type} 更新成功！",
+            "failedItems": "失敗項目 ({count})",
+            "close": "關閉",
+            "copyReport": "複製報告",
+            "downloadCsv": "下載 CSV",
+            "columnModelName": "模型名稱",
+            "columnError": "錯誤"
         }
     },
     "modelTags": {
@@ -1402,15 +1433,6 @@
             "maxLength": "標籤不可超過 30 字元",
             "maxCount": "最多可新增 30 個標籤",
             "duplicate": "此標籤已存在"
-        }
-    },
-    "keyboard": {
-        "navigation": "鍵盤導覽：",
-        "shortcuts": {
-            "pageUp": "向上捲動一頁",
-            "pageDown": "向下捲動一頁",
-            "home": "跳至頂部",
-            "end": "跳至底部"
         }
     },
     "initialization": {
@@ -1500,11 +1522,14 @@
             "noMatchingNodes": "目前工作流程中沒有相容的節點",
             "noTargetNodeSelected": "未選擇目標節點",
             "modelUpdated": "模型已更新到工作流",
-            "modelFailed": "更新模型節點失敗"
+            "modelFailed": "更新模型節點失敗",
+            "embeddingAdded": "Embedding 已附加到工作流",
+            "embeddingFailed": "傳送 Embedding 到工作流失敗"
         },
         "nodeSelector": {
             "recipe": "配方",
             "lora": "LoRA",
+            "embedding": "Embedding",
             "replace": "取代",
             "append": "附加",
             "selectTargetNode": "選擇目標節點",
@@ -1947,7 +1972,9 @@
             "bulkMoveSuccess": "已成功移動 {successCount} 個 {type}",
             "exampleImagesDownloadSuccess": "範例圖片下載成功！",
             "exampleImagesDownloadFailed": "下載範例圖片失敗：{message}",
-            "moveFailed": "Failed to move item: {message}"
+            "moveFailed": "Failed to move item: {message}",
+            "copiedToClipboard": "已複製到剪貼簿",
+            "downloadStarted": "下載已開始"
         }
     },
     "doctor": {

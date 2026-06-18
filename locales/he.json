@@ -22,6 +22,7 @@
         },
         "status": {
             "loading": "טוען...",
+            "cancelling": "מבטל...",
             "unknown": "לא ידוע",
             "date": "תאריך",
             "version": "גרסה",
@@ -113,6 +114,7 @@
             "replacePreview": "החלף תצוגה מקדימה",
             "copyCheckpointName": "העתק שם Checkpoint",
             "copyEmbeddingName": "העתק שם Embedding",
+            "embeddingNameCopied": "תחביר Embedding הועתק",
             "sendCheckpointToWorkflow": "שלח ל-ComfyUI",
             "sendEmbeddingToWorkflow": "שלח ל-ComfyUI"
         },
@@ -249,7 +251,18 @@
             "toggle": "החלף ערכת נושא",
             "switchToLight": "עבור לערכת נושא בהירה",
             "switchToDark": "עבור לערכת נושא כהה",
-            "switchToAuto": "עבור לערכת נושא אוטומטית"
+            "switchToAuto": "עבור לערכת נושא אוטומטית",
+            "presets": "ערכות נושא מוגדרות",
+            "default": "ברירת מחדל",
+            "nord": "Nord",
+            "gruvbox": "Gruvbox",
+            "monokai": "Monokai",
+            "dracula": "Dracula",
+            "solarized": "Solarized",
+            "mode": "מצב",
+            "light": "בהיר",
+            "dark": "כהה",
+            "auto": "אוטומטי"
         },
         "actions": {
             "checkUpdates": "בדוק עדכונים",
@@ -447,7 +460,9 @@
                 "modelName": "שם מודל",
                 "fileName": "שם קובץ"
             },
-            "modelNameDisplayHelp": "בחר מה להציג בכותרת התחתונה של כרטיס המודל"
+            "modelNameDisplayHelp": "בחר מה להציג בכותרת התחתונה של כרטיס המודל",
+            "cardBlurAmount": "עוצמת טשטוש שכבת-על בכרטיס",
+            "cardBlurAmountHelp": "כוונן את עוצמת הטשטוש של שכבת-העל בכותרת ובכותרות תחתונה בכרטיסי מודל ומתכונים (0 = ללא טשטוש, 20 = טשטוש מקסימלי)."
         },
         "folderSettings": {
             "activeLibrary": "ספרייה פעילה",
@@ -692,7 +707,7 @@
             "copyAll": "העתק את כל התחבירים",
             "refreshAll": "רענן את כל המטא-דאטה",
             "repairMetadata": "תקן מטא-דאטה עבור הנבחרים",
-            "reimportMetadata": "ייבא מחדש מטא-דאטה עבור הנבחרים",
+            "reimportMetadata": "ייבא מחדש ממקור",
             "checkUpdates": "בדוק עדכונים לבחירה",
             "moveAll": "העבר הכל לתיקייה",
             "autoOrganize": "ארגן אוטומטית נבחרים",
@@ -953,8 +968,9 @@
     "sidebar": {
         "modelRoot": "שורש",
         "collapseAll": "כווץ את כל התיקיות",
-        "pinSidebar": "נעל סרגל צד",
-        "unpinSidebar": "שחרר סרגל צד",
+        "hideOnThisPage": "הסתר סרגל צד בדף זה",
+        "showSidebar": "הצג סרגל צד",
+        "sidebarHiddenNotification": "סרגל הצד מוסתר בדף {page}",
         "switchToListView": "עבור לתצוגת רשימה",
         "switchToTreeView": "תצוגת עץ",
         "recursiveOn": "כלול תיקיות משנה",
@@ -1391,6 +1407,21 @@
                     "versionDeleted": "הגרסה נמחקה"
                 }
             }
+        },
+        "metadataFetchSummary": {
+            "title": "סיכום שליפת מטא-דאטה",
+            "statSuccess": "הצלחה",
+            "statFailed": "נכשל",
+            "statSkipped": "דולג",
+            "statTotal": "סה\"כ נסרק",
+            "statDuration": "משך",
+            "successMessage": "כל {count} {type}s עודכנו בהצלחה!",
+            "failedItems": "פריטים נכשלים ({count})",
+            "close": "סגור",
+            "copyReport": "העתק דוח",
+            "downloadCsv": "הורד CSV",
+            "columnModelName": "שם המודל",
+            "columnError": "שגיאה"
         }
     },
     "modelTags": {
@@ -1402,15 +1433,6 @@
             "maxLength": "תגית לא תעלה על 30 תווים",
             "maxCount": "מותרות עד 30 תגיות",
             "duplicate": "תגית זו כבר קיימת"
-        }
-    },
-    "keyboard": {
-        "navigation": "ניווט במקלדת:",
-        "shortcuts": {
-            "pageUp": "גלול עמוד אחד למעלה",
-            "pageDown": "גלול עמוד אחד למטה",
-            "home": "קפוץ להתחלה",
-            "end": "קפוץ לסוף"
         }
     },
     "initialization": {
@@ -1500,11 +1522,14 @@
             "noMatchingNodes": "אין צמתים תואמים זמינים ב-workflow הנוכחי",
             "noTargetNodeSelected": "לא נבחר צומת יעד",
             "modelUpdated": "מודל עודכן ב-workflow",
-            "modelFailed": "עדכון צומת המודל נכשל"
+            "modelFailed": "עדכון צומת המודל נכשל",
+            "embeddingAdded": "Embedding נוסף ל-workflow",
+            "embeddingFailed": "הוספת Embedding נכשלה"
         },
         "nodeSelector": {
             "recipe": "מתכון",
             "lora": "LoRA",
+            "embedding": "Embedding",
             "replace": "החלף",
             "append": "הוסף",
             "selectTargetNode": "בחר צומת יעד",
@@ -1947,7 +1972,9 @@
             "bulkMoveSuccess": "הועברו בהצלחה {successCount} {type}s",
             "exampleImagesDownloadSuccess": "תמונות הדוגמה הורדו בהצלחה!",
             "exampleImagesDownloadFailed": "הורדת תמונות הדוגמה נכשלה: {message}",
-            "moveFailed": "Failed to move item: {message}"
+            "moveFailed": "Failed to move item: {message}",
+            "copiedToClipboard": "הועתק ללוח",
+            "downloadStarted": "ההורדה החלה"
         }
     },
     "doctor": {

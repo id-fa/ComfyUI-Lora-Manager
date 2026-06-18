@@ -197,11 +197,17 @@ export function restoreFolderFilter() {
   }
 }
 
+const CYCLE_ORDER = ['auto', 'light', 'dark'];
+const PRESET_NAMES = ['default', 'nord', 'gruvbox', 'monokai', 'dracula', 'solarized'];
+
+export { CYCLE_ORDER, PRESET_NAMES };
+
 export function initTheme() {
   const savedTheme = getStorageItem('theme') || 'auto';
+  const savedPreset = getStorageItem('theme_preset') || 'default';
   applyTheme(savedTheme);
+  applyPreset(savedPreset);
 
-  // Update theme when system preference changes (for 'auto' mode)
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
     const currentTheme = getStorageItem('theme') || 'auto';
     if (currentTheme === 'auto') {
@@ -212,34 +218,44 @@ export function initTheme() {
 
 export function toggleTheme() {
   const currentTheme = getStorageItem('theme') || 'auto';
-  let newTheme;
-
-  if (currentTheme === 'light') {
-    newTheme = 'dark';
-  } else {
-    newTheme = 'light';
-  }
+  const currentIndex = CYCLE_ORDER.indexOf(currentTheme);
+  const nextIndex = (currentIndex + 1) % CYCLE_ORDER.length;
+  const newTheme = CYCLE_ORDER[nextIndex];
 
   setStorageItem('theme', newTheme);
   applyTheme(newTheme);
 
-  // Force a repaint to ensure theme changes are applied immediately
   document.body.style.display = 'none';
-  document.body.offsetHeight; // Trigger a reflow
+  document.body.offsetHeight;
   document.body.style.display = '';
 
   return newTheme;
 }
 
-// Add a new helper function to apply the theme
+export function cyclePreset() {
+  const currentPreset = getStorageItem('theme_preset') || 'default';
+  const currentIndex = PRESET_NAMES.indexOf(currentPreset);
+  const nextIndex = (currentIndex + 1) % PRESET_NAMES.length;
+  const newPreset = PRESET_NAMES[nextIndex];
+
+  setStorageItem('theme_preset', newPreset);
+  applyPreset(newPreset);
+
+  return newPreset;
+}
+
+export function setPreset(name) {
+  if (!PRESET_NAMES.includes(name)) return;
+  setStorageItem('theme_preset', name);
+  applyPreset(name);
+}
+
 function applyTheme(theme) {
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
   const htmlElement = document.documentElement;
 
-  // Remove any existing theme attributes
   htmlElement.removeAttribute('data-theme');
 
-  // Apply the appropriate theme
   if (theme === 'dark' || (theme === 'auto' && prefersDark)) {
     htmlElement.setAttribute('data-theme', 'dark');
     document.body.dataset.theme = 'dark';
@@ -248,19 +264,18 @@ function applyTheme(theme) {
     document.body.dataset.theme = 'light';
   }
 
-  // Update the theme-toggle icon state
   updateThemeToggleIcons(theme);
 }
 
-// New function to update theme toggle icons
+function applyPreset(preset) {
+  document.documentElement.setAttribute('data-theme-preset', preset);
+}
+
 function updateThemeToggleIcons(theme) {
   const themeToggle = document.querySelector('.theme-toggle');
   if (!themeToggle) return;
 
-  // Remove any existing active classes
   themeToggle.classList.remove('theme-light', 'theme-dark', 'theme-auto');
-
-  // Add the appropriate class based on current theme
   themeToggle.classList.add(`theme-${theme}`);
 }
 
@@ -869,6 +884,100 @@ async function sendWidgetValueToNodes(nodeIds, nodesMap, widgetName, value, mess
   }
 }
 
+async function sendTextToNodes(nodeIds, nodesMap, text, mode, messages = {}) {
+  const {
+    successMessage = 'Updated workflow node',
+    failureMessage = 'Failed to update workflow node',
+    missingTargetMessage = 'No target node selected',
+  } = messages;
+
+  const targetIds = Array.isArray(nodeIds) ? nodeIds : [];
+  if (targetIds.length === 0) {
+    showToast(missingTargetMessage, {}, 'warning');
+    return false;
+  }
+
+  const references = targetIds
+    .map((nodeKey) => resolveNodeReference(nodeKey, nodesMap))
+    .filter((reference) => reference && reference.node_id !== undefined);
+
+  if (references.length === 0) {
+    showToast(missingTargetMessage, {}, 'warning');
+    return false;
+  }
+
+  try {
+    const response = await fetch('/api/lm/update-node-widget', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        widget_name: 'text',
+        value: text,
+        mode: mode || 'append',
+        node_ids: references,
+      }),
+    });
+
+    const result = await response.json();
+    if (result.success) {
+      showToast(successMessage, {}, 'success');
+      return true;
+    }
+
+    const errorMessage = result?.error || failureMessage;
+    showToast(errorMessage, {}, 'error');
+    return false;
+  } catch (error) {
+    console.error('Failed to send text to workflow:', error);
+    showToast(failureMessage, {}, 'error');
+    return false;
+  }
+}
+
+export async function sendEmbeddingToWorkflow(embeddingCode) {
+  const registry = await fetchWorkflowRegistry();
+  if (!registry) {
+    return false;
+  }
+
+  const textNodes = filterRegistryNodes(registry.nodes, (node) => {
+    if (!isNodeEnabled(node)) {
+      return false;
+    }
+    return node.capabilities?.has_text_widget === true;
+  });
+
+  const nodeKeys = Object.keys(textNodes);
+  if (nodeKeys.length === 0) {
+    showToast('uiHelpers.workflow.noMatchingNodes', {}, 'warning');
+    return false;
+  }
+
+  const messages = {
+    successMessage: translate('uiHelpers.workflow.embeddingAdded', {}, 'Embedding added to workflow'),
+    failureMessage: translate('uiHelpers.workflow.embeddingFailed', {}, 'Failed to add embedding'),
+    missingTargetMessage: translate('uiHelpers.workflow.noTargetNodeSelected', {}, 'No target node selected'),
+  };
+
+  const handleSend = (selectedNodeIds) =>
+    sendTextToNodes(selectedNodeIds, textNodes, embeddingCode, 'append', messages);
+
+  if (nodeKeys.length === 1) {
+    return await handleSend([nodeKeys[0]]);
+  }
+
+  const actionType = translate('uiHelpers.nodeSelector.embedding', {}, 'Embedding');
+
+  showNodeSelector(textNodes, {
+    actionType,
+    actionMode: '',
+    onSend: handleSend,
+  });
+  return true;
+}
+
 // Global variable to track active node selector state
 let nodeSelectorState = {
   isActive: false,
@@ -907,7 +1016,9 @@ function showNodeSelector(nodes, options = {}) {
   nodeSelectorState.enableSendAll = options.enableSendAll !== false;
 
   // Generate node list HTML with icons and proper colors
-  const nodeItems = Object.entries(safeNodes).map(([nodeKey, node]) => {
+  const nodeItems = Object.entries(safeNodes)
+    .sort(([, a], [, b]) => a.type - b.type || a.id - b.id)
+    .map(([nodeKey, node]) => {
     const iconClass = NODE_TYPE_ICONS[node.type] || 'fas fa-question-circle';
     const bgColor = node.bgcolor || DEFAULT_NODE_COLOR;
     const graphLabel = node.graph_name ? ` (${node.graph_name})` : '';

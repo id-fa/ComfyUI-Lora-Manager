@@ -22,6 +22,7 @@
         },
         "status": {
             "loading": "加载中...",
+            "cancelling": "取消中...",
             "unknown": "未知",
             "date": "日期",
             "version": "版本",
@@ -113,6 +114,7 @@
             "replacePreview": "替换预览",
             "copyCheckpointName": "复制 Checkpoint 名称",
             "copyEmbeddingName": "复制 Embedding 名称",
+            "embeddingNameCopied": "已复制 Embedding 语法",
             "sendCheckpointToWorkflow": "发送到 ComfyUI",
             "sendEmbeddingToWorkflow": "发送到 ComfyUI"
         },
@@ -249,7 +251,18 @@
             "toggle": "切换主题",
             "switchToLight": "切换到浅色主题",
             "switchToDark": "切换到深色主题",
-            "switchToAuto": "切换到自动主题"
+            "switchToAuto": "切换到自动主题",
+            "presets": "主题预设",
+            "default": "默认",
+            "nord": "Nord",
+            "gruvbox": "Gruvbox",
+            "monokai": "Monokai",
+            "dracula": "Dracula",
+            "solarized": "Solarized",
+            "mode": "模式",
+            "light": "浅色",
+            "dark": "深色",
+            "auto": "自动"
         },
         "actions": {
             "checkUpdates": "检查更新",
@@ -447,7 +460,9 @@
                 "modelName": "模型名称",
                 "fileName": "文件名"
             },
-            "modelNameDisplayHelp": "选择在模型卡片底部显示的内容"
+            "modelNameDisplayHelp": "选择在模型卡片底部显示的内容",
+            "cardBlurAmount": "卡片叠加模糊强度",
+            "cardBlurAmountHelp": "调整模型和配方卡片上页眉和页脚叠加层的模糊强度（0 = 无模糊，20 = 最大模糊）。"
         },
         "folderSettings": {
             "activeLibrary": "活动库",
@@ -692,7 +707,7 @@
             "copyAll": "复制所选中语法",
             "refreshAll": "刷新所选中元数据",
             "repairMetadata": "修复所选中元数据",
-            "reimportMetadata": "重新导入所选配方元数据",
+            "reimportMetadata": "从源重新导入",
             "checkUpdates": "检查所选更新",
             "moveAll": "移动所选中到文件夹",
             "autoOrganize": "自动整理所选模型",
@@ -953,8 +968,9 @@
     "sidebar": {
         "modelRoot": "根目录",
         "collapseAll": "折叠所有文件夹",
-        "pinSidebar": "固定侧边栏",
-        "unpinSidebar": "取消固定侧边栏",
+        "hideOnThisPage": "隐藏此页面侧边栏",
+        "showSidebar": "显示侧边栏",
+        "sidebarHiddenNotification": "{page}页面的文件夹侧边栏已隐藏",
         "switchToListView": "切换到列表视图",
         "switchToTreeView": "切换到树状视图",
         "recursiveOn": "包含子文件夹",
@@ -1391,6 +1407,21 @@
                     "versionDeleted": "版本已删除"
                 }
             }
+        },
+        "metadataFetchSummary": {
+            "title": "元数据获取摘要",
+            "statSuccess": "成功",
+            "statFailed": "失败",
+            "statSkipped": "已跳过",
+            "statTotal": "总计扫描",
+            "statDuration": "耗时",
+            "successMessage": "全部 {count} 个 {type} 更新成功！",
+            "failedItems": "失败项目 ({count})",
+            "close": "关闭",
+            "copyReport": "复制报告",
+            "downloadCsv": "下载 CSV",
+            "columnModelName": "模型名称",
+            "columnError": "错误"
         }
     },
     "modelTags": {
@@ -1402,15 +1433,6 @@
             "maxLength": "标签不能超过30个字符",
             "maxCount": "最多允许30个标签",
             "duplicate": "该标签已存在"
-        }
-    },
-    "keyboard": {
-        "navigation": "键盘导航：",
-        "shortcuts": {
-            "pageUp": "向上一页滚动",
-            "pageDown": "向下一页滚动",
-            "home": "跳到顶部",
-            "end": "跳到底部"
         }
     },
     "initialization": {
@@ -1500,11 +1522,14 @@
             "noMatchingNodes": "当前工作流中没有兼容的节点",
             "noTargetNodeSelected": "未选择目标节点",
             "modelUpdated": "模型已更新到工作流",
-            "modelFailed": "更新模型节点失败"
+            "modelFailed": "更新模型节点失败",
+            "embeddingAdded": "Embedding 已追加到工作流",
+            "embeddingFailed": "添加 Embedding 失败"
         },
         "nodeSelector": {
             "recipe": "配方",
             "lora": "LoRA",
+            "embedding": "Embedding",
             "replace": "替换",
             "append": "追加",
             "selectTargetNode": "选择目标节点",
@@ -1947,7 +1972,9 @@
             "bulkMoveSuccess": "成功移动 {successCount} 个 {type}",
             "exampleImagesDownloadSuccess": "示例图片下载成功！",
             "exampleImagesDownloadFailed": "示例图片下载失败：{message}",
-            "moveFailed": "Failed to move item: {message}"
+            "moveFailed": "Failed to move item: {message}",
+            "copiedToClipboard": "已复制到剪贴板",
+            "downloadStarted": "下载已开始"
         }
     },
     "doctor": {

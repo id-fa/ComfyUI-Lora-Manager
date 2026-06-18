@@ -15,7 +15,6 @@ import { i18n } from '../i18n/index.js';
 import { configureModelCardVideo } from '../components/shared/ModelCard.js';
 import { validatePriorityTagString, getPriorityTagSuggestionsMap, invalidatePriorityTagSuggestionsCache } from '../utils/priorityTagHelpers.js';
 import { bannerService } from './BannerService.js';
-import { sidebarManager } from '../components/SidebarManager.js';
 
 const VALID_MATURE_BLUR_LEVELS = new Set(['PG13', 'R', 'X', 'XXX']);
 
@@ -804,6 +803,18 @@ export class SettingsManager {
             );
         }
 
+        // Set card blur amount slider
+        const cardBlurAmountInput = document.getElementById('cardBlurAmount');
+        const cardBlurValue = state.global.settings.card_blur_amount ?? 8;
+        if (cardBlurAmountInput) {
+            cardBlurAmountInput.value = cardBlurValue;
+            cardBlurAmountInput.style.setProperty('--range-fill', (cardBlurValue / 20 * 100) + '%');
+        }
+        const cardBlurAmountValue = document.getElementById('cardBlurAmountValue');
+        if (cardBlurAmountValue) {
+            cardBlurAmountValue.textContent = `${cardBlurValue}px`;
+        }
+
         const usePortableCheckbox = document.getElementById('usePortableSettings');
         if (usePortableCheckbox) {
             usePortableCheckbox.checked = !!state.global.settings.use_portable_settings;
@@ -872,12 +883,6 @@ export class SettingsManager {
         const cardInfoDisplaySelect = document.getElementById('cardInfoDisplay');
         if (cardInfoDisplaySelect) {
             cardInfoDisplaySelect.value = state.global.settings.card_info_display || 'always';
-        }
-
-        const showFolderSidebarCheckbox = document.getElementById('showFolderSidebar');
-        if (showFolderSidebarCheckbox) {
-            const showSidebarSetting = state.global.settings.show_folder_sidebar;
-            showFolderSidebarCheckbox.checked = showSidebarSetting !== false;
         }
 
         // Set model card footer action
@@ -2051,6 +2056,31 @@ export class SettingsManager {
         }
     }
 
+    async saveRangeSetting(elementId, displayId, settingKey) {
+        const element = document.getElementById(elementId);
+        if (!element) return;
+
+        const value = parseInt(element.value, 10);
+
+        try {
+            await this.saveSetting(settingKey, value);
+            this.applyFrontendSettings();
+
+            // Update the displayed value next to the slider
+            const displayEl = document.getElementById(displayId);
+            if (displayEl) {
+                displayEl.textContent = `${value}px`;
+            }
+
+            const max = parseInt(element.max, 10) || 20;
+            element.style.setProperty('--range-fill', (value / max * 100) + '%');
+
+            showToast('toast.settings.settingsUpdated', { setting: settingKey.replace(/_/g, ' ') }, 'success');
+        } catch (error) {
+            showToast('toast.settings.settingSaveFailed', { message: error.message }, 'error');
+        }
+    }
+
     updateExampleImagesOpenSettingsVisibility() {
         const openMode = state.global.settings.example_images_open_mode || 'system';
         const localRootSetting = document.getElementById('exampleImagesLocalRootSetting');
@@ -2887,6 +2917,10 @@ export class SettingsManager {
     }
 
     applyFrontendSettings() {
+        // Apply card blur amount to CSS custom property
+        const cardBlurAmount = state.global.settings.card_blur_amount ?? 8;
+        document.documentElement.style.setProperty('--card-blur-amount', `${cardBlurAmount}px`);
+
         // Apply autoplay setting to existing videos in card previews
         const autoplayOnHover = state.global.settings.autoplay_on_hover;
         document.querySelectorAll('.card-preview video').forEach(video => {
@@ -2913,12 +2947,6 @@ export class SettingsManager {
         const showVersionOnCard = state.global.settings.show_version_on_card !== false;
         document.body.classList.toggle('hide-card-version', !showVersionOnCard);
 
-        const shouldShowSidebar = state.global.settings.show_folder_sidebar !== false;
-        if (sidebarManager && typeof sidebarManager.setSidebarEnabled === 'function') {
-            sidebarManager.setSidebarEnabled(shouldShowSidebar).catch((error) => {
-                console.error('Failed to apply sidebar visibility setting:', error);
-            });
-        }
     }
 }
 

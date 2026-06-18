@@ -22,6 +22,7 @@
         },
         "status": {
             "loading": "Chargement...",
+            "cancelling": "Annulation...",
             "unknown": "Inconnu",
             "date": "Date",
             "version": "Version",
@@ -113,6 +114,7 @@
             "replacePreview": "Remplacer l'aperçu",
             "copyCheckpointName": "Copier le nom du checkpoint",
             "copyEmbeddingName": "Copier le nom de l'embedding",
+            "embeddingNameCopied": "Syntaxe dembedding copiée",
             "sendCheckpointToWorkflow": "Envoyer vers ComfyUI",
             "sendEmbeddingToWorkflow": "Envoyer vers ComfyUI"
         },
@@ -249,7 +251,18 @@
             "toggle": "Basculer le thème",
             "switchToLight": "Passer au thème clair",
             "switchToDark": "Passer au thème sombre",
-            "switchToAuto": "Passer au thème automatique"
+            "switchToAuto": "Passer au thème automatique",
+            "presets": "Préréglages de thème",
+            "default": "Par défaut",
+            "nord": "Nord",
+            "gruvbox": "Gruvbox",
+            "monokai": "Monokai",
+            "dracula": "Dracula",
+            "solarized": "Solarized",
+            "mode": "Mode",
+            "light": "Clair",
+            "dark": "Sombre",
+            "auto": "Auto"
         },
         "actions": {
             "checkUpdates": "Vérifier les mises à jour",
@@ -447,7 +460,9 @@
                 "modelName": "Nom du modèle",
                 "fileName": "Nom du fichier"
             },
-            "modelNameDisplayHelp": "Choisissez ce qui doit être affiché dans le pied de page de la carte du modèle"
+            "modelNameDisplayHelp": "Choisissez ce qui doit être affiché dans le pied de page de la carte du modèle",
+            "cardBlurAmount": "Flou de superposition des cartes",
+            "cardBlurAmountHelp": "Ajustez l'intensité du flou des superpositions d'en-tête et de pied de page sur les cartes de modèles et de recettes (0 = aucun flou, 20 = flou maximal)."
         },
         "folderSettings": {
             "activeLibrary": "Bibliothèque active",
@@ -692,7 +707,7 @@
             "copyAll": "Copier toute la syntaxe",
             "refreshAll": "Actualiser toutes les métadonnées",
             "repairMetadata": "Réparer les métadonnées de la sélection",
-            "reimportMetadata": "Ré-importer les métadonnées de la sélection",
+            "reimportMetadata": "Ré-importer depuis la source",
             "checkUpdates": "Vérifier les mises à jour pour la sélection",
             "moveAll": "Déplacer tout vers un dossier",
             "autoOrganize": "Auto-organiser la sélection",
@@ -953,8 +968,9 @@
     "sidebar": {
         "modelRoot": "Racine",
         "collapseAll": "Réduire tous les dossiers",
-        "pinSidebar": "Épingler la barre latérale",
-        "unpinSidebar": "Désépingler la barre latérale",
+        "hideOnThisPage": "Masquer la barre latérale sur cette page",
+        "showSidebar": "Afficher la barre latérale",
+        "sidebarHiddenNotification": "Barre latérale masquée sur la page {page}",
         "switchToListView": "Passer en vue liste",
         "switchToTreeView": "Passer en vue arborescence",
         "recursiveOn": "Inclure les sous-dossiers",
@@ -1391,6 +1407,21 @@
                     "versionDeleted": "Version supprimée"
                 }
             }
+        },
+        "metadataFetchSummary": {
+            "title": "Récapitulatif de la récupération des métadonnées",
+            "statSuccess": "Réussi",
+            "statFailed": "Échoué",
+            "statSkipped": "Ignoré",
+            "statTotal": "Total scanné",
+            "statDuration": "Durée",
+            "successMessage": "Tous les {count} {type}s mis à jour avec succès !",
+            "failedItems": "Éléments échoués ({count})",
+            "close": "Fermer",
+            "copyReport": "Copier le rapport",
+            "downloadCsv": "Télécharger CSV",
+            "columnModelName": "Nom du modèle",
+            "columnError": "Erreur"
         }
     },
     "modelTags": {
@@ -1402,15 +1433,6 @@
             "maxLength": "Le tag ne doit pas dépasser 30 caractères",
             "maxCount": "Maximum 30 tags autorisés",
             "duplicate": "Ce tag existe déjà"
-        }
-    },
-    "keyboard": {
-        "navigation": "Navigation au clavier :",
-        "shortcuts": {
-            "pageUp": "Défiler d'une page vers le haut",
-            "pageDown": "Défiler d'une page vers le bas",
-            "home": "Aller en haut",
-            "end": "Aller en bas"
         }
     },
     "initialization": {
@@ -1500,11 +1522,14 @@
             "noMatchingNodes": "Aucun nœud compatible disponible dans le workflow actuel",
             "noTargetNodeSelected": "Aucun nœud cible sélectionné",
             "modelUpdated": "Modèle mis à jour dans le workflow",
-            "modelFailed": "Échec de la mise à jour du nœud modèle"
+            "modelFailed": "Échec de la mise à jour du nœud modèle",
+            "embeddingAdded": "Embedding ajouté au workflow",
+            "embeddingFailed": "Échec de l'ajout de l'embedding"
         },
         "nodeSelector": {
             "recipe": "Recipe",
             "lora": "LoRA",
+            "embedding": "Embedding",
             "replace": "Remplacer",
             "append": "Ajouter",
             "selectTargetNode": "Sélectionner le nœud cible",
@@ -1947,7 +1972,9 @@
             "bulkMoveSuccess": "{successCount} {type}s déplacés avec succès",
             "exampleImagesDownloadSuccess": "Images d'exemple téléchargées avec succès !",
             "exampleImagesDownloadFailed": "Échec du téléchargement des images d'exemple : {message}",
-            "moveFailed": "Failed to move item: {message}"
+            "moveFailed": "Failed to move item: {message}",
+            "copiedToClipboard": "Copié dans le presse-papiers",
+            "downloadStarted": "Téléchargement démarré"
         }
     },
     "doctor": {

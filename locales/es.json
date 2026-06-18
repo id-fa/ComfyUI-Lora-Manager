@@ -22,6 +22,7 @@
         },
         "status": {
             "loading": "Cargando...",
+            "cancelling": "Cancelando...",
             "unknown": "Desconocido",
             "date": "Fecha",
             "version": "Versión",
@@ -113,6 +114,7 @@
             "replacePreview": "Reemplazar vista previa",
             "copyCheckpointName": "Copiar nombre del checkpoint",
             "copyEmbeddingName": "Copiar nombre del embedding",
+            "embeddingNameCopied": "Sintaxis de embedding copiada",
             "sendCheckpointToWorkflow": "Enviar a ComfyUI",
             "sendEmbeddingToWorkflow": "Enviar a ComfyUI"
         },
@@ -249,7 +251,18 @@
             "toggle": "Cambiar tema",
             "switchToLight": "Cambiar a tema claro",
             "switchToDark": "Cambiar a tema oscuro",
-            "switchToAuto": "Cambiar a tema automático"
+            "switchToAuto": "Cambiar a tema automático",
+            "presets": "Preajustes de tema",
+            "default": "Predeterminado",
+            "nord": "Nord",
+            "gruvbox": "Gruvbox",
+            "monokai": "Monokai",
+            "dracula": "Dracula",
+            "solarized": "Solarized",
+            "mode": "Modo",
+            "light": "Claro",
+            "dark": "Oscuro",
+            "auto": "Auto"
         },
         "actions": {
             "checkUpdates": "Comprobar actualizaciones",
@@ -447,7 +460,9 @@
                 "modelName": "Nombre del modelo",
                 "fileName": "Nombre del archivo"
             },
-            "modelNameDisplayHelp": "Elige qué mostrar en el pie de la tarjeta del modelo"
+            "modelNameDisplayHelp": "Elige qué mostrar en el pie de la tarjeta del modelo",
+            "cardBlurAmount": "Desenfoque de superposición de tarjetas",
+            "cardBlurAmountHelp": "Ajuste la intensidad de desenfoque de las superposiciones del encabezado y pie de página en las tarjetas de modelos y recetas (0 = sin desenfoque, 20 = desenfoque máximo)."
         },
         "folderSettings": {
             "activeLibrary": "Biblioteca activa",
@@ -692,7 +707,7 @@
             "copyAll": "Copiar toda la sintaxis",
             "refreshAll": "Actualizar todos los metadatos",
             "repairMetadata": "Reparar metadatos de la selección",
-            "reimportMetadata": "Reimportar metadatos de la selección",
+            "reimportMetadata": "Reimportar desde origen",
             "checkUpdates": "Comprobar actualizaciones para la selección",
             "moveAll": "Mover todos a carpeta",
             "autoOrganize": "Auto-organizar seleccionados",
@@ -953,8 +968,9 @@
     "sidebar": {
         "modelRoot": "Raíz",
         "collapseAll": "Colapsar todas las carpetas",
-        "pinSidebar": "Fijar barra lateral",
-        "unpinSidebar": "Desfijar barra lateral",
+        "hideOnThisPage": "Ocultar barra lateral en esta página",
+        "showSidebar": "Mostrar barra lateral",
+        "sidebarHiddenNotification": "Barra lateral oculta en la página {page}",
         "switchToListView": "Cambiar a vista de lista",
         "switchToTreeView": "Cambiar a vista de árbol",
         "recursiveOn": "Incluir subcarpetas",
@@ -1391,6 +1407,21 @@
                     "versionDeleted": "Versión eliminada"
                 }
             }
+        },
+        "metadataFetchSummary": {
+            "title": "Resumen de obtención de metadatos",
+            "statSuccess": "Éxito",
+            "statFailed": "Fallido",
+            "statSkipped": "Omitido",
+            "statTotal": "Total escaneado",
+            "statDuration": "Duración",
+            "successMessage": "¡Todos los {count} {type}s actualizados correctamente!",
+            "failedItems": "Elementos fallidos ({count})",
+            "close": "Cerrar",
+            "copyReport": "Copiar informe",
+            "downloadCsv": "Descargar CSV",
+            "columnModelName": "Nombre del modelo",
+            "columnError": "Error"
         }
     },
     "modelTags": {
@@ -1402,15 +1433,6 @@
             "maxLength": "La etiqueta no debe exceder los 30 caracteres",
             "maxCount": "Máximo 30 etiquetas permitidas",
             "duplicate": "Esta etiqueta ya existe"
-        }
-    },
-    "keyboard": {
-        "navigation": "Navegación por teclado:",
-        "shortcuts": {
-            "pageUp": "Desplazar hacia arriba una página",
-            "pageDown": "Desplazar hacia abajo una página",
-            "home": "Saltar al inicio",
-            "end": "Saltar al final"
         }
     },
     "initialization": {
@@ -1500,11 +1522,14 @@
             "noMatchingNodes": "No hay nodos compatibles disponibles en el flujo de trabajo actual",
             "noTargetNodeSelected": "No se ha seleccionado ningún nodo de destino",
             "modelUpdated": "Modelo actualizado en el flujo de trabajo",
-            "modelFailed": "Error al actualizar nodo de modelo"
+            "modelFailed": "Error al actualizar nodo de modelo",
+            "embeddingAdded": "Embedding añadido al flujo de trabajo",
+            "embeddingFailed": "Error al añadir el embedding"
         },
         "nodeSelector": {
             "recipe": "Receta",
             "lora": "LoRA",
+            "embedding": "Embedding",
             "replace": "Reemplazar",
             "append": "Añadir",
             "selectTargetNode": "Seleccionar nodo de destino",
@@ -1947,7 +1972,9 @@
             "bulkMoveSuccess": "Movidos exitosamente {successCount} {type}s",
             "exampleImagesDownloadSuccess": "¡Imágenes de ejemplo descargadas exitosamente!",
             "exampleImagesDownloadFailed": "Error al descargar imágenes de ejemplo: {message}",
-            "moveFailed": "Failed to move item: {message}"
+            "moveFailed": "Failed to move item: {message}",
+            "copiedToClipboard": "Copiado al portapapeles",
+            "downloadStarted": "Descarga iniciada"
         }
     },
     "doctor": {
