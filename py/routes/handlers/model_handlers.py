@@ -233,6 +233,8 @@ class ModelListingHandler:
         start_time = time.perf_counter()
         try:
             params = self._parse_common_params(request)
+            # group_by_model is meaningless for excluded view; strip it
+            params.pop("group_by_model", None)
             result = await self._service.get_excluded_paginated_data(**params)
 
             format_start = time.perf_counter()
@@ -366,6 +368,19 @@ class ModelListingHandler:
             request.query.get("name_pattern_use_regex", "false").lower() == "true"
         )
 
+        # Group-by-model flag: deduplicate versions sharing the same civitai modelId
+        group_by_model = (
+            request.query.get("group_by_model", "false").lower() == "true"
+        )
+
+        # View-local-versions filter: show all local versions of a specific model
+        civitai_model_id = request.query.get("civitai_model_id")
+        if civitai_model_id is not None:
+            try:
+                civitai_model_id = int(civitai_model_id)
+            except (TypeError, ValueError):
+                civitai_model_id = None
+
         return {
             "page": page,
             "page_size": page_size,
@@ -389,6 +404,8 @@ class ModelListingHandler:
             "name_pattern_include": name_pattern_include,
             "name_pattern_exclude": name_pattern_exclude,
             "name_pattern_use_regex": name_pattern_use_regex,
+            "group_by_model": group_by_model,
+            "civitai_model_id": civitai_model_id,
             **self._parse_specific_params(request),
         }
 
@@ -1272,6 +1289,14 @@ class ModelQueryHandler:
                     license_flags = (model_data or {}).get("license_flags")
                     if license_flags is not None:
                         response_payload["license_flags"] = int(license_flags)
+                    # Include the user's license icon style preference so the
+                    # ComfyUI tooltip can pick the right set without a separate
+                    # API call.
+                    try:
+                        settings = get_settings_manager()
+                        response_payload["use_new_license_icons"] = settings.get("use_new_license_icons", True)
+                    except Exception:
+                        pass
                 return web.json_response(response_payload)
             return web.json_response(
                 {

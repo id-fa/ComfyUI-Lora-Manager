@@ -145,6 +145,10 @@
         },
         "usage": {
             "timesUsed": "Verwendungsanzahl"
+        },
+        "footer": {
+            "versionCount": "{count} Versionen",
+            "viewAllVersions": "Alle lokalen Versionen anzeigen"
         }
     },
     "globalContextMenu": {
@@ -183,6 +187,9 @@
         },
         "manageExcludedModels": {
             "label": "Ausgeschlossene Modelle verwalten"
+        },
+        "groupByModel": {
+            "label": "Nach Modell gruppieren"
         }
     },
     "header": {
@@ -195,13 +202,7 @@
             "statistics": "Statistiken"
         },
         "search": {
-            "placeholder": "Suchen...",
-            "placeholders": {
-                "loras": "LoRAs suchen...",
-                "recipes": "Rezepte suchen...",
-                "checkpoints": "Checkpoints suchen...",
-                "embeddings": "Embeddings suchen..."
-            },
+            "placeholder": "Suchen",
             "options": "Suchoptionen",
             "searchIn": "Suchen in:",
             "notAvailable": "Suche auf Statistikseite nicht verfügbar",
@@ -255,7 +256,7 @@
             "presets": "Theme-Voreinstellungen",
             "default": "Standard",
             "nord": "Nord",
-            "gruvbox": "Gruvbox",
+            "midnight": "Midnight",
             "monokai": "Monokai",
             "dracula": "Dracula",
             "solarized": "Solarized",
@@ -274,6 +275,9 @@
         "civitaiApiKey": "Civitai API Key",
         "civitaiApiKeyPlaceholder": "Geben Sie Ihren Civitai API Key ein",
         "civitaiApiKeyHelp": "Wird für die Authentifizierung beim Herunterladen von Modellen von Civitai verwendet",
+        "civitaiApiKeyConfigured": "Konfiguriert",
+        "civitaiApiKeyNotConfigured": "Nicht konfiguriert",
+        "civitaiApiKeySet": "Einrichten",
         "civitaiHost": {
             "label": "Civitai-Host",
             "help": "Wählen Sie aus, welche Civitai-Seite geöffnet wird, wenn Sie „View on Civitai“-Links verwenden.",
@@ -314,6 +318,7 @@
             "downloads": "Downloads",
             "videoSettings": "Video-Einstellungen",
             "layoutSettings": "Layout-Einstellungen",
+            "licenseIcons": "Lizenzsymbole",
             "misc": "Verschiedenes",
             "backup": "Backups",
             "folderSettings": "Standard-Roots",
@@ -321,7 +326,7 @@
             "extraFolderPaths": "Zusätzliche Ordnerpfade",
             "downloadPathTemplates": "Download-Pfad-Vorlagen",
             "priorityTags": "Prioritäts-Tags",
-            "updateFlags": "Update-Markierungen",
+            "versionScope": "Update-Markierungen",
             "exampleImages": "Beispielbilder",
             "autoOrganize": "Auto-Organisierung",
             "metadata": "Metadaten",
@@ -426,6 +431,8 @@
             "help": "Wenn aktiviert, überspringt LoRA Manager den Download einer Modellversion, wenn der Download-Verlaufsdienst diese spezifische Version als bereits heruntergeladen erfasst hat. Gilt für alle Download-Abläufe."
         },
         "layoutSettings": {
+            "groupByModel": "Nach Modell gruppieren",
+            "groupByModelHelp": "Wenn aktiviert, wird nur die neueste Version jedes Civitai-Modells als einzelne Karte angezeigt. Ältere Versionen werden ausgeblendet.",
             "displayDensity": "Anzeige-Dichte",
             "displayDensityOptions": {
                 "default": "Standard",
@@ -582,7 +589,7 @@
             "download": "Herunterladen",
             "restartRequired": "Neustart erforderlich"
         },
-        "updateFlagStrategy": {
+        "versionGrouping": {
             "label": "Strategie für Update-Markierungen",
             "help": "Entscheide, ob Update-Badges nur dann erscheinen, wenn eine neue Version dasselbe Basismodell wie deine lokalen Dateien verwendet, oder sobald es irgendein neueres Release für dieses Modell gibt.",
             "options": {
@@ -593,6 +600,10 @@
         "hideEarlyAccessUpdates": {
             "label": "Früher Zugriff Updates ausblenden",
             "help": "Nur Early-Access-Updates"
+        },
+        "licenseIcons": {
+            "useNewStyle": "Aktualisierte Lizenzsymbole verwenden",
+            "useNewStyleHelp": "Lizenzberechtigungen mit farbigen Indikatoren (neuer Stil) oder nur Einschränkungssymbolen (klassischer Stil) anzeigen. Orientiert sich am aktuellen CivitAI-Design."
         },
         "misc": {
             "includeTriggerWords": "Trigger Words in LoRA-Syntax einschließen",
@@ -662,7 +673,11 @@
                 "sizeAsc": "Kleinste",
                 "usage": "Anzahl Nutzung",
                 "usageDesc": "Meiste",
-                "usageAsc": "Wenigste"
+                "usageAsc": "Wenigste",
+                "versionsCount": "Lokale Versionen",
+                "versionsCountDesc": "Meiste Versionen zuerst",
+                "versionsCountAsc": "Wenigste Versionen zuerst",
+                "versionIdDesc": "Neueste Version zuerst"
             },
             "refresh": {
                 "title": "Modelliste aktualisieren",
@@ -1008,6 +1023,18 @@
             "storage": "Speicher",
             "insights": "Erkenntnisse"
         },
+        "metrics": {
+            "totalModels": "Modelle gesamt",
+            "totalStorage": "Speicher gesamt",
+            "totalGenerations": "Generationen gesamt",
+            "usageRate": "Nutzungsrate",
+            "loras": "LoRAs",
+            "checkpoints": "Checkpoints",
+            "embeddings": "Embeddings",
+            "uniqueTags": "Einzigartige Tags",
+            "unusedModels": "Ungenutzte Modelle",
+            "avgUsesPerModel": "Ø Nutzungen/Modell"
+        },
         "usage": {
             "mostUsedLoras": "Meistgenutzte LoRAs",
             "mostUsedCheckpoints": "Meistgenutzte Checkpoints",
@@ -1025,13 +1052,77 @@
         },
         "insights": {
             "smartInsights": "Intelligente Erkenntnisse",
-            "recommendations": "Empfehlungen"
+            "recommendations": "Empfehlungen",
+            "noInsights": "Keine Erkenntnisse verfügbar",
+            "unusedLoras": {
+                "high": {
+                    "title": "Hohe Anzahl ungenutzter LoRAs",
+                    "description": "{percent}% Ihrer LoRAs ({count}/{total}) wurden noch nie verwendet.",
+                    "suggestion": "Erwägen Sie, ungenutzte Modelle zu organisieren oder zu archivieren, um Speicherplatz freizugeben."
+                }
+            },
+            "unusedCheckpoints": {
+                "detected": {
+                    "title": "Ungenutzte Checkpoints erkannt",
+                    "description": "{percent}% Ihrer Checkpoints ({count}/{total}) wurden noch nie verwendet.",
+                    "suggestion": "Überprüfen Sie nicht mehr benötigte Checkpoints und erwägen Sie deren Entfernung."
+                }
+            },
+            "unusedEmbeddings": {
+                "high": {
+                    "title": "Hohe Anzahl ungenutzter Embeddings",
+                    "description": "{percent}% Ihrer Embeddings ({count}/{total}) wurden noch nie verwendet.",
+                    "suggestion": "Organisieren oder archivieren Sie ungenutzte Embeddings, um Ihre Sammlung zu optimieren."
+                }
+            },
+            "collection": {
+                "large": {
+                    "title": "Große Sammlung erkannt",
+                    "description": "Ihre Modellsammlung verwendet {size} Speicher.",
+                    "suggestion": "Erwägen Sie externe Speicher- oder Cloud-Lösungen für eine bessere Organisation."
+                }
+            },
+            "activity": {
+                "active": {
+                    "title": "Aktiver Benutzer",
+                    "description": "Sie haben {count} Generationen abgeschlossen!",
+                    "suggestion": "Entdecken und erstellen Sie weiterhin großartige Inhalte mit Ihren Modellen."
+                }
+            }
         },
         "charts": {
             "collectionOverview": "Sammlungsübersicht",
             "baseModelDistribution": "Basis-Modell-Verteilung",
             "usageTrends": "Nutzungstrends (Letzte 30 Tage)",
-            "usageDistribution": "Nutzungsverteilung"
+            "usageDistribution": "Nutzungsverteilung",
+            "date": "Datum",
+            "usageCount": "Nutzungsanzahl",
+            "fileSizeBytes": "Dateigröße (Bytes)",
+            "models": "Modelle",
+            "loraUsage": "LoRA-Nutzung",
+            "checkpointUsage": "Checkpoint-Nutzung",
+            "embeddingUsage": "Embedding-Nutzung"
+        },
+        "modelTypes": {
+            "lora": "LoRA",
+            "locon": "LyCORIS",
+            "dora": "DoRA",
+            "checkpoint": "Checkpoint",
+            "diffusion_model": "Diffusionsmodell",
+            "embedding": "Embeddings"
+        },
+        "placeholders": {
+            "loading": "Lädt...",
+            "noModels": "Keine Modelle gefunden",
+            "errorLoading": "Fehler beim Laden der Daten",
+            "noStorageData": "Keine Speicherdaten verfügbar",
+            "rootFolder": "Root",
+            "chartLibraryMissing": "Diagramm benötigt Chart.js-Bibliothek"
+        },
+        "tooltips": {
+            "tagCount": "{tag}: {count} Modelle",
+            "chartUsage": "{name}: {size}, {count} Nutzungen",
+            "chartPercentage": "{label}: {value} ({pct}%)"
         }
     },
     "modals": {
@@ -1524,12 +1615,15 @@
             "modelUpdated": "Modell im Workflow aktualisiert",
             "modelFailed": "Fehler beim Aktualisieren des Modellknotens",
             "embeddingAdded": "Embedding zum Workflow hinzugefügt",
-            "embeddingFailed": "Fehler beim Hinzufügen des Embeddings"
+            "embeddingFailed": "Fehler beim Hinzufügen des Embeddings",
+            "promptSent": "Prompt an Workflow gesendet",
+            "promptFailed": "Fehler beim Senden des Prompts"
         },
         "nodeSelector": {
             "recipe": "Rezept",
             "lora": "LoRA",
             "embedding": "Embedding",
+            "prompt": "Prompt",
             "replace": "Ersetzen",
             "append": "Anhängen",
             "selectTargetNode": "Zielknoten auswählen",
@@ -1716,6 +1810,7 @@
             "enterLoraName": "Bitte geben Sie einen LoRA-Namen oder Syntax ein",
             "reconnectedSuccessfully": "LoRA erfolgreich neu verbunden",
             "reconnectFailed": "Fehler beim Neuverbinden des LoRA: {message}",
+            "noPromptToSend": "Kein zu sendender Prompt",
             "cannotSend": "Kann Rezept nicht senden: Fehlende Rezept-ID",
             "sendFailed": "Fehler beim Senden des Rezepts an Workflow",
             "sendError": "Fehler beim Senden des Rezepts an Workflow",

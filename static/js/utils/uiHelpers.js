@@ -6,6 +6,7 @@ import { eventManager } from './EventManager.js';
 import { bannerService } from '../managers/BannerService.js';
 import { modalManager } from '../managers/ModalManager.js';
 import { buildCivitaiUrl, normalizeCivitaiPageHost } from './civitaiUtils.js';
+import { resolveSamplerScheduler, findMatchingWidgets } from './genParamsMapper.js';
 
 const CIVITAI_HOST_INFO_BANNER_ID = 'civitai-host-preference';
 const CIVITAI_HOST_INFO_BANNER_SEEN_KEY = 'civitai_host_info_banner_seen';
@@ -198,15 +199,20 @@ export function restoreFolderFilter() {
 }
 
 const CYCLE_ORDER = ['auto', 'light', 'dark'];
-const PRESET_NAMES = ['default', 'nord', 'gruvbox', 'monokai', 'dracula', 'solarized'];
+const PRESET_NAMES = ['default', 'nord', 'midnight', 'monokai', 'dracula', 'solarized'];
 
 export { CYCLE_ORDER, PRESET_NAMES };
 
 export function initTheme() {
   const savedTheme = getStorageItem('theme') || 'auto';
-  const savedPreset = getStorageItem('theme_preset') || 'default';
+  // Migrate deprecated presets
+  let savedPreset = getStorageItem('theme_preset');
+  if (savedPreset === 'gruvbox') {
+    savedPreset = 'midnight';
+    setStorageItem('theme_preset', 'midnight');
+  }
   applyTheme(savedTheme);
-  applyPreset(savedPreset);
+  applyPreset(savedPreset || 'default');
 
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
     const currentTheme = getStorageItem('theme') || 'auto';
@@ -514,6 +520,22 @@ export function copyLoraSyntax(card) {
     const message = translate('uiHelpers.lora.syntaxCopiedWithTriggerWordGroups', {}, 'LoRA syntax with trigger word groups copied to clipboard');
     copyToClipboard(finalSyntax, message);
   }
+}
+
+/**
+ * Strip <lora:...> tags from prompt text and clean up residual punctuation/whitespace.
+ * Handles both unescaped (<lora:...>) and HTML-escaped (&lt;lora:...&gt;) variants.
+ * Cleans up artifacts like leading ", ", double commas, and extra whitespace.
+ */
+export function stripLoraTags(text) {
+    return text
+        .replace(/<lora:[^>]*>/gi, '')
+        .replace(/&lt;lora:[^&]*&gt;/gi, '')
+        .replace(/,(\s*,)+/g, ',')
+        .replace(/^,\s*/, '')
+        .replace(/,\s*$/, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
 }
 
 async function fetchWorkflowRegistry() {
@@ -838,11 +860,12 @@ async function sendWidgetValueToNodes(nodeIds, nodesMap, widgetName, value, mess
     successMessage = 'Updated workflow node',
     failureMessage = 'Failed to update workflow node',
     missingTargetMessage = 'No target node selected',
+    silent = false,
   } = messages;
 
   const targetIds = Array.isArray(nodeIds) ? nodeIds : [];
   if (targetIds.length === 0) {
-    showToast(missingTargetMessage, {}, 'warning');
+    if (!silent) showToast(missingTargetMessage, {}, 'warning');
     return false;
   }
 
@@ -851,7 +874,7 @@ async function sendWidgetValueToNodes(nodeIds, nodesMap, widgetName, value, mess
     .filter((reference) => reference && reference.node_id !== undefined);
 
   if (references.length === 0) {
-    showToast(missingTargetMessage, {}, 'warning');
+    if (!silent) showToast(missingTargetMessage, {}, 'warning');
     return false;
   }
 
@@ -870,16 +893,16 @@ async function sendWidgetValueToNodes(nodeIds, nodesMap, widgetName, value, mess
 
     const result = await response.json();
     if (result.success) {
-      showToast(successMessage, {}, 'success');
+      if (!silent) showToast(successMessage, {}, 'success');
       return true;
     }
 
     const errorMessage = result?.error || failureMessage;
-    showToast(errorMessage, {}, 'error');
+    if (!silent) showToast(errorMessage, {}, 'error');
     return false;
   } catch (error) {
     console.error('Failed to send widget value to workflow:', error);
-    showToast(failureMessage, {}, 'error');
+    if (!silent) showToast(failureMessage, {}, 'error');
     return false;
   }
 }
@@ -913,7 +936,7 @@ async function sendTextToNodes(nodeIds, nodesMap, text, mode, messages = {}) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        widget_name: 'text',
+        action: 'inject_text',
         value: text,
         mode: mode || 'append',
         node_ids: references,
@@ -946,7 +969,10 @@ export async function sendEmbeddingToWorkflow(embeddingCode) {
     if (!isNodeEnabled(node)) {
       return false;
     }
-    return node.capabilities?.has_text_widget === true;
+    return (
+      node.capabilities?.has_text_widget === true ||
+      node.marker_role === "send_prompt_target"
+    );
   });
 
   const nodeKeys = Object.keys(textNodes);
@@ -974,6 +1000,184 @@ export async function sendEmbeddingToWorkflow(embeddingCode) {
     actionType,
     actionMode: '',
     onSend: handleSend,
+  });
+  return true;
+}
+
+/**
+ * Send prompt text to workflow text-capable nodes (replaces existing content).
+ * Uses the same target node discovery as sendEmbeddingToWorkflow.
+ * @param {string} promptText - The prompt/negative prompt text to send
+ * @param {Object} [options] - Optional messages overrides
+ * @param {string} [options.actionTypeText] - Label for the action type (default "Prompt")
+ * @param {string} [options.successMessage] - Success toast message
+ * @param {string} [options.failureMessage] - Failure toast message
+ * @param {string} [options.missingNodesMessage] - No nodes warning message
+ * @param {string} [options.missingTargetMessage] - No target selected warning message
+ * @returns {Promise<boolean>} Whether the send succeeded
+ */
+export async function sendPromptToWorkflow(promptText, options = {}) {
+  const registry = await fetchWorkflowRegistry();
+  if (!registry) {
+    return false;
+  }
+
+  const textNodes = filterRegistryNodes(registry.nodes, (node) => {
+    if (!isNodeEnabled(node)) {
+      return false;
+    }
+    return (
+      node.capabilities?.has_text_widget === true ||
+      node.marker_role === "send_prompt_target"
+    );
+  });
+
+  const nodeKeys = Object.keys(textNodes);
+  if (nodeKeys.length === 0) {
+    showToast(options.missingNodesMessage || 'uiHelpers.workflow.noMatchingNodes', {}, 'warning');
+    return false;
+  }
+
+  const messages = {
+    successMessage: options.successMessage || translate('uiHelpers.workflow.promptSent', {}, 'Prompt sent to workflow'),
+    failureMessage: options.failureMessage || translate('uiHelpers.workflow.promptFailed', {}, 'Failed to send prompt'),
+    missingTargetMessage: options.missingTargetMessage || translate('uiHelpers.workflow.noTargetNodeSelected', {}, 'No target node selected'),
+  };
+
+  const handleSend = (selectedNodeIds) =>
+    sendTextToNodes(selectedNodeIds, textNodes, promptText, 'replace', messages);
+
+  if (nodeKeys.length === 1) {
+    return await handleSend([nodeKeys[0]]);
+  }
+
+  const actionType = options.actionTypeText || translate('uiHelpers.nodeSelector.prompt', {}, 'Prompt');
+
+  showNodeSelector(textNodes, {
+    actionType,
+    actionMode: translate('uiHelpers.nodeSelector.replace', {}, 'Replace'),
+    onSend: handleSend,
+  });
+  return true;
+}
+
+/**
+ * Send generation parameters (seed, steps, cfg, sampler, scheduler) to
+ * workflow nodes that have been marked with "Send Gen Params Target".
+ *
+ * @param {Object} genParams - Raw gen_params from recipe or showcase metadata
+ * @returns {Promise<boolean>} Whether the send succeeded
+ */
+export async function sendGenParamsToWorkflow(genParams) {
+  if (!genParams || typeof genParams !== 'object') {
+    showToast('No generation parameters to send', {}, 'warning');
+    return false;
+  }
+
+  // 1. Extract relevant params (skip prompt, negative_prompt, clip_skip, denoising_strength)
+  const raw = {
+    seed: genParams.seed,
+    steps: genParams.steps,
+    cfg: genParams.cfg_scale,
+  };
+
+  // 2. Resolve sampler/scheduler
+  const resolved = resolveSamplerScheduler(genParams.sampler);
+  if (resolved) {
+    if (resolved.sampler) raw.sampler = resolved.sampler;
+    if (resolved.scheduler) raw.scheduler = resolved.scheduler;
+  }
+
+  // Check if we have anything to send
+  const hasAny = Object.values(raw).some(v => v !== undefined && v !== null && v !== '');
+  if (!hasAny) {
+    showToast('No sendable parameters found', {}, 'warning');
+    return false;
+  }
+
+  // 3. Fetch workflow registry
+  const registry = await fetchWorkflowRegistry();
+  if (!registry) {
+    return false;
+  }
+
+  // 4. Filter nodes by marker_role === "send_gen_params"
+  const targetNodes = filterRegistryNodes(registry.nodes, (node) => {
+    return node.marker_role === 'send_gen_params' && isNodeEnabled(node);
+  });
+
+  const nodeKeys = Object.keys(targetNodes);
+  if (nodeKeys.length === 0) {
+    showToast(
+      'No node marked as Send Gen Params Target.\nRight-click a node in ComfyUI → Mark as → Send Gen Params Target',
+      {},
+      'warning'
+    );
+    return false;
+  }
+
+  // 5. For each candidate node, find matching widgets
+  // Also collect widget_names from registry for matching
+  const sendToNode = async (nodeIds) => {
+    const targetIds = Array.isArray(nodeIds) ? nodeIds : [nodeIds];
+    let allSuccess = true;
+    let totalSent = 0;
+    let totalFailed = 0;
+
+    for (const nodeKey of targetIds) {
+      const node = targetNodes[nodeKey];
+      if (!node) continue;
+
+      const widgetNames = node.widget_names || [];
+      const updates = findMatchingWidgets(widgetNames, raw);
+
+      if (updates.length === 0) {
+        showToast(`Node "${node.title || node.type}" has no matching widgets for these parameters`, {}, 'warning');
+        allSuccess = false;
+        continue;
+      }
+
+      // Send each widget value sequentially
+      for (const update of updates) {
+        const success = await sendWidgetValueToNodes(
+          [nodeKey],
+          targetNodes,
+          update.widgetName,
+          update.value,
+          {
+            silent: true,
+          }
+        );
+        if (success) {
+          totalSent++;
+        } else {
+          totalFailed++;
+          allSuccess = false;
+        }
+      }
+    }
+
+    // Show single summary toast
+    if (totalSent > 0 && totalFailed === 0) {
+      showToast(`Sent ${totalSent} parameter${totalSent > 1 ? 's' : ''} to workflow`, {}, 'success');
+    } else if (totalFailed > 0 && totalSent > 0) {
+      showToast(`Partially updated (${totalSent} ok, ${totalFailed} failed)`, {}, 'warning');
+    } else if (totalFailed > 0) {
+      showToast('Failed to update parameters', {}, 'error');
+    }
+    return allSuccess;
+  };
+
+  // 6. If multiple nodes, show node selector; otherwise send directly
+  if (nodeKeys.length === 1) {
+    return await sendToNode([nodeKeys[0]]);
+  }
+
+  showNodeSelector(targetNodes, {
+    actionType: 'Gen Params',
+    actionMode: 'Update',
+    onSend: sendToNode,
+    enableSendAll: true,
   });
   return true;
 }

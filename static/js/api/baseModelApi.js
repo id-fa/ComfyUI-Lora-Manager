@@ -1,7 +1,7 @@
 import { state, getCurrentPageState } from '../state/index.js';
 import { showToast } from '../utils/uiHelpers.js';
 import { translate } from '../utils/i18nHelpers.js';
-import { getStorageItem, getSessionItem, saveMapToStorage } from '../utils/storageHelpers.js';
+import { getStorageItem, getSessionItem, removeSessionItem, saveMapToStorage } from '../utils/storageHelpers.js';
 import {
     getCompleteApiConfig,
     getCurrentModelType,
@@ -115,7 +115,10 @@ export class BaseModelApiClient {
         const pageState = this.getPageState();
 
         try {
-            state.loadingManager.showSimpleLoading(`Loading more ${this.apiConfig.config.displayName}s...`);
+            // Use grid-scoped loading instead of full-page overlay
+            if (state.virtualScroller?.showGridLoading) {
+                state.virtualScroller.showGridLoading();
+            }
 
             pageState.isLoading = true;
             if (resetPage) {
@@ -133,6 +136,16 @@ export class BaseModelApiClient {
             pageState.hasMore = result.hasMore;
             pageState.currentPage = pageState.currentPage + 1;
 
+            // When resetting to page 1, scroll back to the top
+            // This covers: folder selection, filter/sort/search changes,
+            // favorites/update/excluded view toggles, alphabet filter, etc.
+            if (resetPage) {
+                const scrollContainer = document.querySelector('.page-content');
+                if (scrollContainer) {
+                    scrollContainer.scrollTop = 0;
+                }
+            }
+
             if (updateFolders) {
                 sidebarManager.refresh();
             }
@@ -144,7 +157,14 @@ export class BaseModelApiClient {
             throw error;
         } finally {
             pageState.isLoading = false;
-            state.loadingManager.hide();
+            // Wait for the next rAF so refreshWithData's scheduleRender has
+            // completed rendering new cards before hiding the grid loading overlay.
+            // This eliminates the ~6.7ms blank-frame gap that caused the flicker.
+            if (state.virtualScroller?.hideGridLoading) {
+                requestAnimationFrame(() => {
+                    state.virtualScroller.hideGridLoading();
+                });
+            }
         }
     }
 
@@ -679,39 +699,34 @@ export class BaseModelApiClient {
                 <div class="modal-content metadata-refresh-result-modal">
                     <button class="close" data-action="close-modal">&times;</button>
 
-                    <h2><i class="fas fa-sync-alt"></i> ${translate('modals.metadataFetchSummary.title', {}, 'Metadata Fetch Summary')}</h2>
+                    <h2>${translate('modals.metadataFetchSummary.title', {}, 'Metadata Fetch Summary')}</h2>
 
                     <div class="refresh-summary-stats">
                         <div class="stat-card stat-card-success">
-                            <i class="fas fa-check-circle"></i>
                             <div class="stat-card-body">
                                 <span class="stat-card-label">${translate('modals.metadataFetchSummary.statSuccess', {}, 'Success')}</span>
                                 <span class="stat-card-value">${success}</span>
                             </div>
                         </div>
                         <div class="stat-card stat-card-failure">
-                            <i class="fas fa-times-circle"></i>
                             <div class="stat-card-body">
                                 <span class="stat-card-label">${translate('modals.metadataFetchSummary.statFailed', {}, 'Failed')}</span>
                                 <span class="stat-card-value">${failure_count}</span>
                             </div>
                         </div>
                         <div class="stat-card stat-card-skipped">
-                            <i class="fas fa-forward"></i>
                             <div class="stat-card-body">
                                 <span class="stat-card-label">${translate('modals.metadataFetchSummary.statSkipped', {}, 'Skipped')}</span>
                                 <span class="stat-card-value">${skipped_count}</span>
                             </div>
                         </div>
                         <div class="stat-card stat-card-total">
-                            <i class="fas fa-database"></i>
                             <div class="stat-card-body">
                                 <span class="stat-card-label">${translate('modals.metadataFetchSummary.statTotal', {}, 'Total Scanned')}</span>
                                 <span class="stat-card-value">${total || processed}</span>
                             </div>
                         </div>
                         <div class="stat-card stat-card-time">
-                            <i class="fas fa-clock"></i>
                             <div class="stat-card-body">
                                 <span class="stat-card-label">${translate('modals.metadataFetchSummary.statDuration', {}, 'Duration')}</span>
                                 <span class="stat-card-value">${elapsed_seconds}s</span>
@@ -1266,6 +1281,12 @@ export class BaseModelApiClient {
 
         params.append('recursive', pageState.searchOptions.recursive ? 'true' : 'false');
 
+        // Pass group-by-model mode to backend (skip when showing all versions of a specific model)
+        const vlmModelId = getSessionItem('vlm_model_id');
+        if (state.global.settings.group_by_model && !vlmModelId) {
+            params.append('group_by_model', 'true');
+        }
+
         if (!isExcludedView && pageState.filters) {
             if (pageState.filters.tags && Object.keys(pageState.filters.tags).length > 0) {
                 Object.entries(pageState.filters.tags).forEach(([tag, state]) => {
@@ -1347,6 +1368,24 @@ export class BaseModelApiClient {
     }
 
     _addModelSpecificParams(params, pageState) {
+        // Check for View Local Versions filter (takes priority over recipe filters)
+        const vlmModelId = getSessionItem('vlm_model_id');
+        const vlmPageType = getSessionItem('vlm_page_type');
+        if (vlmModelId && vlmPageType === this.modelType) {
+            params.append('civitai_model_id', vlmModelId);
+            const vlmBaseModel = getSessionItem('vlm_base_model');
+            if (vlmBaseModel) {
+                params.append('base_model', vlmBaseModel);
+            }
+            return;
+        } else if (vlmModelId && vlmPageType !== this.modelType) {
+            // Stale VLM data from a different page type — clean up
+            removeSessionItem('vlm_model_id');
+            removeSessionItem('vlm_model_name');
+            removeSessionItem('vlm_base_model');
+            removeSessionItem('vlm_page_type');
+        }
+
         if (this.modelType === 'loras') {
             const filterLoraHash = getSessionItem('recipe_to_lora_filterLoraHash');
             const filterLoraHashes = getSessionItem('recipe_to_lora_filterLoraHashes');
