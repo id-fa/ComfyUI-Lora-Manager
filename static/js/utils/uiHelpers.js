@@ -320,6 +320,15 @@ export function openCivitai(filePath) {
 }
 
 /**
+ * Open a Hugging Face model page in a new tab
+ * @param {string} hfUrl - The Hugging Face URL
+ */
+export function openHuggingFace(hfUrl) {
+  if (!hfUrl) return;
+  window.open(hfUrl, '_blank', 'noopener,noreferrer');
+}
+
+/**
  * Dynamically positions the search options panel and filter panel
  * based on the current layout and folder tags container height
  */
@@ -1475,4 +1484,41 @@ export async function openExampleImagesFolder(modelHash) {
     showToast('uiHelpers.exampleImages.failedToOpen', {}, 'error');
     return false;
   }
+}
+
+/**
+ * Set up a paste handler on a textarea that automatically appends a newline
+ * after pasted content that looks like a URL (http/https). This lets users
+ * paste multiple URLs one after another without manually pressing Enter.
+ * @param {string} textareaId - The id of the textarea element
+ */
+export function setupAutoNewlineOnPaste(textareaId) {
+  const el = document.getElementById(textareaId);
+  if (!el || el.tagName !== 'TEXTAREA') return;
+
+  el.addEventListener('paste', (e) => {
+    const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+    // Only apply to text that starts with http:// or https://
+    if (/^https?:\/\//.test(pastedText) && !pastedText.endsWith('\n')) {
+      e.preventDefault();
+
+      const start = el.selectionStart;
+      const end = el.selectionEnd;
+      const text = el.value;
+      const before = text.substring(0, start);
+      const after = text.substring(end);
+
+      // Append newline after the pasted URL
+      const modifiedText = pastedText + '\n';
+      el.value = before + modifiedText + after;
+
+      // Move cursor to just after the inserted text
+      const newCursorPos = start + modifiedText.length;
+      el.selectionStart = el.selectionEnd = newCursorPos;
+
+      // Trigger input event so any listeners stay in sync
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    // Non-URL text or text already ending with \n — let default paste happen
+  });
 }

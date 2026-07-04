@@ -822,3 +822,65 @@
 [data-theme="dark"] .batch-preview-item {
     background: var(--lora-surface);
 }
+
+.hf-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 8px;
+    background: oklch(0.55 0.12 250 / 0.15);
+    color: oklch(0.7 0.12 250);
+    font-size: 0.75em;
+    font-weight: 600;
+    margin-left: 4px;
+}
+
+
+/* Checkbox inside HF batch preview items */
+.batch-preview-checkbox {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--lora-accent);
+    flex-shrink: 0;
+    padding: 0;
+    border: none;
+    margin: 0;
+}
+
+/* Select All toolbar in batch preview */
+.batch-preview-select-all {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--lora-surface);
+    cursor: pointer;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.batch-preview-select-all input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--lora-accent);
+    flex-shrink: 0;
+    padding: 0;
+    border: none;
+    margin: 0;
+}
+
+.batch-preview-select-all label {
+    cursor: pointer;
+    font-size: 0.9em;
+    color: var(--text-color);
+    font-weight: 500;
+    margin: 0;
+    user-select: none;
+}
+
+[data-theme="dark"] .batch-preview-select-all {
+    background: var(--lora-surface);
+}

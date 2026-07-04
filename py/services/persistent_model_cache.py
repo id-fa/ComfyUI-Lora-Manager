@@ -57,6 +57,7 @@ class PersistentModelCache:
         "db_checked",
         "last_checked_at",
         "hash_status",
+        "hf_url",
     )
     _MODEL_UPDATE_COLUMNS: Tuple[str, ...] = _MODEL_COLUMNS[2:]
     _instances: Dict[str, "PersistentModelCache"] = {}
@@ -165,8 +166,8 @@ class PersistentModelCache:
 
             item = {
                 "file_path": file_path,
-                "file_name": row["file_name"],
-                "model_name": row["model_name"],
+                "file_name": row["file_name"] or "",
+                "model_name": row["model_name"] or "",
                 "folder": row["folder"] or "",
                 "size": row["size"] or 0,
                 "modified": row["modified"] or 0.0,
@@ -188,6 +189,7 @@ class PersistentModelCache:
                 "skip_metadata_refresh": bool(row["skip_metadata_refresh"]),
                 "license_flags": int(license_value),
                 "hash_status": row["hash_status"] or "completed",
+                "hf_url": row["hf_url"] or "",
             }
             raw_data.append(item)
 
@@ -452,6 +454,7 @@ class PersistentModelCache:
                             db_checked INTEGER,
                             last_checked_at REAL,
                             hash_status TEXT,
+                            hf_url TEXT DEFAULT '',
                             PRIMARY KEY (model_type, file_path)
                         );
 
@@ -500,6 +503,7 @@ class PersistentModelCache:
             # Persisting without explicit flags should assume CivitAI's documented defaults (0b111001 == 57).
             "license_flags": f"INTEGER DEFAULT {DEFAULT_LICENSE_FLAGS}",
             "hash_status": "TEXT DEFAULT 'completed'",
+            "hf_url": "TEXT DEFAULT ''",
         }
 
         for column, definition in required_columns.items():
@@ -548,19 +552,19 @@ class PersistentModelCache:
         return (
             model_type,
             item.get("file_path"),
-            item.get("file_name"),
-            item.get("model_name"),
-            item.get("folder"),
+            item.get("file_name") or "",
+            item.get("model_name") or "",
+            item.get("folder") or "",
             int(item.get("size") or 0),
             float(item.get("modified") or 0.0),
             (item.get("sha256") or "").lower() or None,
-            item.get("base_model"),
-            item.get("preview_url"),
+            item.get("base_model") or "",
+            item.get("preview_url") or "",
             int(item.get("preview_nsfw_level") or 0),
             1 if item.get("from_civitai", True) else 0,
             1 if item.get("favorite") else 0,
-            item.get("notes"),
-            item.get("usage_tips"),
+            item.get("notes") or "",
+            item.get("usage_tips") or "",
             metadata_source,
             civitai.get("id"),
             civitai.get("modelId"),
@@ -575,6 +579,7 @@ class PersistentModelCache:
             1 if item.get("db_checked") else 0,
             float(item.get("last_checked_at") or 0.0),
             item.get("hash_status", "completed"),
+            item.get("hf_url") or "",
         )
 
     def _insert_model_sql(self) -> str:

@@ -105,6 +105,7 @@
             "removeFromFavorites": "Aus Favoriten entfernen",
             "viewOnCivitai": "Auf Civitai anzeigen",
             "notAvailableFromCivitai": "Nicht auf Civitai verfügbar",
+            "viewOnHuggingFace": "Auf Hugging Face ansehen",
             "sendToWorkflow": "An ComfyUI senden (Klick: Anhängen, Shift+Klick: Ersetzen)",
             "copyLoRASyntax": "LoRA-Syntax kopieren",
             "checkpointNameCopied": "Checkpoint-Name kopiert",
@@ -1134,7 +1135,10 @@
             "titleWithType": "{type} von URL herunterladen",
             "civitaiUrl": "Civitai URL:",
             "placeholder": "https://civitai.com/models/...",
-            "urlHint": "Geben Sie eine CivitAI- oder CivArchive-URL pro Zeile ein. Unterstützt mehrere URLs für den Batch-Download.",
+            "urlHint": "Geben Sie eine CivitAI-, CivArchive- oder Hugging Face-URL pro Zeile ein. Unterstützt mehrere URLs für den Batch-Download.",
+            "selectHfFiles": "Datei(en) zum Herunterladen aus diesem Repository auswählen:",
+            "selectAll": "Alle auswählen",
+            "fetchingRepoFiles": "Repository-Dateien werden abgerufen...",
             "locationPreview": "Download-Speicherort Vorschau",
             "useDefaultPath": "Standardpfad verwenden",
             "useDefaultPathTooltip": "Wenn aktiviert, werden Dateien automatisch mit konfigurierten Pfadvorlagen organisiert",
@@ -1163,7 +1167,9 @@
             },
             "errors": {
                 "invalidUrl": "Ungültiges Civitai URL-Format",
-                "noVersions": "Keine Versionen für dieses Modell verfügbar"
+                "noVersions": "Keine Versionen für dieses Modell verfügbar",
+                "mixedSources": "CivitAI- und Hugging Face-URLs können nicht in derselben Charge gemischt werden.",
+                "noModelFiles": "In diesem Repository wurden keine Modelldateien gefunden."
             },
             "status": {
                 "preparing": "Download wird vorbereitet...",
@@ -1314,6 +1320,8 @@
                 "editVersionName": "Versionsname bearbeiten",
                 "viewOnCivitai": "Auf Civitai anzeigen",
                 "viewOnCivitaiText": "Auf Civitai anzeigen",
+                "viewOnHuggingFace": "Auf Hugging Face ansehen",
+                "viewOnHuggingFaceText": "Auf Hugging Face ansehen",
                 "viewCreatorProfile": "Ersteller-Profil anzeigen",
                 "openFileLocation": "Dateispeicherort öffnen",
                 "sendToWorkflow": "An ComfyUI senden",
@@ -1339,7 +1347,10 @@
                 "additionalNotes": "Zusätzliche Notizen",
                 "notesHint": "Enter zum Speichern, Shift+Enter für neue Zeile",
                 "addNotesPlaceholder": "Fügen Sie hier Ihre Notizen hinzu...",
-                "aboutThisVersion": "Über diese Version"
+                "aboutThisVersion": "Über diese Version",
+                "baseModelSearchPlaceholder": "Basismodell suchen…",
+                "baseModelSuggested": "Vorschlag",
+                "baseModelNoMatch": "Keine passenden Basismodelle"
             },
             "notes": {
                 "saved": "Notizen erfolgreich gespeichert",

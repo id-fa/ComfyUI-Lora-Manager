@@ -105,6 +105,7 @@
             "removeFromFavorites": "הסר מהמועדפים",
             "viewOnCivitai": "הצג ב-Civitai",
             "notAvailableFromCivitai": "לא זמין מ-Civitai",
+            "viewOnHuggingFace": "צפייה ב-Hugging Face",
             "sendToWorkflow": "שלח ל-ComfyUI (לחיצה: הוסף, Shift+לחיצה: החלף)",
             "copyLoRASyntax": "העתק תחביר LoRA",
             "checkpointNameCopied": "שם Checkpoint הועתק",
@@ -1134,7 +1135,10 @@
             "titleWithType": "הורד {type} מכתובת URL",
             "civitaiUrl": "כתובת URL של Civitai:",
             "placeholder": "https://civitai.com/models/...",
-            "urlHint": "יש להזין כתובת URL אחת של CivitAI או CivArchive בכל שורה. תומך במספר כתובות URL להורדה בבת אחת.",
+            "urlHint": "יש להזין כתובת URL אחת של CivitAI, CivArchive או Hugging Face בכל שורה. תומך במספר כתובות URL להורדה בקבוצה.",
+            "selectHfFiles": "בחר קבצים להורדה ממאגר זה:",
+            "selectAll": "בחר הכל",
+            "fetchingRepoFiles": "מביא קבצים מהמאגר...",
             "locationPreview": "תצוגה מקדימה של מיקום ההורדה",
             "useDefaultPath": "השתמש בנתיב ברירת מחדל",
             "useDefaultPathTooltip": "כאשר מופעל, קבצים מאורגנים אוטומטית באמצעות תבניות נתיב מוגדרות",
@@ -1163,7 +1167,9 @@
             },
             "errors": {
                 "invalidUrl": "פורמט URL של Civitai לא חוקי",
-                "noVersions": "אין גרסאות זמינות למודל זה"
+                "noVersions": "אין גרסאות זמינות למודל זה",
+                "mixedSources": "לא ניתן לערבב כתובות URL של CivitAI ו-Hugging Face באותה קבוצה.",
+                "noModelFiles": "לא נמצאו קבצי מודל במאגר זה."
             },
             "status": {
                 "preparing": "מכין הורדה...",
@@ -1314,6 +1320,8 @@
                 "editVersionName": "ערוך שם גרסה",
                 "viewOnCivitai": "הצג ב-Civitai",
                 "viewOnCivitaiText": "הצג ב-Civitai",
+                "viewOnHuggingFace": "צפייה ב-Hugging Face",
+                "viewOnHuggingFaceText": "צפייה ב-Hugging Face",
                 "viewCreatorProfile": "הצג פרופיל יוצר",
                 "openFileLocation": "פתח מיקום קובץ",
                 "sendToWorkflow": "שלח ל-ComfyUI",
@@ -1339,7 +1347,10 @@
                 "additionalNotes": "הערות נוספות",
                 "notesHint": "לחץ Enter לשמירה, Shift+Enter לשורה חדשה",
                 "addNotesPlaceholder": "הוסף את ההערות שלך כאן...",
-                "aboutThisVersion": "אודות גרסה זו"
+                "aboutThisVersion": "אודות גרסה זו",
+                "baseModelSearchPlaceholder": "חפש מודל בסיס…",
+                "baseModelSuggested": "מוצע",
+                "baseModelNoMatch": "אין מודלי בסיס תואמים"
             },
             "notes": {
                 "saved": "הערות נשמרו בהצלחה",

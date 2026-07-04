@@ -105,6 +105,7 @@
             "removeFromFavorites": "移除收藏",
             "viewOnCivitai": "在 Civitai 查看",
             "notAvailableFromCivitai": "Civitai 不提供",
+            "viewOnHuggingFace": "在 Hugging Face 查看",
             "sendToWorkflow": "傳送到 ComfyUI（點擊：附加，Shift+點擊：取代）",
             "copyLoRASyntax": "複製 LoRA 語法",
             "checkpointNameCopied": "Checkpoint 名稱已複製",
@@ -1134,7 +1135,10 @@
             "titleWithType": "從網址下載 {type}",
             "civitaiUrl": "Civitai 網址：",
             "placeholder": "https://civitai.com/models/...",
-            "urlHint": "每行輸入一個 CivitAI 或 CivArchive URL。支援批量下載多個 URL。",
+            "urlHint": "每行輸入一個 CivitAI、CivArchive 或 Hugging Face URL。支援批量下載多個 URL。",
+            "selectHfFiles": "選擇從此倉庫下載的檔案：",
+            "selectAll": "全選",
+            "fetchingRepoFiles": "正在獲取倉庫檔案...",
             "locationPreview": "下載位置預覽",
             "useDefaultPath": "使用預設路徑",
             "useDefaultPathTooltip": "啟用後，檔案將依照設定的路徑範本自動整理",
@@ -1163,7 +1167,9 @@
             },
             "errors": {
                 "invalidUrl": "Civitai 網址格式無效",
-                "noVersions": "此模型無可用版本"
+                "noVersions": "此模型無可用版本",
+                "mixedSources": "無法在同一批次中混合使用 CivitAI 和 Hugging Face URL。",
+                "noModelFiles": "在此倉庫中未找到模型檔案。"
             },
             "status": {
                 "preparing": "準備下載中...",
@@ -1314,6 +1320,8 @@
                 "editVersionName": "編輯版本名稱",
                 "viewOnCivitai": "在 Civitai 查看",
                 "viewOnCivitaiText": "在 Civitai 查看",
+                "viewOnHuggingFace": "在 Hugging Face 查看",
+                "viewOnHuggingFaceText": "在 Hugging Face 查看",
                 "viewCreatorProfile": "查看創作者個人檔案",
                 "openFileLocation": "開啟檔案位置",
                 "sendToWorkflow": "傳送到 ComfyUI",
@@ -1339,7 +1347,10 @@
                 "additionalNotes": "附加備註",
                 "notesHint": "按 Enter 儲存，Shift+Enter 換行",
                 "addNotesPlaceholder": "在此新增備註...",
-                "aboutThisVersion": "關於此版本"
+                "aboutThisVersion": "關於此版本",
+                "baseModelSearchPlaceholder": "搜尋基礎模型…",
+                "baseModelSuggested": "推薦",
+                "baseModelNoMatch": "沒有符合的基礎模型"
             },
             "notes": {
                 "saved": "備註已儲存",

@@ -105,6 +105,7 @@
             "removeFromFavorites": "Remove from favorites",
             "viewOnCivitai": "View on Civitai",
             "notAvailableFromCivitai": "Not available from Civitai",
+            "viewOnHuggingFace": "View on Hugging Face",
             "sendToWorkflow": "Send to ComfyUI (Click: Append, Shift+Click: Replace)",
             "copyLoRASyntax": "Copy LoRA Syntax",
             "checkpointNameCopied": "Checkpoint name copied",
@@ -1134,7 +1135,10 @@
             "titleWithType": "Download {type} from URL",
             "civitaiUrl": "Civitai URL(s):",
             "placeholder": "https://civitai.com/models/...",
-            "urlHint": "Enter one CivitAI or CivArchive URL per line. Supports multiple URLs for batch download.",
+            "urlHint": "Enter one CivitAI, CivArchive, or Hugging Face URL per line. Supports multiple URLs for batch download.",
+            "selectHfFiles": "Select file(s) to download from this repository:",
+            "selectAll": "Select All",
+            "fetchingRepoFiles": "Fetching repository files...",
             "locationPreview": "Download Location Preview",
             "useDefaultPath": "Use Default Path",
             "useDefaultPathTooltip": "When enabled, files are automatically organized using configured path templates",
@@ -1163,7 +1167,9 @@
             },
             "errors": {
                 "invalidUrl": "Invalid Civitai URL format",
-                "noVersions": "No versions available for this model"
+                "noVersions": "No versions available for this model",
+                "mixedSources": "Cannot mix CivitAI and Hugging Face URLs in the same batch.",
+                "noModelFiles": "No model files found in this repository."
             },
             "status": {
                 "preparing": "Preparing download...",
@@ -1314,6 +1320,8 @@
                 "editVersionName": "Edit version name",
                 "viewOnCivitai": "View on Civitai",
                 "viewOnCivitaiText": "View on Civitai",
+                "viewOnHuggingFace": "View on Hugging Face",
+                "viewOnHuggingFaceText": "View on Hugging Face",
                 "viewCreatorProfile": "View Creator Profile",
                 "openFileLocation": "Open File Location",
                 "sendToWorkflow": "Send to ComfyUI",
@@ -1339,7 +1347,10 @@
                 "additionalNotes": "Additional Notes",
                 "notesHint": "Press Enter to save, Shift+Enter for new line",
                 "addNotesPlaceholder": "Add your notes here...",
-                "aboutThisVersion": "About this version"
+                "aboutThisVersion": "About this version",
+                "baseModelSearchPlaceholder": "Search base model…",
+                "baseModelSuggested": "Suggested",
+                "baseModelNoMatch": "No matching base models"
             },
             "notes": {
                 "saved": "Notes saved successfully",

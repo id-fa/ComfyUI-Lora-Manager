@@ -105,6 +105,7 @@
             "removeFromFavorites": "Удалить из избранного",
             "viewOnCivitai": "Посмотреть на Civitai",
             "notAvailableFromCivitai": "Недоступно на Civitai",
+            "viewOnHuggingFace": "Открыть Hugging Face",
             "sendToWorkflow": "Отправить в ComfyUI (Клик: Добавить, Shift+Клик: Заменить)",
             "copyLoRASyntax": "Копировать синтаксис LoRA",
             "checkpointNameCopied": "Имя checkpoint скопировано",
@@ -1134,7 +1135,10 @@
             "titleWithType": "Скачать {type} по URL",
             "civitaiUrl": "Civitai URL:",
             "placeholder": "https://civitai.com/models/...",
-            "urlHint": "Введите один URL CivitAI или CivArchive в каждой строке. Поддерживается пакетная загрузка нескольких URL.",
+            "urlHint": "Введите один URL CivitAI, CivArchive или Hugging Face в каждой строке. Поддерживает несколько URL для пакетной загрузки.",
+            "selectHfFiles": "Выберите файл(ы) для загрузки из этого репозитория：",
+            "selectAll": "Выбрать все",
+            "fetchingRepoFiles": "Получение файлов репозитория...",
             "locationPreview": "Предпросмотр места загрузки",
             "useDefaultPath": "Использовать путь по умолчанию",
             "useDefaultPathTooltip": "При включении файлы автоматически организуются с использованием настроенных шаблонов путей",
@@ -1163,7 +1167,9 @@
             },
             "errors": {
                 "invalidUrl": "Неверный формат URL Civitai",
-                "noVersions": "Нет доступных версий для этой модели"
+                "noVersions": "Нет доступных версий для этой модели",
+                "mixedSources": "Нельзя смешивать URL-адреса CivitAI и Hugging Face в одном пакете.",
+                "noModelFiles": "В этом репозитории не найдено файлов моделей."
             },
             "status": {
                 "preparing": "Подготовка загрузки...",
@@ -1314,6 +1320,8 @@
                 "editVersionName": "Редактировать название версии",
                 "viewOnCivitai": "Посмотреть на Civitai",
                 "viewOnCivitaiText": "Посмотреть на Civitai",
+                "viewOnHuggingFace": "Открыть Hugging Face",
+                "viewOnHuggingFaceText": "Открыть Hugging Face",
                 "viewCreatorProfile": "Посмотреть профиль создателя",
                 "openFileLocation": "Открыть расположение файла",
                 "sendToWorkflow": "Отправить в ComfyUI",
@@ -1339,7 +1347,10 @@
                 "additionalNotes": "Дополнительные заметки",
                 "notesHint": "Нажмите Enter для сохранения, Shift+Enter для новой строки",
                 "addNotesPlaceholder": "Добавьте ваши заметки здесь...",
-                "aboutThisVersion": "Об этой версии"
+                "aboutThisVersion": "Об этой версии",
+                "baseModelSearchPlaceholder": "Поиск базовой модели…",
+                "baseModelSuggested": "Предполагаемые",
+                "baseModelNoMatch": "Нет подходящих базовых моделей"
             },
             "notes": {
                 "saved": "Заметки успешно сохранены",

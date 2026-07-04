@@ -105,6 +105,7 @@
             "removeFromFavorites": "从收藏移除",
             "viewOnCivitai": "在 Civitai 查看",
             "notAvailableFromCivitai": "Civitai 上不可用",
+            "viewOnHuggingFace": "在 Hugging Face 查看",
             "sendToWorkflow": "发送到 ComfyUI（点击：追加，Shift+点击：替换）",
             "copyLoRASyntax": "复制 LoRA 语法",
             "checkpointNameCopied": "检查点名称已复制",
@@ -1134,7 +1135,10 @@
             "titleWithType": "从 URL 下载 {type}",
             "civitaiUrl": "Civitai URL:",
             "placeholder": "https://civitai.com/models/...",
-            "urlHint": "每行输入一个 CivitAI 或 CivArchive URL。支持批量下载多个 URL。",
+            "urlHint": "每行输入一个 CivitAI、CivArchive 或 Hugging Face URL。支持批量下载多个 URL。",
+            "selectHfFiles": "选择从此仓库下载的文件：",
+            "selectAll": "全选",
+            "fetchingRepoFiles": "正在获取仓库文件...",
             "locationPreview": "下载位置预览",
             "useDefaultPath": "使用默认路径",
             "useDefaultPathTooltip": "启用后，文件将自动按配置的路径模板进行整理",
@@ -1163,7 +1167,9 @@
             },
             "errors": {
                 "invalidUrl": "无效的 Civitai URL 格式",
-                "noVersions": "此模型没有可用版本"
+                "noVersions": "此模型没有可用版本",
+                "mixedSources": "无法在同一批次中混合使用 CivitAI 和 Hugging Face URL。",
+                "noModelFiles": "在此仓库中未找到模型文件。"
             },
             "status": {
                 "preparing": "正在准备下载...",
@@ -1314,6 +1320,8 @@
                 "editVersionName": "编辑版本名称",
                 "viewOnCivitai": "在 Civitai 查看",
                 "viewOnCivitaiText": "在 Civitai 查看",
+                "viewOnHuggingFace": "在 Hugging Face 查看",
+                "viewOnHuggingFaceText": "在 Hugging Face 查看",
                 "viewCreatorProfile": "查看创作者主页",
                 "openFileLocation": "打开文件位置",
                 "sendToWorkflow": "发送到 ComfyUI",
@@ -1339,7 +1347,10 @@
                 "additionalNotes": "附加备注",
                 "notesHint": "回车保存，Shift+回车换行",
                 "addNotesPlaceholder": "在此添加你的备注...",
-                "aboutThisVersion": "关于此版本"
+                "aboutThisVersion": "关于此版本",
+                "baseModelSearchPlaceholder": "搜索基础模型…",
+                "baseModelSuggested": "推荐",
+                "baseModelNoMatch": "没有匹配的基础模型"
             },
             "notes": {
                 "saved": "备注保存成功",
