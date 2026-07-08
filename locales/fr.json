@@ -657,6 +657,32 @@
             "proxyPassword": "Mot de passe (optionnel)",
             "proxyPasswordPlaceholder": "mot_de_passe",
             "proxyPasswordHelp": "Mot de passe pour l'authentification proxy (si nécessaire)"
+        },
+        "aiProvider": {
+            "title": "Fournisseur d'IA",
+            "provider": "Fournisseur",
+            "providerHelp": "Choisissez votre fournisseur LLM. OpenAI et Ollama utilisent des endpoints prédéfinis. Personnalisé vous permet de spécifier n'importe quel endpoint compatible OpenAI.",
+            "providerOptions": {
+                "openai": "OpenAI",
+                "ollama": "Ollama (local)",
+                "deepseek": "DeepSeek",
+                "groq": "Groq",
+                "openrouter": "OpenRouter",
+                "opencode-go": "OpenCode Go",
+                "custom": "Personnalisé (compatible OpenAI)"
+            },
+            "apiBase": "URL de base de l'API",
+            "apiBaseHelp": "L'URL de base pour l'API LLM (ex. https://api.openai.com/v1). Laissez vide pour utiliser le fournisseur par défaut.",
+            "apiBasePlaceholder": "https://api.openai.com/v1",
+            "apiKey": "Clé API",
+            "apiKeyHelp": "Votre clé API du fournisseur LLM. Stockée localement, jamais envoyée à un serveur autre que votre fournisseur LLM choisi.",
+            "apiKeyPlaceholder": "sk-...",
+            "apiKeyNotSet": "Non définie",
+            "apiKeyConfigured": "Configurée",
+            "apiKeySet": "Configurer",
+            "model": "Modèle",
+            "modelHelp": "Le nom du modèle à utiliser (ex. deepseek-v4-flash, gemini-2.5-flash, gemma4:12b). Consultez votre fournisseur pour les modèles disponibles.",
+            "modelPlaceholder": "Sélectionner un modèle..."
         }
     },
     "loras": {
@@ -754,12 +780,15 @@
                 "completed": "Terminé : {success} déplacés, {skipped} ignorés, {failures} échecs",
                 "complete": "Auto-organisation terminée",
                 "error": "Erreur : {error}"
-            }
+            },
+            "enrichHfAgent": "Enrichir les métadonnées HF (IA)"
         },
         "contextMenu": {
             "refreshMetadata": "Actualiser les données Civitai",
             "checkUpdates": "Vérifier les mises à jour",
-            "relinkCivitai": "Relier à nouveau à Civitai",
+            "linkModel": "Lier le modèle",
+            "linkCivitai": "Relier à nouveau à Civitai",
+            "linkHuggingFace": "Lier à HuggingFace",
             "copySyntax": "Copier la syntaxe LoRA",
             "copyFilename": "Copier le nom de fichier du modèle",
             "copyRecipeSyntax": "Copier la syntaxe de la recipe",
@@ -778,7 +807,8 @@
             "shareRecipe": "Partager la recipe",
             "viewAllLoras": "Voir tous les LoRAs",
             "downloadMissingLoras": "Télécharger les LoRAs manquants",
-            "deleteRecipe": "Supprimer la recipe"
+            "deleteRecipe": "Supprimer la recipe",
+            "enrichHfAgent": "Enrichir les métadonnées HF (IA)"
         }
     },
     "recipes": {
@@ -1290,6 +1320,14 @@
             "createNewFolder": "Créer un nouveau dossier",
             "pathPlaceholder": "Tapez le chemin du dossier ou sélectionnez dans l'arbre ci-dessous...",
             "root": "Racine"
+        },
+        "linkHuggingFace": {
+            "title": "Lier à HuggingFace",
+            "infoText": "Collez l'URL du dépôt HuggingFace pour associer ce modèle à sa source. Cela permet l'enrichissement des métadonnées par IA.",
+            "urlLabel": "URL du dépôt HuggingFace :",
+            "urlPlaceholder": "https://huggingface.co/user/repo",
+            "helpText": "Entrez l'URL complète du dépôt HuggingFace.",
+            "confirmAction": "Enregistrer & lier"
         },
         "relinkCivitai": {
             "title": "Relier à nouveau à Civitai",
@@ -2020,6 +2058,8 @@
             "contentRatingFailed": "Échec de la définition de la classification du contenu : {message}",
             "relinkSuccess": "Modèle relié à Civitai avec succès",
             "relinkFailed": "Erreur : {message}",
+            "linkHfSuccess": "Modèle lié à HuggingFace avec succès",
+            "linkHfFailed": "Erreur : {message}",
             "fetchMetadataFirst": "Veuillez d'abord récupérer les métadonnées depuis CivitAI",
             "noCivitaiInfo": "Aucune information CivitAI disponible",
             "missingHash": "Hash du modèle non disponible"
@@ -2081,6 +2121,12 @@
             "moveFailed": "Failed to move item: {message}",
             "copiedToClipboard": "Copié dans le presse-papiers",
             "downloadStarted": "Téléchargement démarré"
+        },
+        "agent": {
+            "llmNotConfigured": "Fournisseur d'IA non configuré. Activez-le dans Paramètres → Fournisseur d'IA.",
+            "enrichStarted": "Enrichissement des métadonnées par IA...",
+            "enrichComplete": "Enrichissement des métadonnées terminé : {{summary}}",
+            "enrichFailed": "Échec de l'enrichissement des métadonnées : {{error}}"
         }
     },
     "doctor": {

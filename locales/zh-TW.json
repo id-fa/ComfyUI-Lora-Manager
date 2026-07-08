@@ -657,6 +657,32 @@
             "proxyPassword": "密碼（選填）",
             "proxyPasswordPlaceholder": "password",
             "proxyPasswordHelp": "代理驗證所需的密碼（如有需要）"
+        },
+        "aiProvider": {
+            "title": "AI 提供者",
+            "provider": "提供者",
+            "providerHelp": "選擇您的 LLM 提供者。OpenAI 和 Ollama 使用預設 API 端點。自訂允許您指定任何相容 OpenAI 的端點。",
+            "providerOptions": {
+                "openai": "OpenAI",
+                "ollama": "Ollama（本地）",
+                "deepseek": "DeepSeek",
+                "groq": "Groq",
+                "openrouter": "OpenRouter",
+                "opencode-go": "OpenCode Go",
+                "custom": "自訂（OpenAI 相容）"
+            },
+            "apiBase": "API 基礎網址",
+            "apiBaseHelp": "LLM API 的基礎網址。選擇預設或輸入自訂網址，下拉選單顯示所有支援的提供者預設。",
+            "apiBasePlaceholder": "https://api.openai.com/v1",
+            "apiKey": "API 金鑰",
+            "apiKeyHelp": "LLM 提供者的 API 金鑰。儲存在本地，除您選擇的 LLM 提供者外不會傳送到任何伺服器。",
+            "apiKeyPlaceholder": "[TODO: Translate] sk-...",
+            "apiKeyNotSet": "未設定",
+            "apiKeyConfigured": "已設定",
+            "apiKeySet": "設定",
+            "model": "模型",
+            "modelHelp": "要使用的模型。從下拉選單選擇（從提供者取得）或輸入自訂模型名稱。",
+            "modelPlaceholder": "選擇一個模型..."
         }
     },
     "loras": {
@@ -754,12 +780,15 @@
                 "completed": "完成：已移動 {success}，已略過 {skipped}，失敗 {failures}",
                 "complete": "自動整理完成",
                 "error": "錯誤：{error}"
-            }
+            },
+            "enrichHfAgent": "AI HF 中繼資料增強"
         },
         "contextMenu": {
             "refreshMetadata": "刷新 Civitai 資料",
             "checkUpdates": "檢查更新",
-            "relinkCivitai": "重新連結 Civitai",
+            "linkModel": "連結模型",
+            "linkCivitai": "連結到 Civitai",
+            "linkHuggingFace": "連結到 HuggingFace",
             "copySyntax": "複製 LoRA 語法",
             "copyFilename": "複製模型檔名",
             "copyRecipeSyntax": "複製配方語法",
@@ -778,7 +807,8 @@
             "shareRecipe": "分享配方",
             "viewAllLoras": "檢視全部 LoRA",
             "downloadMissingLoras": "下載缺少的 LoRA",
-            "deleteRecipe": "刪除配方"
+            "deleteRecipe": "刪除配方",
+            "enrichHfAgent": "AI HF 中繼資料增強"
         }
     },
     "recipes": {
@@ -1290,6 +1320,14 @@
             "createNewFolder": "建立新資料夾",
             "pathPlaceholder": "輸入資料夾路徑或從下方樹狀結構選擇...",
             "root": "根目錄"
+        },
+        "linkHuggingFace": {
+            "title": "連結到 HuggingFace",
+            "infoText": "貼上 HuggingFace 倉庫 URL 以關聯此模型。關聯後可啟用 AI 中繼資料增強功能。",
+            "urlLabel": "HuggingFace 倉庫 URL：",
+            "urlPlaceholder": "https://huggingface.co/user/repo",
+            "helpText": "請輸入完整的 HuggingFace 倉庫 URL。",
+            "confirmAction": "儲存並連結"
         },
         "relinkCivitai": {
             "title": "重新連結至 Civitai",
@@ -2020,6 +2058,8 @@
             "contentRatingFailed": "設定內容分級失敗：{message}",
             "relinkSuccess": "模型已成功重新連結至 Civitai",
             "relinkFailed": "錯誤：{message}",
+            "linkHfSuccess": "模型已成功連結到 HuggingFace",
+            "linkHfFailed": "錯誤：{message}",
             "fetchMetadataFirst": "請先從 CivitAI 取得 metadata",
             "noCivitaiInfo": "無 CivitAI 資訊",
             "missingHash": "模型雜湊不可用"
@@ -2081,6 +2121,12 @@
             "moveFailed": "Failed to move item: {message}",
             "copiedToClipboard": "已複製到剪貼簿",
             "downloadStarted": "下載已開始"
+        },
+        "agent": {
+            "llmNotConfigured": "AI 提供者尚未設定。請在 設定 → AI 提供者 中進行設定。",
+            "enrichStarted": "正在使用 AI 增強中繼資料...",
+            "enrichComplete": "中繼資料增強完成：{{summary}}",
+            "enrichFailed": "中繼資料增強失敗：{{error}}"
         }
     },
     "doctor": {

@@ -12,8 +12,21 @@
     <div class="context-menu-item" data-action="check-updates">
         <i class="fas fa-bell"></i> <span>{{ t('loras.contextMenu.checkUpdates') }}</span>
     </div>
-    <div class="context-menu-item" data-action="relink-civitai">
-        <i class="fas fa-link"></i> <span>{{ t('loras.contextMenu.relinkCivitai') }}</span>
+    <div class="context-menu-item has-submenu" data-has-submenu="link-model">
+        <i class="fas fa-link"></i>
+        <span>{{ t('loras.contextMenu.linkModel') }}</span>
+        <i class="fas fa-chevron-right submenu-arrow"></i>
+        <div class="context-submenu">
+            <div class="context-menu-item" data-action="relink-civitai">
+                <i class="fas fa-external-link-alt"></i> <span>{{ t('loras.contextMenu.linkCivitai') }}</span>
+            </div>
+            <div class="context-menu-item" data-action="link-hf">
+                <i class="fas fa-robot"></i> <span>{{ t('loras.contextMenu.linkHuggingFace') }}</span>
+            </div>
+        </div>
+    </div>
+    <div class="context-menu-item" data-action="enrich-hf-llm">
+        <i class="fas fa-wand-magic-sparkles"></i> <span>{{ t('loras.contextMenu.enrichHfAgent') }}</span>
     </div>
     <div class="context-menu-separator menu-section-break"></div>
     <!-- Workflow -->
@@ -82,6 +95,9 @@
         </div>
         <div class="context-menu-item" data-action="resume-metadata-refresh">
             <i class="fas fa-redo"></i> <span>{{ t('loras.bulkOperations.resumeMetadataRefresh') }}</span>
+        </div>
+        <div class="context-menu-item" data-action="enrich-hf-llm-bulk">
+            <i class="fas fa-wand-magic-sparkles"></i> <span>{{ t('loras.bulkOperations.enrichHfAgent') }}</span>
         </div>
     </div>
     <div class="context-menu-section" data-section="workflow">

@@ -657,6 +657,32 @@
             "proxyPassword": "סיסמה (אופציונלי)",
             "proxyPasswordPlaceholder": "password",
             "proxyPasswordHelp": "סיסמה לאימות מול הפרוקסי (אם נדרש)"
+        },
+        "aiProvider": {
+            "title": "ספק AI",
+            "provider": "ספק",
+            "providerHelp": "בחר את ספק ה-LLM שלך. OpenAI ו-Ollama משתמשים בנקודות קצה מוגדרות מראש. מותאם אישית מאפשר לך לציין כל נקודת קצה תואמת OpenAI.",
+            "providerOptions": {
+                "openai": "OpenAI",
+                "ollama": "Ollama (מקומי)",
+                "deepseek": "DeepSeek",
+                "groq": "Groq",
+                "openrouter": "OpenRouter",
+                "opencode-go": "OpenCode Go",
+                "custom": "מותאם אישית (תואם OpenAI)"
+            },
+            "apiBase": "כתובת בסיס API",
+            "apiBaseHelp": "כתובת ה-URL הבסיסית ל-API של LLM (לדוגמה https://api.openai.com/v1). השאר ריק לשימוש בברירת המחדל של הספק.",
+            "apiBasePlaceholder": "https://api.openai.com/v1",
+            "apiKey": "מפתח API",
+            "apiKeyHelp": "מפתח ה-API של ספק ה-LLM שלך. נשמר מקומית, לעולם לא נשלח לשרת כלשהו מלבד ספק ה-LLM שבחרת.",
+            "apiKeyPlaceholder": "sk-...",
+            "apiKeyNotSet": "לא הוגדר",
+            "apiKeyConfigured": "הוגדר",
+            "apiKeySet": "הגדר",
+            "model": "מודל",
+            "modelHelp": "שם המודל לשימוש (לדוגמה deepseek-v4-flash, gemini-2.5-flash, gemma4:12b). בדוק אצל הספק שלך אילו מודלים זמינים.",
+            "modelPlaceholder": "בחר מודל..."
         }
     },
     "loras": {
@@ -754,12 +780,15 @@
                 "completed": "הושלם: {success} הועברו, {skipped} דולגו, {failures} נכשלו",
                 "complete": "ארגון אוטומטי הושלם",
                 "error": "שגיאה: {error}"
-            }
+            },
+            "enrichHfAgent": "העשרת HF מטא-דאטה (AI)"
         },
         "contextMenu": {
             "refreshMetadata": "רענן נתוני Civitai",
             "checkUpdates": "בדוק עדכונים",
-            "relinkCivitai": "קשר מחדש ל-Civitai",
+            "linkModel": "קישור מודל",
+            "linkCivitai": "קשר מחדש ל-Civitai",
+            "linkHuggingFace": "קישור ל-HuggingFace",
             "copySyntax": "העתק תחביר LoRA",
             "copyFilename": "העתק שם קובץ מודל",
             "copyRecipeSyntax": "העתק תחביר מתכון",
@@ -778,7 +807,8 @@
             "shareRecipe": "שתף מתכון",
             "viewAllLoras": "הצג את כל ה-LoRAs",
             "downloadMissingLoras": "הורד LoRAs חסרים",
-            "deleteRecipe": "מחק מתכון"
+            "deleteRecipe": "מחק מתכון",
+            "enrichHfAgent": "העשרת HF מטא-דאטה (AI)"
         }
     },
     "recipes": {
@@ -1290,6 +1320,14 @@
             "createNewFolder": "צור תיקייה חדשה",
             "pathPlaceholder": "הקלד נתיב תיקייה או בחר מהעץ למטה...",
             "root": "שורש"
+        },
+        "linkHuggingFace": {
+            "title": "קישור ל-HuggingFace",
+            "infoText": "הדבק את כתובת ה-URL של מאגר HuggingFace כדי לשייך מודל זה למקורו. פעולה זו מאפשרת העשרת מטא-דאטה באמצעות AI.",
+            "urlLabel": "כתובת URL של מאגר HuggingFace:",
+            "urlPlaceholder": "https://huggingface.co/user/repo",
+            "helpText": "הזן את כתובת ה-URL המלאה של מאגר HuggingFace.",
+            "confirmAction": "שמור וקשר"
         },
         "relinkCivitai": {
             "title": "קשר מחדש ל-Civitai",
@@ -2020,6 +2058,8 @@
             "contentRatingFailed": "הגדרת דירוג התוכן נכשלה: {message}",
             "relinkSuccess": "המודל קושר מחדש ל-Civitai בהצלחה",
             "relinkFailed": "שגיאה: {message}",
+            "linkHfSuccess": "המודל נקשר בהצלחה ל-HuggingFace",
+            "linkHfFailed": "שגיאה: {message}",
             "fetchMetadataFirst": "אנא אחזר מטא-דאטה מ-CivitAI תחילה",
             "noCivitaiInfo": "אין מידע מ-CivitAI זמין",
             "missingHash": "ה-hash של המודל אינו זמין"
@@ -2081,6 +2121,12 @@
             "moveFailed": "Failed to move item: {message}",
             "copiedToClipboard": "הועתק ללוח",
             "downloadStarted": "ההורדה החלה"
+        },
+        "agent": {
+            "llmNotConfigured": "ספק AI לא הוגדר. הפעל אותו בהגדרות → ספק AI.",
+            "enrichStarted": "מעשיר מטא-דאטה באמצעות AI...",
+            "enrichComplete": "העשרת מטא-דאטה הושלמה: {{summary}}",
+            "enrichFailed": "העשרת מטא-דאטה נכשלה: {{error}}"
         }
     },
     "doctor": {
