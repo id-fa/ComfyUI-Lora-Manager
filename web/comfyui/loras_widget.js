@@ -2,15 +2,8 @@ import { createToggle, createArrowButton, createDragHandle, updateEntrySelection
 import { 
   parseLoraValue, 
   formatLoraValue, 
-  updateWidgetHeight, 
-  shouldShowClipEntry, 
+  shouldShowClipEntry,
   syncClipStrengthIfCollapsed,
-  LORA_ENTRY_HEIGHT,
-  HEADER_HEIGHT,
-  CONTAINER_PADDING,
-  EMPTY_CONTAINER_HEIGHT,
-  FOLDER_HEADER_HEIGHT,
-  SEARCH_ROW_HEIGHT,
   getLoraFolder,
   getLoraBasename,
   sortLorasByFolder
@@ -19,7 +12,7 @@ import { initDrag, createContextMenu, initHeaderDrag, initReorderDrag, handleKey
 import { forwardMiddleMouseToCanvas, forwardWheelToCanvas, enableListWheelScroll } from "./utils.js";
 import { PreviewTooltip } from "./preview_tooltip.js";
 import { ensureLmStyles } from "./lm_styles_loader.js";
-import { getStrengthStepPreference, getLoraWidgetMaxVisibleLoras } from "./settings.js";
+import { getStrengthStepPreference } from "./settings.js";
 
 export function addLorasWidget(node, name, opts, callback) {
   ensureLmStyles();
@@ -34,15 +27,13 @@ export function addLorasWidget(node, name, opts, callback) {
   // Set initial height using CSS variables approach
   const defaultHeight = 200;
 
-  // In Vue/node-2.0 mode, cap the widget height so it shows at most N entries.
-  // This prevents content from driving the node size beyond the cap.
-  // canvas/legacy mode is unaffected.
+  // Set a fixed minimum height so the node has a reasonable starting size.
+  // Adding or removing LoRAs does NOT change the node size — the container
+  // scrolls when content exceeds the allocated space.
+  container.style.setProperty('--comfy-widget-min-height', `${defaultHeight}px`);
+
   if (typeof LiteGraph !== 'undefined' && LiteGraph.vueNodesMode) {
-    const maxLoras = getLoraWidgetMaxVisibleLoras();
-    const gap = 5; // flex gap from .lm-loras-container CSS
-    const maxH = CONTAINER_PADDING + HEADER_HEIGHT + SEARCH_ROW_HEIGHT + maxLoras * LORA_ENTRY_HEIGHT + maxLoras * gap;
-    container.style.maxHeight = `${maxH}px`;
-    container.style.setProperty('--comfy-widget-max-height', `${maxH}px`);
+    container.classList.add('lm-vue-node');
     // Window capture-phase hook: scroll the widget instead of zooming the canvas
     // when the wheel is over a scrollable loras list.
     enableListWheelScroll(container);
@@ -221,9 +212,6 @@ export function addLorasWidget(node, name, opts, callback) {
       emptyMessage.textContent = "No LoRAs added";
       emptyMessage.className = "lm-lora-empty-state";
       container.appendChild(emptyMessage);
-      
-      // Set fixed height for empty state
-      updateWidgetHeight(container, EMPTY_CONTAINER_HEIGHT, defaultHeight, node);
       return;
     }
 
@@ -345,9 +333,6 @@ export function addLorasWidget(node, name, opts, callback) {
       ? lorasData.filter((lora) => String(lora.name).toLowerCase().includes(query))
       : lorasData;
 
-    // Track the total visible entries for height calculation
-    let totalVisibleEntries = 0;
-
     // Folder separators: only shown when the list spans more than one folder.
     const distinctFolders = new Set(displayLoras.map((lora) => getLoraFolder(lora.name)));
     const showFolderHeaders = distinctFolders.size > 1;
@@ -363,7 +348,6 @@ export function addLorasWidget(node, name, opts, callback) {
       folderStats.set(folder, stat);
     });
     let prevFolder = null;
-    let folderHeaderCount = 0;
     // Whether the folder currently being iterated is collapsed.
     let currentFolderCollapsed = false;
 
@@ -376,7 +360,6 @@ export function addLorasWidget(node, name, opts, callback) {
         const folder = getLoraFolder(name);
         if (folder !== prevFolder) {
           prevFolder = folder;
-          folderHeaderCount++;
           // While searching, force every folder open so matches stay visible.
           const isFolderCollapsed = !isSearching && collapsedFolders.has(folder);
           currentFolderCollapsed = isFolderCollapsed;
@@ -428,8 +411,6 @@ export function addLorasWidget(node, name, opts, callback) {
       if (currentFolderCollapsed) {
         return;
       }
-
-      totalVisibleEntries++;
 
       // Determine expansion state using our helper function
       const isExpanded = shouldShowClipEntry(loraData);
@@ -700,7 +681,6 @@ export function addLorasWidget(node, name, opts, callback) {
 
       // If expanded, show the clip entry
       if (isExpanded) {
-        totalVisibleEntries++;
         const clipEl = document.createElement("div");
         clipEl.className = "lm-lora-clip-entry";
 
@@ -832,14 +812,6 @@ export function addLorasWidget(node, name, opts, callback) {
       noMatch.className = "lm-lora-empty-state";
       container.appendChild(noMatch);
     }
-
-    // Calculate height based on number of loras and fixed sizes
-    const calculatedHeight = CONTAINER_PADDING + HEADER_HEIGHT + SEARCH_ROW_HEIGHT
-      + (displayLoras.length === 0
-          ? LORA_ENTRY_HEIGHT
-          : (Math.min(totalVisibleEntries, 12) * LORA_ENTRY_HEIGHT)
-            + (folderHeaderCount * FOLDER_HEADER_HEIGHT));
-    updateWidgetHeight(container, calculatedHeight, defaultHeight, node);
 
     // After all LoRA elements are created, apply selection state as the last step
     // This ensures the selection state is not overwritten

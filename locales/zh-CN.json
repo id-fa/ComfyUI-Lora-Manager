@@ -505,7 +505,9 @@
             "saveSuccess": "额外文件夹路径已更新，需要重启才能生效。",
             "saveError": "更新额外文件夹路径失败：{message}",
             "validation": {
-                "duplicatePath": "此路径已配置"
+                "duplicatePath": "此路径已配置",
+                "checkpointUnetOverlap": "checkpoints 和 diffusion models 不能使用相同的路径：{paths}",
+                "checkpointUnetOverlapInline": "此路径已被用于另一种模型类型。请为 checkpoints 和 diffusion models 使用不同的文件夹。"
             }
         },
         "priorityTags": {
@@ -1205,7 +1207,9 @@
                 "preparing": "正在准备下载...",
                 "downloadedPreview": "预览图片已下载",
                 "downloadingFile": "正在下载 {type} 文件",
-                "finalizing": "正在完成下载..."
+                "finalizing": "正在完成下载...",
+                "cancelling": "取消下载中...",
+                "cancelled": "下载已取消"
             },
             "progress": {
                 "currentFile": "当前文件：",
@@ -2013,7 +2017,8 @@
             "imagesCompleted": "示例图片{action}完成",
             "imagesFailed": "示例图片{action}失败",
             "loadError": "加载下载项出错：{message}",
-            "downloadError": "下载错误：{message}"
+            "downloadError": "下载错误：{message}",
+            "downloadStopped": "下载已取消"
         },
         "import": {
             "folderTreeFailed": "加载文件夹树失败",

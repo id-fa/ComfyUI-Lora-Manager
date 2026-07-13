@@ -505,7 +505,9 @@
             "saveSuccess": "נתיבי תיקיות נוספים עודכנו. נדרשת הפעלה מחדש כדי להחיל את השינויים.",
             "saveError": "נכשל בעדכון נתיבי תיקיות נוספים: {message}",
             "validation": {
-                "duplicatePath": "נתיב זה כבר מוגדר"
+                "duplicatePath": "נתיב זה כבר מוגדר",
+                "checkpointUnetOverlap": "לא ניתן להשתמש באותו נתיב עבור checkpoints ומודלי דיפוזיה: {paths}",
+                "checkpointUnetOverlapInline": "הנתיב הזה כבר נמצא בשימוש עבור סוג מודל אחר. יש להשתמש בתיקיות נפרדות עבור checkpoints ומודלי דיפוזיה."
             }
         },
         "priorityTags": {
@@ -1205,7 +1207,9 @@
                 "preparing": "מכין הורדה...",
                 "downloadedPreview": "תמונת תצוגה מקדימה הורדה",
                 "downloadingFile": "מוריד קובץ {type}",
-                "finalizing": "מסיים הורדה..."
+                "finalizing": "מסיים הורדה...",
+                "cancelling": "מבטל הורדה...",
+                "cancelled": "ההורדה בוטלה"
             },
             "progress": {
                 "currentFile": "הקובץ הנוכחי:",
@@ -2013,7 +2017,8 @@
             "imagesCompleted": "{action} תמונות הדוגמה הושלם",
             "imagesFailed": "{action} תמונות הדוגמה נכשל",
             "loadError": "שגיאה בטעינת הורדות: {message}",
-            "downloadError": "שגיאת הורדה: {message}"
+            "downloadError": "שגיאת הורדה: {message}",
+            "downloadStopped": "ההורדה בוטלה"
         },
         "import": {
             "folderTreeFailed": "טעינת עץ התיקיות נכשלה",

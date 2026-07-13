@@ -555,6 +555,8 @@ async function fetchWorkflowRegistry() {
     if (!registryData.success) {
       if (registryData.error === 'Standalone Mode Active') {
         showToast('toast.general.cannotInteractStandalone', {}, 'warning');
+      } else if (registryData.error === 'Empty Registry') {
+        showToast('uiHelpers.workflow.noSupportedNodes', {}, 'warning');
       } else {
         showToast('toast.general.failedWorkflowInfo', {}, 'error');
       }

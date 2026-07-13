@@ -505,7 +505,9 @@
             "saveSuccess": "追加フォルダーパスを更新しました。変更を適用するには再起動が必要です。",
             "saveError": "追加フォルダーパスの更新に失敗しました: {message}",
             "validation": {
-                "duplicatePath": "このパスはすでに設定されています"
+                "duplicatePath": "このパスはすでに設定されています",
+                "checkpointUnetOverlap": "checkpoints と diffusion models に同じパスは使用できません：{paths}",
+                "checkpointUnetOverlapInline": "このパスは別のモデルタイプですでに使用されています。checkpoints と diffusion models には別々のフォルダを使用してください。"
             }
         },
         "priorityTags": {
@@ -1205,7 +1207,9 @@
                 "preparing": "ダウンロードを準備中...",
                 "downloadedPreview": "プレビュー画像をダウンロードしました",
                 "downloadingFile": "{type}ファイルをダウンロード中",
-                "finalizing": "ダウンロードを完了中..."
+                "finalizing": "ダウンロードを完了中...",
+                "cancelling": "ダウンロードをキャンセル中...",
+                "cancelled": "ダウンロードをキャンセルしました"
             },
             "progress": {
                 "currentFile": "現在のファイル:",
@@ -2013,7 +2017,8 @@
             "imagesCompleted": "例画像 {action} が完了しました",
             "imagesFailed": "例画像 {action} が失敗しました",
             "loadError": "ダウンロード読み込みエラー：{message}",
-            "downloadError": "ダウンロードエラー：{message}"
+            "downloadError": "ダウンロードエラー：{message}",
+            "downloadStopped": "ダウンロードをキャンセルしました"
         },
         "import": {
             "folderTreeFailed": "フォルダツリーの読み込みに失敗しました",

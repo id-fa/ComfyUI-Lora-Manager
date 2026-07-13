@@ -505,7 +505,9 @@
             "saveSuccess": "Дополнительные пути к папкам обновлены. Требуется перезапуск для применения изменений.",
             "saveError": "Не удалось обновить дополнительные пути к папкам: {message}",
             "validation": {
-                "duplicatePath": "Этот путь уже настроен"
+                "duplicatePath": "Этот путь уже настроен",
+                "checkpointUnetOverlap": "Нельзя использовать один и тот же путь для checkpoints и diffusion models: {paths}",
+                "checkpointUnetOverlapInline": "Этот путь уже используется для другого типа модели. Используйте отдельные папки для checkpoints и diffusion models."
             }
         },
         "priorityTags": {
@@ -1205,7 +1207,9 @@
                 "preparing": "Подготовка загрузки...",
                 "downloadedPreview": "Превью изображение загружено",
                 "downloadingFile": "Загрузка файла {type}",
-                "finalizing": "Завершение загрузки..."
+                "finalizing": "Завершение загрузки...",
+                "cancelling": "Отмена загрузки...",
+                "cancelled": "Загрузка отменена"
             },
             "progress": {
                 "currentFile": "Текущий файл:",
@@ -2013,7 +2017,8 @@
             "imagesCompleted": "Примеры изображений {action} завершены",
             "imagesFailed": "Примеры изображений {action} не удались",
             "loadError": "Ошибка загрузки downloads: {message}",
-            "downloadError": "Ошибка загрузки: {message}"
+            "downloadError": "Ошибка загрузки: {message}",
+            "downloadStopped": "Загрузка отменена"
         },
         "import": {
             "folderTreeFailed": "Не удалось загрузить дерево папок",

@@ -505,7 +505,9 @@
       "saveSuccess": "Extra folder paths updated. Restart required to apply changes.",
       "saveError": "Failed to update extra folder paths: {message}",
       "validation": {
-        "duplicatePath": "This path is already configured"
+        "duplicatePath": "This path is already configured",
+        "checkpointUnetOverlap": "Cannot use the same path for both checkpoints and diffusion models: {paths}",
+        "checkpointUnetOverlapInline": "This path is also used for a different model type. Use separate folders for checkpoints and diffusion models."
       }
     },
     "priorityTags": {
@@ -1205,7 +1207,9 @@
         "preparing": "Preparing download...",
         "downloadedPreview": "Downloaded preview image",
         "downloadingFile": "Downloading {type} file",
-        "finalizing": "Finalizing download..."
+        "finalizing": "Finalizing download...",
+        "cancelling": "Cancelling download...",
+        "cancelled": "Download cancelled"
       },
       "progress": {
         "currentFile": "Current file:",
@@ -2013,7 +2017,8 @@
       "imagesCompleted": "Example images {action} completed",
       "imagesFailed": "Example images {action} failed",
       "loadError": "Error loading downloads: {message}",
-      "downloadError": "Download error: {message}"
+      "downloadError": "Download error: {message}",
+      "downloadStopped": "Download cancelled"
     },
     "import": {
       "folderTreeFailed": "Failed to load folder tree",

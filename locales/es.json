@@ -505,7 +505,9 @@
             "saveSuccess": "Rutas de carpetas adicionales actualizadas. Se requiere reinicio para aplicar los cambios.",
             "saveError": "Error al actualizar las rutas de carpetas adicionales: {message}",
             "validation": {
-                "duplicatePath": "Esta ruta ya está configurada"
+                "duplicatePath": "Esta ruta ya está configurada",
+                "checkpointUnetOverlap": "No se puede usar la misma ruta para checkpoints y modelos de difusión: {paths}",
+                "checkpointUnetOverlapInline": "Esta ruta ya se usa para otro tipo de modelo. Use carpetas separadas para checkpoints y modelos de difusión."
             }
         },
         "priorityTags": {
@@ -1205,7 +1207,9 @@
                 "preparing": "Preparando descarga...",
                 "downloadedPreview": "Imagen de vista previa descargada",
                 "downloadingFile": "Descargando archivo de {type}",
-                "finalizing": "Finalizando descarga..."
+                "finalizing": "Finalizando descarga...",
+                "cancelling": "Cancelando descarga...",
+                "cancelled": "Descarga cancelada"
             },
             "progress": {
                 "currentFile": "Archivo actual:",
@@ -2013,7 +2017,8 @@
             "imagesCompleted": "Imágenes de ejemplo {action} completadas",
             "imagesFailed": "Imágenes de ejemplo {action} fallidas",
             "loadError": "Error al cargar descargas: {message}",
-            "downloadError": "Error de descarga: {message}"
+            "downloadError": "Error de descarga: {message}",
+            "downloadStopped": "Descarga cancelada"
         },
         "import": {
             "folderTreeFailed": "Error al cargar árbol de carpetas",
