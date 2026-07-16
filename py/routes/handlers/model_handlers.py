@@ -1275,9 +1275,13 @@ class ModelQueryHandler:
                     text=f"{self._service.model_type.capitalize()} file name is required",
                     status=400,
                 )
-            notes = await self._service.get_model_notes(model_name)
-            if notes is not None:
-                return web.json_response({"success": True, "notes": notes})
+            result = await self._service.get_model_notes(model_name)
+            if result is not None:
+                return web.json_response({
+                    "success": True,
+                    "notes": result["notes"],
+                    "file_path": result["file_path"],
+                })
             return web.json_response(
                 {
                     "success": False,
@@ -1313,9 +1317,20 @@ class ModelQueryHandler:
                 }
                 if include_license_flags:
                     model_data = await self._service.get_model_info_by_name(model_name)
-                    license_flags = (model_data or {}).get("license_flags")
-                    if license_flags is not None:
-                        response_payload["license_flags"] = int(license_flags)
+                    # Only return license_flags when real CivitAI model license
+                    # data exists. This mirrors ModelModal's guard
+                    # (modelData?.civitai?.model) so the preview tooltip never
+                    # shows misleading license icons for HF or other models
+                    # without actual license metadata.
+                    civitai_data = (model_data or {}).get("civitai") or {}
+                    has_license_data = (
+                        isinstance(civitai_data, dict)
+                        and isinstance(civitai_data.get("model"), dict)
+                    )
+                    if has_license_data:
+                        license_flags = (model_data or {}).get("license_flags")
+                        if license_flags is not None:
+                            response_payload["license_flags"] = int(license_flags)
                     # Include the user's license icon style preference so the
                     # ComfyUI tooltip can pick the right set without a separate
                     # API call.
