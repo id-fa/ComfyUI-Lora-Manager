@@ -682,7 +682,10 @@ class DownloadManager:
                     u for u in download_urls if not u.startswith(CIVITAI_DOWNLOAD_URL_PREFIXES)
                 ]
                 download_urls = non_civitai_urls + civitai_urls
-        else:
+
+        # Fallback: when mirrors is empty or all mirrors have been deleted,
+        # use the file's downloadUrl directly (e.g. CivitAI download endpoint).
+        if not download_urls:
             download_url = file_info.get("downloadUrl")
             if download_url:
                 download_urls.append(normalize_civitai_download_url(download_url))
@@ -1386,7 +1389,17 @@ class DownloadManager:
 
             # Update save directory with relative path if provided
             if relative_path:
+                base_save_dir = save_dir
                 save_dir = os.path.join(save_dir, relative_path)
+                # Security: validate path containment after joining
+                resolved_dir = os.path.realpath(os.path.normpath(save_dir))
+                base_dir = os.path.realpath(os.path.normpath(base_save_dir))
+                if not resolved_dir.startswith(base_dir + os.sep) and resolved_dir != base_dir:
+                    logger.warning(
+                        "Path traversal detected: %s escapes %s",
+                        resolved_dir, base_dir,
+                    )
+                    return {"success": False, "error": "Download path is outside allowed directory"}
                 # Create directory if it doesn't exist
                 os.makedirs(save_dir, exist_ok=True)
 
@@ -1520,35 +1533,8 @@ class DownloadManager:
 
             if not file_info:
                 return {"success": False, "error": "No suitable file found in metadata"}
-            mirrors = file_info.get("mirrors") or []
-            download_urls = []
-            if mirrors:
-                for mirror in mirrors:
-                    if mirror.get("deletedAt") is None and mirror.get("url"):
-                        download_urls.append(
-                            normalize_civitai_download_url(mirror["url"])
-                        )
 
-                # When source is 'civarchive', prioritize non-Civitai URLs
-                # This avoids failed downloads from deleted Civitai models
-                if source == "civarchive" and len(download_urls) > 1:
-                    civitai_urls = [
-                        u
-                        for u in download_urls
-                        if u.startswith(CIVITAI_DOWNLOAD_URL_PREFIXES)
-                    ]
-                    non_civitai_urls = [
-                        u
-                        for u in download_urls
-                        if not u.startswith(CIVITAI_DOWNLOAD_URL_PREFIXES)
-                    ]
-                    download_urls = non_civitai_urls + civitai_urls
-            else:
-                download_url = file_info.get("downloadUrl")
-                if download_url:
-                    download_urls.append(
-                        normalize_civitai_download_url(download_url)
-                    )
+            download_urls = self._build_download_urls_from_file_info(file_info, source=source)
 
             if not download_urls:
                 return {"success": False, "error": "No mirror URL found"}
@@ -1851,6 +1837,9 @@ class DownloadManager:
             model_tags, model_type
         )
 
+        if not first_tag:
+            first_tag = "no tags"  # Default if no tags available
+
         # Format the template with available data
         formatted_path = path_template
         formatted_path = formatted_path.replace("{base_model}", mapped_base_model)
@@ -1865,6 +1854,15 @@ class DownloadManager:
 
         if model_type == "embedding":
             formatted_path = formatted_path.replace(" ", "_")
+
+        # Sanitize the resolved path to prevent path traversal:
+        # - Strip leading slashes (prevents os.path.join from treating path as absolute)
+        # - Collapse double slashes from empty placeholder substitutions
+        # - Strip trailing slashes for cleanliness
+        formatted_path = formatted_path.lstrip("/")
+        while "//" in formatted_path:
+            formatted_path = formatted_path.replace("//", "/")
+        formatted_path = formatted_path.rstrip("/")
 
         return formatted_path
 

@@ -478,11 +478,9 @@ export class FilterPresetManager {
             const pageState = getCurrentPageState();
             pageState.filters = this.filterManager.cloneFilters();
 
-            // If tags haven't been loaded yet, load them first
-            if (!this.filterManager.tagsLoaded) {
-                await this.filterManager.loadTopTags();
-                this.filterManager.tagsLoaded = true;
-            }
+            // Refresh tag display so preset's non-top-20 tags appear inline
+            await this.filterManager.loadTopTags();
+            this.filterManager.tagsLoaded = true;
 
             // Check again after async operation
             if (requestId !== this.applyPresetRequestId) return;
@@ -745,8 +743,16 @@ export class FilterPresetManager {
                 presetEl.classList.add('active');
             }
 
-            presetEl.addEventListener('click', (e) => {
-                e.stopPropagation();
+            // Apply preset on click (toggle if already active)
+            // Bind to the whole .filter-preset div so clicking anywhere inside triggers apply
+            presetEl.addEventListener('click', async () => {
+                this.cancelPendingDelete();
+
+                if (this.activePreset === preset.name) {
+                    await this.filterManager.clearFilters();
+                } else {
+                    await this.applyPreset(preset.name);
+                }
             });
 
             const presetName = document.createElement('span');
@@ -758,18 +764,6 @@ export class FilterPresetManager {
             deleteBtn.className = 'preset-delete-btn';
             deleteBtn.innerHTML = '<i class="fas fa-times"></i>';
             deleteBtn.title = translate('header.filter.presetDeleteTooltip', {}, 'Delete preset');
-
-            // Apply preset on name click (toggle if already active)
-            presetName.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                this.cancelPendingDelete();
-
-                if (this.activePreset === preset.name) {
-                    await this.filterManager.clearFilters();
-                } else {
-                    await this.applyPreset(preset.name);
-                }
-            });
 
             // Two-step delete on delete button click
             deleteBtn.addEventListener('click', (e) => {

@@ -973,10 +973,28 @@ class ModelQueryHandler:
             limit = int(request.query.get("limit", "20"))
             if limit < 0:
                 limit = 20
+            elif limit > 200:
+                limit = 20
             top_tags = await self._service.get_top_tags(limit)
             return web.json_response({"success": True, "tags": top_tags})
         except Exception as exc:
             self._logger.error("Error getting top tags: %s", exc, exc_info=True)
+            return web.json_response(
+                {"success": False, "error": "Internal server error"}, status=500
+            )
+
+    async def search_tags(self, request: web.Request) -> web.Response:
+        try:
+            query = request.query.get("q", "")
+            limit = int(request.query.get("limit", "20"))
+            if limit < 0:
+                limit = 20
+            elif limit > 200:
+                limit = 20
+            tags = await self._service.search_tags(query, limit)
+            return web.json_response({"success": True, "tags": tags})
+        except Exception as exc:
+            self._logger.error("Error searching tags: %s", exc, exc_info=True)
             return web.json_response(
                 {"success": False, "error": "Internal server error"}, status=500
             )
@@ -1787,14 +1805,20 @@ class ModelDownloadHandler:
 
     async def delete_download_history_item(self, request: web.Request) -> web.Response:
         try:
-            item_id = int(request.query.get("id", "0"))
-            if not item_id:
+            download_id = request.query.get("download_id")
+            id_str = request.query.get("id")
+            item_id = int(id_str) if id_str else None
+
+            if not download_id and not item_id:
                 return web.json_response(
-                    {"success": False, "error": "id is required"}, status=400
+                    {"success": False, "error": "id or download_id is required"},
+                    status=400,
                 )
 
             service = await DownloadQueueService.get_instance()
-            deleted = await service.delete_history_item(item_id)
+            deleted = await service.delete_history_item(
+                id=item_id, download_id=download_id
+            )
             return web.json_response({"success": deleted})
         except Exception as exc:
             self._logger.error(
@@ -1804,14 +1828,20 @@ class ModelDownloadHandler:
 
     async def retry_download_from_history(self, request: web.Request) -> web.Response:
         try:
-            item_id = int(request.query.get("id", "0"))
-            if not item_id:
+            download_id = request.query.get("download_id")
+            id_str = request.query.get("id")
+            item_id = int(id_str) if id_str else None
+
+            if not download_id and not item_id:
                 return web.json_response(
-                    {"success": False, "error": "id is required"}, status=400
+                    {"success": False, "error": "id or download_id is required"},
+                    status=400,
                 )
 
             service = await DownloadQueueService.get_instance()
-            item = await service.retry_from_history(item_id)
+            item = await service.retry_from_history(
+                item_id=item_id, download_id=download_id
+            )
             if item is None:
                 return web.json_response(
                     {"success": False, "error": "History item not found or not retryable"},
@@ -2935,6 +2965,7 @@ class ModelHandlerSet:
             "bulk_delete_models": self.management.bulk_delete_models,
             "verify_duplicates": self.management.verify_duplicates,
             "get_top_tags": self.query.get_top_tags,
+            "search_tags": self.query.search_tags,
             "get_base_models": self.query.get_base_models,
             "get_model_types": self.query.get_model_types,
             "scan_models": self.query.scan_models,
