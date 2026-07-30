@@ -333,6 +333,7 @@ export const PATH_TEMPLATE_PLACEHOLDERS = [
 export const DEFAULT_PATH_TEMPLATES = {
     lora: '{base_model}/{first_tag}',
     checkpoint: '{base_model}',
+    unet: '{base_model}',
     embedding: '{first_tag}'
 };
 
@@ -369,21 +370,24 @@ export function getMatureBlurThreshold(settings = {}) {
 export const NODE_TYPES = {
     LORA_LOADER: 1,
     LORA_STACKER: 2,
-    WAN_VIDEO_LORA_SELECT: 3
+    WAN_VIDEO_LORA_SELECT: 3,
+    HOOK_LORA: 4
 };
 
 // Node type names to IDs mapping
 export const NODE_TYPE_NAMES = {
     "Lora Loader (LoraManager)": NODE_TYPES.LORA_LOADER,
     "Lora Stacker (LoraManager)": NODE_TYPES.LORA_STACKER,
-    "WanVideo Lora Select (LoraManager)": NODE_TYPES.WAN_VIDEO_LORA_SELECT
+    "WanVideo Lora Select (LoraManager)": NODE_TYPES.WAN_VIDEO_LORA_SELECT,
+    "Create Hook LoRA (LoraManager)": NODE_TYPES.HOOK_LORA
 };
 
 // Node type icons
 export const NODE_TYPE_ICONS = {
     [NODE_TYPES.LORA_LOADER]: "fas fa-l",
     [NODE_TYPES.LORA_STACKER]: "fas fa-s",
-    [NODE_TYPES.WAN_VIDEO_LORA_SELECT]: "fas fa-w"
+    [NODE_TYPES.WAN_VIDEO_LORA_SELECT]: "fas fa-w",
+    [NODE_TYPES.HOOK_LORA]: "fas fa-h"
 };
 
 // Default ComfyUI node color when bgcolor is null

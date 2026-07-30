@@ -888,8 +888,10 @@ export function addLorasWidget(node, name, opts, callback) {
       });
     },
     setValue: function(v) {
+      // Ensure v is an array; handle falsy, string, or object values safely
+      v = Array.isArray(v) ? v : [];
       // Remove duplicates by keeping the last occurrence of each lora name
-      const uniqueValue = (v || []).reduce((acc, lora) => {
+      const uniqueValue = v.reduce((acc, lora) => {
         // Remove any existing lora with the same name
         const filtered = acc.filter(l => l.name !== lora.name);
         // Add the current lora
@@ -921,7 +923,11 @@ export function addLorasWidget(node, name, opts, callback) {
         }
       }
 
-      renderLoras(widgetValue, widget);
+      // Skip DOM re-render during drag to preserve pointer capture and event listeners.
+      // The strength inputs are updated directly via the pointermove handler instead.
+      if (!widget.__dragActive) {
+        renderLoras(widgetValue, widget);
+      }
     },
     hideOnZoom: true,
     selectOn: ['click', 'focus']

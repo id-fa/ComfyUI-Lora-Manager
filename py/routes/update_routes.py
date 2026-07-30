@@ -38,6 +38,84 @@ def _clean_excludes() -> List[str]:
     return excludes
 
 
+def _stage_preserved_items(plugin_root: str) -> tuple[str, list[str]]:
+    """Move preserved user-data items to a temp directory outside *plugin_root*.
+
+    This ensures that ``git reset --hard``, ``git clean -fd``, and ZIP-based
+    replacement cannot touch these files even when ``-e`` exclusion patterns
+    are mishandled (e.g. on Windows where forward-slash patterns may not
+    match backslash-prefixed paths in some Git builds, or where file locks
+    prevent deletion/recreation).
+
+    Returns:
+        ``(backup_root, staged_names)``: the temp directory path and the
+        list of item names that were successfully moved.
+    """
+    backup_root = tempfile.mkdtemp(prefix='lora_manager_update_')
+    staged: list[str] = []
+    for name in _PRESERVE_DIRS:
+        src = os.path.join(plugin_root, name)
+        if not os.path.lexists(src):
+            continue
+        dst = os.path.join(backup_root, name)
+        try:
+            shutil.move(src, dst)
+            staged.append(name)
+            logger.debug("Staged '%s' for update safety", name)
+        except OSError:
+            # ``shutil.move`` may fail on Windows if a file handle inside
+            # the directory is still open (e.g. a SQLite WAL file). Fall
+            # back to copy-then-remove.
+            logger.debug("Move failed for '%s', falling back to copy", name)
+            try:
+                if os.path.isdir(src) and not os.path.islink(src):
+                    shutil.copytree(src, dst, symlinks=True)
+                    shutil.rmtree(src, ignore_errors=True)
+                else:
+                    shutil.copy2(src, dst)
+                    os.remove(src)
+                staged.append(name)
+                logger.info("Copied (then removed) '%s' for update safety", name)
+            except Exception as exc:
+                logger.warning(
+                    "Could not stage '%s': %s (will rely on git -e / skip lists)", name, exc
+                )
+    return backup_root, staged
+
+
+def _restore_preserved_items(plugin_root: str, backup_root: str, staged: list[str]) -> None:
+    """Move staged items back from *backup_root* into *plugin_root*.
+
+    Any leftover placeholder at the destination (created by git checkout or
+    ZIP extraction) is removed before the move.
+    """
+    for name in staged:
+        src = os.path.join(backup_root, name)
+        dst = os.path.join(plugin_root, name)
+        try:
+            if os.path.lexists(dst):
+                if os.path.isdir(dst) and not os.path.islink(dst):
+                    shutil.rmtree(dst, ignore_errors=True)
+                else:
+                    os.remove(dst)
+            shutil.move(src, dst)
+            logger.debug("Restored '%s' after update", name)
+        except OSError:
+            logger.debug("Move failed restoring '%s', falling back to copy", name)
+            try:
+                if os.path.isdir(src) and not os.path.islink(src):
+                    shutil.copytree(src, dst, symlinks=True, dirs_exist_ok=True)
+                    shutil.rmtree(src, ignore_errors=True)
+                else:
+                    shutil.copy2(src, dst)
+                    os.remove(src)
+                logger.info("Copied '%s' back after update", name)
+            except Exception as exc:
+                logger.error("Failed to restore '%s': %s", name, exc)
+    shutil.rmtree(backup_root, ignore_errors=True)
+
+
+
 class UpdateRoutes:
     """Routes for handling plugin update checks"""
     
@@ -47,6 +125,7 @@ class UpdateRoutes:
         app.router.add_get('/api/lm/check-updates', UpdateRoutes.check_updates)
         app.router.add_get('/api/lm/version-info', UpdateRoutes.get_version_info)
         app.router.add_post('/api/lm/perform-update', UpdateRoutes.perform_update)
+        app.router.add_post('/api/lm/switch-channel', UpdateRoutes.switch_channel)
     
     @staticmethod
     async def check_updates(request):
@@ -65,10 +144,17 @@ class UpdateRoutes:
 
             # Fetch remote version from GitHub
             if nightly:
-                remote_version, changelog = await UpdateRoutes._get_nightly_version()
-                releases = None
+                local_hash = git_info.get('short_hash', '')
+                nightly_version, releases_result = await asyncio.gather(
+                    UpdateRoutes._get_nightly_version(local_hash),
+                    UpdateRoutes._get_remote_version()
+                )
+                remote_version, _, behind_by, commit_date = nightly_version
+                _, changelog, releases = releases_result
             else:
                 remote_version, changelog, releases = await UpdateRoutes._get_remote_version()
+                behind_by = 0
+                commit_date = ''
             
             # Compare versions
             if nightly:
@@ -81,6 +167,10 @@ class UpdateRoutes:
                     remote_version.replace('v', '')
                 )
             
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            plugin_root = os.path.dirname(os.path.dirname(current_dir))
+            has_git = os.path.exists(os.path.join(plugin_root, '.git'))
+
             response_data = {
                 'success': True,
                 'current_version': local_version,
@@ -88,12 +178,12 @@ class UpdateRoutes:
                 'update_available': update_available,
                 'changelog': changelog,
                 'git_info': git_info,
-                'nightly': nightly
+                'nightly': nightly,
+                'has_git': has_git,
+                'releases': releases,
+                'behind_by': behind_by,
+                'commit_date': commit_date
             }
-            
-            # Include releases list for stable mode
-            if releases is not None:
-                response_data['releases'] = releases
             
             return web.json_response(response_data)
             
@@ -126,9 +216,14 @@ class UpdateRoutes:
             # Format: version-short_hash
             version_string = f"{local_version}-{short_hash}"
             
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            plugin_root = os.path.dirname(os.path.dirname(current_dir))
+            has_git = os.path.exists(os.path.join(plugin_root, '.git'))
+
             return web.json_response({
                 'success': True,
-                'version': version_string
+                'version': version_string,
+                'has_git': has_git
             })
             
         except Exception as e:
@@ -156,20 +251,22 @@ class UpdateRoutes:
             if os.path.exists(settings_path):
                 with open(settings_path, 'r', encoding='utf-8') as f:
                     settings_backup = f.read()
-                logger.info("Backed up settings.json")
+                logger.info("Backed up settings.json (%d bytes)", len(settings_backup))
 
-            git_folder = os.path.join(plugin_root, '.git')
-            if os.path.exists(git_folder):
-                # Git update
-                success, new_version = await UpdateRoutes._perform_git_update(plugin_root, nightly)
-            else:
-                # Fallback: Download ZIP and replace files
-                success, new_version = await UpdateRoutes._download_and_replace_zip(plugin_root)
+            staged_backup_dir, staged_items = _stage_preserved_items(plugin_root)
+            try:
+                git_folder = os.path.join(plugin_root, '.git')
+                if os.path.exists(git_folder):
+                    success, new_version = await UpdateRoutes._perform_git_update(plugin_root, nightly)
+                else:
+                    success, new_version = await UpdateRoutes._download_and_replace_zip(plugin_root)
+            finally:
+                _restore_preserved_items(plugin_root, staged_backup_dir, staged_items)
 
             if settings_backup and success:
                 with open(settings_path, 'w', encoding='utf-8') as f:
                     f.write(settings_backup)
-                logger.info("Restored settings.json")
+                logger.info("Restored settings.json content")
 
             if success:
                 return web.json_response({
@@ -189,6 +286,166 @@ class UpdateRoutes:
                 'success': False,
                 'error': str(e)
             })
+
+    @staticmethod
+    async def switch_channel(request):
+        """
+        Switch between release and nightly update channels.
+        
+        Release → Nightly: Initialize a Git repository (from ZIP/CM stable mode)
+        Nightly → Release: Remove .git, download latest release ZIP, write .tracking
+        """
+        try:
+            body = await request.json() if request.has_body else {}
+            channel = body.get('channel', '')
+
+            if channel not in ('release', 'nightly'):
+                return web.json_response({
+                    'success': False,
+                    'error': f'Invalid channel: {channel}. Must be "release" or "nightly".'
+                })
+
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            plugin_root = os.path.dirname(os.path.dirname(current_dir))
+
+            settings_path = ensure_settings_file(logger)
+            settings_backup = None
+            if os.path.exists(settings_path):
+                with open(settings_path, 'r', encoding='utf-8') as f:
+                    settings_backup = f.read()
+                logger.info("Backed up settings.json before channel switch (%d bytes)", len(settings_backup))
+
+            staged_backup_dir, staged_items = _stage_preserved_items(plugin_root)
+            try:
+                git_folder = os.path.join(plugin_root, '.git')
+
+                if channel == 'nightly':
+                    git_backup = None
+                    if os.path.exists(git_folder):
+                        git_backup = UpdateRoutes._backup_git(git_folder, 'nightly')
+
+                    success = False
+                    new_version = ''
+                    try:
+                        if os.path.exists(git_folder):
+                            success, new_version = await UpdateRoutes._perform_git_update(
+                                plugin_root, nightly=True
+                            )
+                        else:
+                            success, new_version = UpdateRoutes._init_git_repo(plugin_root)
+                    finally:
+                        UpdateRoutes._restore_git(git_backup, git_folder, success, 'nightly')
+                else:
+                    git_backup = None
+                    if os.path.exists(git_folder):
+                        git_backup = UpdateRoutes._backup_git(git_folder, 'release')
+
+                    success = False
+                    new_version = ''
+                    try:
+                        if os.path.exists(git_folder):
+                            shutil.rmtree(git_folder)
+                        tracking_file = os.path.join(plugin_root, '.tracking')
+                        if os.path.exists(tracking_file):
+                            os.remove(tracking_file)
+                        success, new_version = await UpdateRoutes._download_and_replace_zip(plugin_root)
+                    finally:
+                        UpdateRoutes._restore_git(git_backup, git_folder, success, 'release')
+            finally:
+                _restore_preserved_items(plugin_root, staged_backup_dir, staged_items)
+
+            if settings_backup and success:
+                with open(settings_path, 'w', encoding='utf-8') as f:
+                    f.write(settings_backup)
+                logger.info("Restored settings.json content after channel switch")
+
+            if success:
+                return web.json_response({
+                    'success': True,
+                    'channel': channel,
+                    'new_version': new_version,
+                    'message': f'Switched to {channel} channel'
+                })
+            else:
+                return web.json_response({
+                    'success': False,
+                    'error': f'Failed to switch to {channel} channel'
+                })
+
+        except Exception as e:
+            logger.error("Failed to switch channel: %s", e, exc_info=True)
+            return web.json_response({
+                'success': False,
+                'error': str(e)
+            })
+
+    @staticmethod
+    def _init_git_repo(plugin_root: str) -> tuple[bool, str]:
+        """
+        Initialize a Git repository in a ZIP-installed plugin folder.
+        Clones the remote history and checks out main branch.
+        """
+        try:
+            import git
+        except ImportError:
+            logger.error(
+                "GitPython is not available: cannot initialize git repo. "
+                "Install git or set $GIT_PYTHON_GIT_EXECUTABLE to the git binary path."
+            )
+            return False, ""
+
+        clean_excludes = _clean_excludes()
+
+        try:
+            repo = git.Repo.init(plugin_root)
+            origin = repo.create_remote(
+                'origin',
+                'https://github.com/willmiao/ComfyUI-Lora-Manager.git'
+            )
+            origin.fetch()
+
+            repo.create_head('main', origin.refs.main)
+            repo.git.checkout('main', '--force')
+            repo.git.reset('--hard')
+            repo.git.clean('-fd', *clean_excludes)
+
+            tracking_file = os.path.join(plugin_root, '.tracking')
+            if os.path.exists(tracking_file):
+                os.remove(tracking_file)
+                logger.info("Removed .tracking file (now in git mode)")
+
+            new_version = f"main-{repo.head.commit.hexsha[:7]}"
+            logger.info("Initialized git repo on main branch: %s", new_version)
+            return True, new_version
+
+        except Exception as e:
+            logger.error("Failed to initialize git repo: %s", e, exc_info=True)
+            return False, ""
+
+    @staticmethod
+    def _backup_git(git_folder, label):
+        try:
+            backup_dir = tempfile.mkdtemp()
+            backup = os.path.join(backup_dir, '.git')
+            shutil.copytree(git_folder, backup)
+            logger.info("Backed up .git before switching to %s", label)
+            return backup
+        except Exception as e:
+            logger.error("Failed to backup .git before %s switch: %s", label, e)
+            return None
+
+    @staticmethod
+    def _restore_git(git_backup, git_folder, success, label):
+        if git_backup and not success:
+            try:
+                if os.path.exists(git_folder):
+                    shutil.rmtree(git_folder)
+                shutil.copytree(git_backup, git_folder)
+                logger.info("Restored .git after failed %s switch", label)
+            except Exception as e:
+                logger.error("Failed to restore .git after %s switch: %s", label, e)
+        if git_backup:
+            shutil.rmtree(os.path.dirname(git_backup), ignore_errors=True)
 
     @staticmethod
     async def _download_and_replace_zip(plugin_root: str) -> tuple[bool, str]:
@@ -244,8 +501,7 @@ class UpdateRoutes:
             except Exception:
                 logger.debug("Could not close downloaded-version history database", exc_info=True)
 
-            # Skip settings.json, civitai, model cache and runtime cache folders
-            UpdateRoutes._clean_plugin_folder(plugin_root, skip_files=['settings.json', 'civitai', 'model_cache', 'cache', 'wildcards', 'backups', 'stats'])
+            UpdateRoutes._clean_plugin_folder(plugin_root, skip_files=list(_PRESERVE_DIRS))
 
             # Extract ZIP to temp dir
             with tempfile.TemporaryDirectory() as tmp_dir:
@@ -255,7 +511,7 @@ class UpdateRoutes:
                     extracted_root = next(os.scandir(tmp_dir)).path
 
                     # Copy files, skipping user data that should be preserved
-                    skip_items = {'settings.json', 'civitai', 'wildcards', 'backups', 'stats'}
+                    skip_items = set(_PRESERVE_DIRS)
                     for item in os.listdir(extracted_root):
                         if item in skip_items:
                             continue
@@ -272,7 +528,7 @@ class UpdateRoutes:
                     # for ComfyUI Manager to work properly
                     tracking_info_file = os.path.join(plugin_root, '.tracking')
                     tracking_files = []
-                    skip_tracked = {'civitai', 'wildcards', 'backups', 'stats'}
+                    skip_tracked = set(_PRESERVE_DIRS) - {'settings.json'}
                     for root, dirs, files in os.walk(extracted_root):
                         # Skip user data directories and their contents
                         rel_root = os.path.relpath(root, extracted_root)
@@ -295,7 +551,8 @@ class UpdateRoutes:
         except Exception as e:
             logger.error(f"ZIP update failed: {e}", exc_info=True)
             return False, ""
-        
+
+    @staticmethod
     def _clean_plugin_folder(plugin_root, skip_files=None):
         skip_files = skip_files or []
         for item in os.listdir(plugin_root):
@@ -308,41 +565,54 @@ class UpdateRoutes:
                 os.remove(path)
     
     @staticmethod
-    async def _get_nightly_version() -> tuple[str, List[str]]:
-        """
-        Fetch latest commit from main branch
-        """
+    async def _get_nightly_version(local_hash: str = "") -> tuple[str, List[str], int, str]:
         repo_owner = "willmiao"
         repo_name = "ComfyUI-Lora-Manager"
-        
-        # Use GitHub API to fetch the latest commit from main branch
+
         github_url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/commits/main"
-        
+
         try:
             downloader = await get_downloader()
-            success, data = await downloader.make_request('GET', github_url, custom_headers={'Accept': 'application/vnd.github+json'})
-            
+            success, data = await downloader.make_request(
+                'GET', github_url,
+                custom_headers={'Accept': 'application/vnd.github+json'}
+            )
+
             if not success:
-                logger.warning(f"Failed to fetch GitHub commit: {data}")
-                return "main", []
-            
-            commit_sha = data.get('sha', '')[:7]  # Short hash
+                logger.warning("Failed to fetch GitHub commit: %s", data)
+                return "main", [], 0, ""
+
+            commit_sha = data.get('sha', '')[:7]
             commit_message = data.get('commit', {}).get('message', '')
-            
-            # Format as "main-{short_hash}"
+            commit_date = data.get('commit', {}).get('committer', {}).get('date', '')[:10]
+
             version = f"main-{commit_sha}"
-            
-            # Use commit message as changelog
             changelog = [commit_message] if commit_message else []
-            
-            return version, changelog
-        
+
+            behind_by = 0
+            if local_hash and local_hash not in ('unknown', 'stable'):
+                compare_url = (
+                    f"https://api.github.com/repos/{repo_owner}/{repo_name}"
+                    f"/compare/{local_hash}...main"
+                )
+                c_ok, c_data = await downloader.make_request(
+                    'GET', compare_url,
+                    custom_headers={'Accept': 'application/vnd.github+json'}
+                )
+                if c_ok:
+                    if c_data.get('status') in ('ahead', 'diverged'):
+                        behind_by = c_data.get('ahead_by', 0)
+                    else:
+                        behind_by = c_data.get('behind_by', 0)
+
+            return version, changelog, behind_by, commit_date
+
         except NETWORK_EXCEPTIONS as e:
             logger.warning("Unable to reach GitHub for nightly version: %s", e)
-            return "main", []
+            return "main", [], 0, ""
         except Exception as e:
-            logger.error(f"Error fetching nightly version: {e}", exc_info=True)
-            return "main", []
+            logger.error("Error fetching nightly version: %s", e, exc_info=True)
+            return "main", [], 0, ""
     
     @staticmethod
     def _compare_nightly_versions(local_git_info: Dict[str, str], remote_version: str) -> bool:
