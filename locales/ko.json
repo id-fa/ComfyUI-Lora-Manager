@@ -186,6 +186,16 @@
             "cancelled": "수리가 취소되었습니다. {count}개의 레시피가 수리되었습니다.",
             "error": "레시피 복구 실패: {message}"
         },
+        "rematchRecipes": {
+            "label": "레시피를 로컬 모델에 다시 매칭",
+            "loading": "레시피를 로컬 모델에 다시 매칭하는 중...",
+            "success": "{recipes}개 레시피에서 {entries}개 항목이 매칭되었습니다",
+            "successErrors": "{recipes}개 레시피에서 {entries}개 항목이 매칭되었습니다. {failures}개 실패",
+            "allFailed": "{total}개 레시피 중 {failures}개 재매칭 실패",
+            "noMatch": "{recipes}개 레시피에서 {entries}개 항목의 로컬 매칭을 찾지 못했습니다",
+            "cancelled": "재매칭이 취소되었습니다. {recipes}개 레시피 업데이트됨({entries}개 항목)",
+            "error": "레시피 재매칭 실패: {message}"
+        },
         "manageExcludedModels": {
             "label": "제외된 모델 관리"
         },
@@ -449,6 +459,12 @@
                 "compact": "7개 (1080p), 8개 (2K), 10개 (4K)"
             },
             "displayDensityWarning": "경고: 높은 밀도는 리소스가 제한된 시스템에서 성능 문제를 일으킬 수 있습니다.",
+            "recipesLayout": "레시피 레이아웃",
+            "recipesLayoutHelp": "레시피 카드의 배열 방식을 선택하세요: 균일한 그리드 또는 각 이미지의 종횡비를 유지하는 메이슨리(Pinterest 스타일) 레이아웃.",
+            "recipesLayoutOptions": {
+                "grid": "그리드",
+                "masonry": "메이슨리"
+            },
             "showFolderSidebar": "폴더 사이드바 표시",
             "showFolderSidebarHelp": "모델 페이지에서 폴더 탐색 사이드바를 켜거나 끕니다. 비활성화하면 사이드바와 호버 영역이 표시되지 않습니다.",
             "cardInfoDisplay": "카드 정보 표시",
@@ -678,6 +694,7 @@
                 "deepseek": "DeepSeek",
                 "groq": "Groq",
                 "openrouter": "OpenRouter",
+                "google": "Gemini",
                 "opencode-go": "OpenCode Go",
                 "custom": "사용자 정의 (OpenAI 호환)"
             },
@@ -761,6 +778,7 @@
             "copyAll": "모든 문법 복사",
             "refreshAll": "모든 메타데이터 새로고침",
             "repairMetadata": "선택한 레시피 메타데이터 복구",
+            "rematchMetadata": "선택 항목을 로컬 모델에 다시 매칭",
             "reimportMetadata": "소스에서 다시 가져오기",
             "checkUpdates": "선택 항목 업데이트 확인",
             "moveAll": "모두 폴더로 이동",
@@ -816,6 +834,7 @@
             "setContentRating": "콘텐츠 등급 설정",
             "moveToFolder": "폴더로 이동",
             "repairMetadata": "메타데이터 복구",
+            "rematchMetadata": "로컬 모델에 다시 매칭",
             "reimportMetadata": "소스에서 다시 가져오기",
             "excludeModel": "모델 제외",
             "restoreModel": "모델 복원",
@@ -1581,6 +1600,21 @@
             "downloadCsv": "CSV 다운로드",
             "columnModelName": "모델 이름",
             "columnError": "오류"
+        },
+        "downloadBatchSummary": {
+            "title": "일괄 다운로드 요약",
+            "statSuccess": "성공",
+            "statFailed": "실패",
+            "statTotal": "전체",
+            "successMessage": "{count}개 모델이 모두 성공적으로 다운로드되었습니다",
+            "completedWithErrors": "오류와 함께 완료됨",
+            "failed": "다운로드 실패",
+            "failedItems": "실패한 항목 ({count})",
+            "columnName": "모델 이름",
+            "columnError": "오류",
+            "close": "닫기",
+            "copyReport": "보고서 복사",
+            "retryFailed": "실패 항목 재시도 ({count})"
         }
     },
     "modelTags": {
@@ -1929,6 +1963,12 @@
             "repairBulkComplete": "복구 완료: {repaired}개 복구, {skipped}개 건너뜀 (총 {total}개)",
             "repairBulkSkipped": "선택한 {total}개 레시피는 복구가 필요하지 않습니다",
             "repairBulkFailed": "선택한 레시피 복구 실패: {message}",
+            "rematchComplete": "{recipes}개 레시피에서 {entries}개 항목이 매칭되었습니다",
+            "rematchCompleteErrors": "{recipes}개 레시피에서 {entries}개 항목이 매칭되었습니다. {failures}개 실패",
+            "rematchAllFailed": "선택한 {total}개 레시피 중 {failures}개 재매칭 실패",
+            "rematchUnmatched": "{recipes}개 레시피에서 {entries}개 항목의 로컬 매칭을 찾지 못했습니다",
+            "rematchSkipped": "선택한 {total}개 레시피는 재매칭이 필요하지 않습니다",
+            "rematchFailed": "선택한 레시피 재매칭 실패: {message}",
             "reimporting": "소스에서 레시피를 다시 가져오는 중...",
             "reimportSuccess": "레시피를 다시 가져왔습니다",
             "reimportBulkComplete": "다시 가져오기 완료: {completed}개 성공, {failed}개 실패 (총 {total}개)",
@@ -2037,7 +2077,6 @@
             "presetNameTooLong": "프리셋 이름은 {max}자 이하여야 합니다",
             "presetNameInvalidChars": "프리셋 이름에 유효하지 않은 문자가 포함되어 있습니다",
             "presetNameExists": "동일한 이름의 프리셋이 이미 존재합니다",
-            "maxPresetsReached": "최대 {max}개의 프리셋만 허용됩니다. 더 추가하려면 기존 것을 삭제하세요.",
             "presetNotFound": "프리셋을 찾을 수 없습니다",
             "invalidPreset": "잘못된 프리셋 데이터입니다",
             "deletePresetFailed": "프리셋 삭제에 실패했습니다",

@@ -186,6 +186,16 @@
             "cancelled": "Réparation annulée. {count} recettes ont été réparées.",
             "error": "Échec de la réparation des recettes : {message}"
         },
+        "rematchRecipes": {
+            "label": "Réassocier les recettes aux modèles locaux",
+            "loading": "Réassociation des recettes aux modèles locaux...",
+            "success": "{entries} entrées associées dans {recipes} recettes",
+            "successErrors": "{entries} entrées associées dans {recipes} recettes, {failures} échecs",
+            "allFailed": "Échec de la réassociation de {failures} recettes sur {total}",
+            "noMatch": "Aucune correspondance locale trouvée pour {entries} entrées dans {recipes} recettes",
+            "cancelled": "Réassociation annulée. {recipes} recettes mises à jour ({entries} entrées)",
+            "error": "Échec de la réassociation des recettes : {message}"
+        },
         "manageExcludedModels": {
             "label": "Gérer les modèles exclus"
         },
@@ -449,6 +459,12 @@
                 "compact": "7 (1080p), 8 (2K), 10 (4K)"
             },
             "displayDensityWarning": "Attention : Des densités plus élevées peuvent causer des problèmes de performance sur les systèmes avec des ressources limitées.",
+            "recipesLayout": "Disposition des recettes",
+            "recipesLayoutHelp": "Choisissez comment les cartes de recettes sont organisées : une grille uniforme ou une disposition masonry (style Pinterest) qui préserve le rapport d'aspect de chaque image.",
+            "recipesLayoutOptions": {
+                "grid": "Grille",
+                "masonry": "Masonry"
+            },
             "showFolderSidebar": "Afficher la barre latérale des dossiers",
             "showFolderSidebarHelp": "Activez ou désactivez la barre latérale de navigation des dossiers sur les pages de modèles. Lorsqu'elle est désactivée, la barre latérale et la zone de survol restent masquées.",
             "cardInfoDisplay": "Affichage des informations de carte",
@@ -678,6 +694,7 @@
                 "deepseek": "DeepSeek",
                 "groq": "Groq",
                 "openrouter": "OpenRouter",
+                "google": "Gemini",
                 "opencode-go": "OpenCode Go",
                 "custom": "Personnalisé (compatible OpenAI)"
             },
@@ -761,6 +778,7 @@
             "copyAll": "Copier toute la syntaxe",
             "refreshAll": "Actualiser toutes les métadonnées",
             "repairMetadata": "Réparer les métadonnées de la sélection",
+            "rematchMetadata": "Réassocier la sélection aux modèles locaux",
             "reimportMetadata": "Ré-importer depuis la source",
             "checkUpdates": "Vérifier les mises à jour pour la sélection",
             "moveAll": "Déplacer tout vers un dossier",
@@ -816,6 +834,7 @@
             "setContentRating": "Définir la classification du contenu",
             "moveToFolder": "Déplacer vers un dossier",
             "repairMetadata": "Réparer les métadonnées",
+            "rematchMetadata": "Réassocier aux modèles locaux",
             "reimportMetadata": "Ré-importer depuis la source",
             "excludeModel": "Exclure le modèle",
             "restoreModel": "Restaurer le modèle",
@@ -1581,6 +1600,21 @@
             "downloadCsv": "Télécharger CSV",
             "columnModelName": "Nom du modèle",
             "columnError": "Erreur"
+        },
+        "downloadBatchSummary": {
+            "title": "Résumé du téléchargement groupé",
+            "statSuccess": "Réussis",
+            "statFailed": "Échoués",
+            "statTotal": "Total",
+            "successMessage": "Les {count} modèles ont été téléchargés avec succès",
+            "completedWithErrors": "Terminé avec des erreurs",
+            "failed": "Échec du téléchargement",
+            "failedItems": "Éléments échoués ({count})",
+            "columnName": "Nom du modèle",
+            "columnError": "Erreur",
+            "close": "Fermer",
+            "copyReport": "Copier le rapport",
+            "retryFailed": "Réessayer les échecs ({count})"
         }
     },
     "modelTags": {
@@ -1929,6 +1963,12 @@
             "repairBulkComplete": "Réparation terminée : {repaired} réparée(s), {skipped} ignorée(s) (sur {total})",
             "repairBulkSkipped": "Aucune réparation nécessaire parmi les {total} recettes sélectionnées",
             "repairBulkFailed": "Échec de la réparation des recettes sélectionnées : {message}",
+            "rematchComplete": "{entries} entrées associées dans {recipes} recettes",
+            "rematchCompleteErrors": "{entries} entrées associées dans {recipes} recettes, {failures} échecs",
+            "rematchAllFailed": "Échec de la réassociation de {failures} recettes sélectionnées sur {total}",
+            "rematchUnmatched": "Aucune correspondance locale trouvée pour {entries} entrées dans {recipes} recettes",
+            "rematchSkipped": "Aucune des {total} recettes sélectionnées ne nécessite de réassociation",
+            "rematchFailed": "Échec de la réassociation des recettes sélectionnées : {message}",
             "reimporting": "Ré-import de la recette depuis la source...",
             "reimportSuccess": "Recette ré-importée avec succès",
             "reimportBulkComplete": "Ré-import terminé : {completed} ré-importé(s), {failed} échec(s) (sur {total})",
@@ -2037,7 +2077,6 @@
             "presetNameTooLong": "Le nom du préréglage doit contenir au maximum {max} caractères",
             "presetNameInvalidChars": "Le nom du préréglage contient des caractères invalides",
             "presetNameExists": "Un préréglage avec ce nom existe déjà",
-            "maxPresetsReached": "Maximum {max} préréglages autorisés. Supprimez-en un pour en ajouter plus.",
             "presetNotFound": "Préréglage non trouvé",
             "invalidPreset": "Données de préréglage invalides",
             "deletePresetFailed": "Échec de la suppression du préréglage",

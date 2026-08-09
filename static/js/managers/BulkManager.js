@@ -95,7 +95,8 @@ export class BulkManager {
                 setFavorite: true,
                 unfavorite: true,
                 repairMetadata: true,
-                reimportMetadata: true
+                reimportMetadata: true,
+                rematchMetadata: true
             }
         };
 
@@ -864,6 +865,105 @@ export class BulkManager {
         } catch (error) {
             console.error('Error during bulk recipe repair:', error);
             showToast('toast.recipes.repairBulkFailed', { message: error.message }, 'error');
+        } finally {
+            if (state.loadingManager?.hide) {
+                state.loadingManager.hide();
+            }
+            if (typeof state.loadingManager?.restoreProgressBar === 'function') {
+                state.loadingManager.restoreProgressBar();
+            }
+        }
+    }
+
+    async rematchSelectedRecipes() {
+        if (state.selectedModels.size === 0) {
+            showToast('toast.recipes.noRecipesSelected', {}, 'warning');
+            return;
+        }
+
+        if (state.currentPageType !== 'recipes') {
+            showToast('This operation is only available for recipes', {}, 'warning');
+            return;
+        }
+
+        try {
+            const apiClient = this.getActiveApiClient();
+            const filePaths = Array.from(state.selectedModels);
+
+            if (typeof apiClient.rematchBulkModels !== 'function') {
+                showToast('Bulk rematch is not supported for this model type', {}, 'error');
+                return;
+            }
+
+            state.loadingManager.showSimpleLoading('Rematching recipes to local models...');
+
+            const result = await apiClient.rematchBulkModels(filePaths);
+
+            if (result.success) {
+                const total = result.total || filePaths.length;
+                // Unified counters from the backend; legacy fields fall back
+                // for older backends: `rematched` (entry count) for
+                // matched_entries, `total` (selection size) for
+                // matched_recipes.
+                const rematched = result.rematched || 0;
+                const skipped = result.skipped || 0;
+                const matchedRecipes = result.matched_recipes || result.total || 0;
+                const matchedEntries = result.matched_entries || rematched;
+                const failures = result.errors || 0;
+                const unresolvedEntries = result.unresolved_entries || 0;
+                const unresolvedRecipes = result.unresolved_recipes || 0;
+
+                const recipes = result.recipes || [];
+                for (const recipe of recipes) {
+                    if (recipe.file_path) {
+                        state.virtualScroller.updateSingleItem(
+                            recipe.file_path,
+                            recipe
+                        );
+                    }
+                }
+
+                if (matchedEntries > 0) {
+                    const hasFailures = failures > 0;
+                    const toastKey = hasFailures
+                        ? 'toast.recipes.rematchCompleteErrors'
+                        : 'toast.recipes.rematchComplete';
+                    showToast(
+                        toastKey,
+                        { rematched, skipped, total, entries: matchedEntries, recipes: matchedRecipes, failures },
+                        hasFailures ? 'warning' : 'success'
+                    );
+                } else if (failures > 0) {
+                    // Nothing matched and at least one recipe errored —
+                    // "no rematch needed" would be actively misleading here.
+                    showToast(
+                        'toast.recipes.rematchAllFailed',
+                        { total, failures },
+                        'error'
+                    );
+                } else if (unresolvedEntries > 0) {
+                    // Entries existed but have no local model — expected for
+                    // models deleted from Civitai; informational, not an error.
+                    showToast(
+                        'toast.recipes.rematchUnmatched',
+                        { entries: unresolvedEntries, recipes: unresolvedRecipes, total },
+                        'info'
+                    );
+                } else {
+                    showToast(
+                        'toast.recipes.rematchSkipped',
+                        { total },
+                        'info'
+                    );
+                }
+
+                if (state.bulkMode) this.toggleBulkMode();
+            } else {
+                throw new Error(result.error || 'Bulk rematch failed');
+            }
+        } catch (error) {
+            console.error('Error during bulk recipe rematch:', error);
+            showToast('toast.recipes.rematchFailed', { message: error.message }, 'error');
         } finally {
             if (state.loadingManager?.hide) {
                 state.loadingManager.hide();

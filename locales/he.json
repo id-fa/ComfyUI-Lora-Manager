@@ -186,6 +186,16 @@
             "cancelled": "תיקון בוטל. {count} מתכונים תוקנו.",
             "error": "תיקון המתכונים נכשל: {message}"
         },
+        "rematchRecipes": {
+            "label": "התאמה מחדש של מתכונים למודלים מקומיים",
+            "loading": "מתבצעת התאמה מחדש של מתכונים למודלים מקומיים...",
+            "success": "הותאמו {entries} פריטים ב־{recipes} מתכונים",
+            "successErrors": "הותאמו {entries} פריטים ב־{recipes} מתכונים, {failures} נכשלו",
+            "allFailed": "ההתאמה נכשלה עבור {failures} מתוך {total} מתכונים",
+            "noMatch": "לא נמצאה התאמה מקומית עבור {entries} פריטים ב־{recipes} מתכונים",
+            "cancelled": "ההתאמה בוטלה. עודכנו {recipes} מתכונים ({entries} פריטים)",
+            "error": "ההתאמה מחדש של המתכונים נכשלה: {message}"
+        },
         "manageExcludedModels": {
             "label": "ניהול מודלים מוחרגים"
         },
@@ -449,6 +459,12 @@
                 "compact": "7 (1080p), 8 (2K), 10 (4K)"
             },
             "displayDensityWarning": "אזהרה: צפיפויות גבוהות יותר עלולות לגרום לבעיות ביצועים במערכות עם משאבים מוגבלים.",
+            "recipesLayout": "פריסת מתכונים",
+            "recipesLayoutHelp": "בחר כיצד יסודרו כרטיסי המתכונים: רשת אחידה או פריסת Masonry (בסגנון Pinterest) השומרת על יחס הגובה-רוחב של כל תמונה.",
+            "recipesLayoutOptions": {
+                "grid": "רשת",
+                "masonry": "Masonry"
+            },
             "showFolderSidebar": "הצג סרגל צד תיקיות",
             "showFolderSidebarHelp": "הפעל או כבה את סרגל הצד לניווט תיקיות בדפי המודל. כאשר הוא כבוי, סרגל הצד ואזור הריחוף נשארים מוסתרים.",
             "cardInfoDisplay": "תצוגת מידע בכרטיס",
@@ -678,6 +694,7 @@
                 "deepseek": "DeepSeek",
                 "groq": "Groq",
                 "openrouter": "OpenRouter",
+                "google": "Gemini",
                 "opencode-go": "OpenCode Go",
                 "custom": "מותאם אישית (תואם OpenAI)"
             },
@@ -761,6 +778,7 @@
             "copyAll": "העתק את כל התחבירים",
             "refreshAll": "רענן את כל המטא-דאטה",
             "repairMetadata": "תקן מטא-דאטה עבור הנבחרים",
+            "rematchMetadata": "התאמה מחדש של הנבחרים למודלים מקומיים",
             "reimportMetadata": "ייבא מחדש ממקור",
             "checkUpdates": "בדוק עדכונים לבחירה",
             "moveAll": "העבר הכל לתיקייה",
@@ -816,6 +834,7 @@
             "setContentRating": "הגדר דירוג תוכן",
             "moveToFolder": "העבר לתיקייה",
             "repairMetadata": "תיקון מטא-דאטה",
+            "rematchMetadata": "התאמה מחדש למודלים מקומיים",
             "reimportMetadata": "ייבא מחדש ממקור",
             "excludeModel": "החרג מודל",
             "restoreModel": "שחזור מודל",
@@ -1581,6 +1600,21 @@
             "downloadCsv": "הורד CSV",
             "columnModelName": "שם המודל",
             "columnError": "שגיאה"
+        },
+        "downloadBatchSummary": {
+            "title": "סיכום הורדה בכמות",
+            "statSuccess": "הצליחו",
+            "statFailed": "נכשלו",
+            "statTotal": "סה\"כ",
+            "successMessage": "כל {count} הדגמים הורדו בהצלחה",
+            "completedWithErrors": "הושלם עם שגיאות",
+            "failed": "ההורדה נכשלה",
+            "failedItems": "פריטים שנכשלו ({count})",
+            "columnName": "שם הדגם",
+            "columnError": "שגיאה",
+            "close": "סגור",
+            "copyReport": "העתק דוח",
+            "retryFailed": "נסה שוב ({count})"
         }
     },
     "modelTags": {
@@ -1929,6 +1963,12 @@
             "repairBulkComplete": "התיקון הושלם: {repaired} תוקנו, {skipped} דולגו (מתוך {total})",
             "repairBulkSkipped": "אין צורך בתיקון עבור {total} המתכונים הנבחרים",
             "repairBulkFailed": "תיקון המתכונים הנבחרים נכשל: {message}",
+            "rematchComplete": "הותאמו {entries} פריטים ב־{recipes} מתכונים",
+            "rematchCompleteErrors": "הותאמו {entries} פריטים ב־{recipes} מתכונים, {failures} נכשלו",
+            "rematchAllFailed": "ההתאמה נכשלה עבור {failures} מתוך {total} מתכונים שנבחרו",
+            "rematchUnmatched": "לא נמצאה התאמה מקומית עבור {entries} פריטים ב־{recipes} מתכונים",
+            "rematchSkipped": "אין צורך בהתאמה עבור {total} המתכונים שנבחרו",
+            "rematchFailed": "ההתאמה מחדש של המתכונים שנבחרו נכשלה: {message}",
             "reimporting": "מייבא מתכון מחדש מהמקור...",
             "reimportSuccess": "המתכון יובא מחדש בהצלחה",
             "reimportBulkComplete": "ייבוא מחדש הושלם: {completed} יובאו, {failed} נכשלו (מתוך {total})",
@@ -2037,7 +2077,6 @@
             "presetNameTooLong": "שם קביעה מראש חייב להיות {max} תווים או פחות",
             "presetNameInvalidChars": "שם קביעה מראש מכיל תווים לא חוקיים",
             "presetNameExists": "קביעה מראש עם שם זה כבר קיימת",
-            "maxPresetsReached": "מותר מקסימום {max} קביעות מראש. מחק אחת כדי להוסיף עוד.",
             "presetNotFound": "קביעה מראש לא נמצאה",
             "invalidPreset": "נתוני קביעה מראש לא חוקיים",
             "deletePresetFailed": "מחיקת קביעה מראש נכשלה",
