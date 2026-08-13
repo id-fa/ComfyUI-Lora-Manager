@@ -417,10 +417,9 @@ export class BulkManager {
         const updated = {
             ...existing,
             fileName: card.dataset.file_name ?? existing.fileName,
-            folder: card.dataset.folder ?? existing.folder,
+            folder: card.dataset.folder ?? existing.folder ?? '',
             usageTips: card.dataset.usage_tips ?? existing.usageTips,
             modelName: card.dataset.name ?? existing.modelName,
-            folder: card.dataset.folder ?? existing.folder ?? '',
         };
 
         if (modelId !== null) {
@@ -732,7 +731,6 @@ export class BulkManager {
                         folder: item.folder || '',
                         usageTips: item.usage_tips || '{}',
                         modelName: item.name || item.file_name,
-                        folder: item.folder || '',
                         ...(modelId !== null ? { modelId } : {})
                     });
                 }
