@@ -935,8 +935,16 @@
         },
         "duplicates": {
             "found": "נמצאו {count} קבוצות כפולות",
+            "noGroups": "לא נמצאו קבוצות כפולות לפי קריטריון ההתאמה הנוכחי",
             "keepLatest": "שמור גרסאות אחרונות",
-            "deleteSelected": "מחק נבחרים"
+            "deleteSelected": "מחק נבחרים",
+            "includePromptLabel": "כלול הנחיה בהתאמה",
+            "basis": {
+                "loraCombo": "התאמה לפי: שילוב LoRA",
+                "loraComboAndPrompt": "התאמה לפי: שילוב LoRA + הנחיה",
+                "hintLoraCombo": "מתכונים עם אותם LoRAs בעוצמות זהות מקובצים יחד.",
+                "hintPromptIncluded": "מתכונים מקובצים רק כאשר הם משתמשים באותם LoRAs בעוצמות זהות ויש להם אותה הנחיה."
+            }
         },
         "contextMenu": {
             "copyRecipe": {
@@ -1269,8 +1277,13 @@
             }
         },
         "deleteModel": {
+            "freesSpace": "מפנה {size}",
             "title": "מחק מודל",
-            "message": "האם אתה בטוח שברצונך למחוק מודל זה וכל הקבצים הנלווים?"
+            "message": "האם אתה בטוח שברצונך למחוק מודל זה וכל הקבצים הנלווים?",
+            "recoverableWarning": "הקובץ יימחק לצמיתות לאחר 20 שניות, אלא אם תבטלו את הפעולה."
+        },
+        "deleteRecipe": {
+            "recoverableWarning": "ניתן לבטל פעולה זו תוך 20 שניות."
         },
         "excludeModel": {
             "title": "החרג מודל",
@@ -1713,6 +1726,7 @@
             "recipeReplaced": "מתכון הוחלף ב-workflow",
             "recipeFailedToSend": "שליחת מתכון ל-workflow נכשלה",
             "noMatchingNodes": "אין צמתים תואמים זמינים ב-workflow הנוכחי",
+            "noPromptTargets": "[TODO: Translate] No compatible prompt targets in the workflow.\nRight-click a node in ComfyUI → Mark as → Send Prompt Target",
             "noTargetNodeSelected": "לא נבחר צומת יעד",
             "modelUpdated": "מודל עודכן ב-workflow",
             "modelFailed": "עדכון צומת המודל נכשל",
@@ -2104,6 +2118,14 @@
             "updateSuccess": "מילות הטריגר עודכנו בהצלחה",
             "updateFailed": "עדכון מילות הטריגר נכשל",
             "copyFailed": "ההעתקה נכשלה"
+        },
+        "undo": {
+            "action": "בטל",
+            "deleted": "נמחק: {name}",
+            "deletedBulk": "{count} פריטים נמחקו",
+            "expired": "חלון הביטול פג. הפריט נמחק לצמיתות.",
+            "failed": "הביטול נכשל: {error}",
+            "restored": "הפריט שוחזר"
         },
         "virtual": {
             "loadFailed": "טעינת הפריטים נכשלה",

@@ -935,8 +935,16 @@
         },
         "duplicates": {
             "found": "Найдено {count} групп дубликатов",
+            "noGroups": "Дубликатов с текущим критерием не найдено",
             "keepLatest": "Оставить последние версии",
-            "deleteSelected": "Удалить выбранные"
+            "deleteSelected": "Удалить выбранные",
+            "includePromptLabel": "Учитывать запрос при поиске дубликатов",
+            "basis": {
+                "loraCombo": "Критерий: комбинация LoRA",
+                "loraComboAndPrompt": "Критерий: комбинация LoRA + запрос",
+                "hintLoraCombo": "Рецепты с одинаковыми LoRA и одинаковой силой группируются вместе.",
+                "hintPromptIncluded": "Рецепты группируются только при одинаковых LoRA с одинаковой силой И одинаковом запросе."
+            }
         },
         "contextMenu": {
             "copyRecipe": {
@@ -1269,8 +1277,13 @@
             }
         },
         "deleteModel": {
+            "freesSpace": "Освобождает {size}",
             "title": "Удалить модель",
-            "message": "Вы уверены, что хотите удалить эту модель и все связанные файлы?"
+            "message": "Вы уверены, что хотите удалить эту модель и все связанные файлы?",
+            "recoverableWarning": "Файл будет удалён навсегда через 20 секунд, если вы не отмените действие."
+        },
+        "deleteRecipe": {
+            "recoverableWarning": "Это действие можно отменить в течение 20 секунд."
         },
         "excludeModel": {
             "title": "Исключить модель",
@@ -1713,6 +1726,7 @@
             "recipeReplaced": "Рецепт заменён в workflow",
             "recipeFailedToSend": "Не удалось отправить рецепт в workflow",
             "noMatchingNodes": "В текущем workflow нет совместимых узлов",
+            "noPromptTargets": "[TODO: Translate] No compatible prompt targets in the workflow.\nRight-click a node in ComfyUI → Mark as → Send Prompt Target",
             "noTargetNodeSelected": "Целевой узел не выбран",
             "modelUpdated": "Модель обновлена в workflow",
             "modelFailed": "Не удалось обновить узел модели",
@@ -2104,6 +2118,14 @@
             "updateSuccess": "Триггерные слова успешно обновлены",
             "updateFailed": "Не удалось обновить триггерные слова",
             "copyFailed": "Копирование не удалось"
+        },
+        "undo": {
+            "action": "Отменить",
+            "deleted": "Удалено: {name}",
+            "deletedBulk": "Удалено: {count} шт.",
+            "expired": "Время отмены истекло. Элемент был удалён навсегда.",
+            "failed": "Не удалось отменить: {error}",
+            "restored": "Элемент восстановлен"
         },
         "virtual": {
             "loadFailed": "Не удалось загрузить элементы",

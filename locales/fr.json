@@ -935,8 +935,16 @@
         },
         "duplicates": {
             "found": "Trouvé {count} groupes de doublons",
+            "noGroups": "Aucun groupe de doublons trouvé avec le critère de correspondance actuel",
             "keepLatest": "Garder les dernières versions",
-            "deleteSelected": "Supprimer la sélection"
+            "deleteSelected": "Supprimer la sélection",
+            "includePromptLabel": "Inclure le prompt dans la correspondance",
+            "basis": {
+                "loraCombo": "Correspondance : combinaison de LoRA",
+                "loraComboAndPrompt": "Correspondance : combinaison de LoRA + prompt",
+                "hintLoraCombo": "Les recettes avec les mêmes LoRAs et des forces identiques sont regroupées.",
+                "hintPromptIncluded": "Les recettes ne sont regroupées que si elles utilisent les mêmes LoRAs avec des forces identiques ET ont le même prompt."
+            }
         },
         "contextMenu": {
             "copyRecipe": {
@@ -1269,8 +1277,13 @@
             }
         },
         "deleteModel": {
+            "freesSpace": "Libère {size}",
             "title": "Supprimer le modèle",
-            "message": "Êtes-vous sûr de vouloir supprimer ce modèle et tous les fichiers associés ?"
+            "message": "Êtes-vous sûr de vouloir supprimer ce modèle et tous les fichiers associés ?",
+            "recoverableWarning": "Le fichier sera définitivement supprimé après 20 secondes, sauf si vous annulez."
+        },
+        "deleteRecipe": {
+            "recoverableWarning": "Cette action peut être annulée pendant 20 secondes."
         },
         "excludeModel": {
             "title": "Exclure le modèle",
@@ -1713,6 +1726,7 @@
             "recipeReplaced": "Recipe remplacée dans le workflow",
             "recipeFailedToSend": "Échec de l'envoi de la recipe au workflow",
             "noMatchingNodes": "Aucun nœud compatible disponible dans le workflow actuel",
+            "noPromptTargets": "[TODO: Translate] No compatible prompt targets in the workflow.\nRight-click a node in ComfyUI → Mark as → Send Prompt Target",
             "noTargetNodeSelected": "Aucun nœud cible sélectionné",
             "modelUpdated": "Modèle mis à jour dans le workflow",
             "modelFailed": "Échec de la mise à jour du nœud modèle",
@@ -2104,6 +2118,14 @@
             "updateSuccess": "Mots-clés mis à jour avec succès",
             "updateFailed": "Échec de la mise à jour des mots-clés",
             "copyFailed": "Échec de la copie"
+        },
+        "undo": {
+            "action": "Annuler",
+            "deleted": "Supprimé : {name}",
+            "deletedBulk": "{count} élément(s) supprimé(s)",
+            "expired": "La fenêtre d'annulation a expiré. L'élément a été définitivement supprimé.",
+            "failed": "Échec de l'annulation : {error}",
+            "restored": "Élément restauré"
         },
         "virtual": {
             "loadFailed": "Échec du chargement des éléments",

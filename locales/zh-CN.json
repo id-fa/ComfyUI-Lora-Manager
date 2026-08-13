@@ -935,8 +935,16 @@
         },
         "duplicates": {
             "found": "发现 {count} 个重复组",
+            "noGroups": "按当前判重依据未找到重复组",
             "keepLatest": "保留最新版本",
-            "deleteSelected": "删除已选"
+            "deleteSelected": "删除已选",
+            "includePromptLabel": "将提示词纳入判重",
+            "basis": {
+                "loraCombo": "判重依据：LoRA 组合",
+                "loraComboAndPrompt": "判重依据：LoRA 组合 + 提示词",
+                "hintLoraCombo": "使用相同 LoRA（强度一致）的配方会被分组。",
+                "hintPromptIncluded": "仅当配方使用相同的 LoRA（强度一致）且提示词相同时才会被分组。"
+            }
         },
         "contextMenu": {
             "copyRecipe": {
@@ -1269,8 +1277,13 @@
             }
         },
         "deleteModel": {
+            "freesSpace": "释放 {size}",
             "title": "删除模型",
-            "message": "你确定要删除此模型及所有相关文件吗？"
+            "message": "你确定要删除此模型及所有相关文件吗？",
+            "recoverableWarning": "如果不撤销，文件将在 20 秒后被永久删除。"
+        },
+        "deleteRecipe": {
+            "recoverableWarning": "此操作可在 20 秒内撤销。"
         },
         "excludeModel": {
             "title": "排除模型",
@@ -1713,6 +1726,7 @@
             "recipeReplaced": "配方已替换到工作流",
             "recipeFailedToSend": "发送配方到工作流失败",
             "noMatchingNodes": "当前工作流中没有兼容的节点",
+            "noPromptTargets": "工作流中没有兼容的 prompt 目标节点。\n在 ComfyUI 中右键节点 → Mark as → Send Prompt Target",
             "noTargetNodeSelected": "未选择目标节点",
             "modelUpdated": "模型已更新到工作流",
             "modelFailed": "更新模型节点失败",
@@ -2104,6 +2118,14 @@
             "updateSuccess": "触发词更新成功",
             "updateFailed": "触发词更新失败",
             "copyFailed": "复制失败"
+        },
+        "undo": {
+            "action": "撤销",
+            "deleted": "已删除 {name}",
+            "deletedBulk": "已删除 {count} 个项目",
+            "expired": "撤销窗口已过期，项目已被永久删除。",
+            "failed": "撤销失败：{error}",
+            "restored": "项目已恢复"
         },
         "virtual": {
             "loadFailed": "加载项目失败",

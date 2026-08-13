@@ -935,8 +935,16 @@
     },
     "duplicates": {
       "found": "Found {count} duplicate groups",
+      "noGroups": "No duplicate groups found with the current matching basis",
       "keepLatest": "Keep Latest Versions",
-      "deleteSelected": "Delete Selected"
+      "deleteSelected": "Delete Selected",
+      "includePromptLabel": "Include prompt in matching",
+      "basis": {
+        "loraCombo": "Matched by: LoRA combination",
+        "loraComboAndPrompt": "Matched by: LoRA combination + prompt",
+        "hintLoraCombo": "Recipes with the same LoRAs at identical strengths are grouped.",
+        "hintPromptIncluded": "Recipes are grouped only when they use the same LoRAs at identical strengths AND have the same prompt."
+      }
     },
     "contextMenu": {
       "copyRecipe": {
@@ -1269,8 +1277,13 @@
       }
     },
     "deleteModel": {
+      "freesSpace": "Frees {size}",
       "title": "Delete Model",
-      "message": "Are you sure you want to delete this model and all associated files?"
+      "message": "Are you sure you want to delete this model and all associated files?",
+      "recoverableWarning": "This will permanently delete the file after 20 seconds unless you undo."
+    },
+    "deleteRecipe": {
+      "recoverableWarning": "This action can be undone for 20 seconds."
     },
     "excludeModel": {
       "title": "Exclude Model",
@@ -1713,6 +1726,7 @@
       "recipeReplaced": "Recipe replaced in workflow",
       "recipeFailedToSend": "Failed to send recipe to workflow",
       "noMatchingNodes": "No compatible nodes available in the current workflow",
+      "noPromptTargets": "No compatible prompt targets in the workflow.\nRight-click a node in ComfyUI → Mark as → Send Prompt Target",
       "noTargetNodeSelected": "No target node selected",
       "modelUpdated": "Model updated in workflow",
       "modelFailed": "Failed to update model node",
@@ -2104,6 +2118,14 @@
       "updateSuccess": "Trigger words updated successfully",
       "updateFailed": "Failed to update trigger words",
       "copyFailed": "Copy failed"
+    },
+    "undo": {
+      "action": "Undo",
+      "deleted": "Deleted {name}",
+      "deletedBulk": "Deleted {count} item(s)",
+      "expired": "Undo window expired. The item was permanently deleted.",
+      "failed": "Undo failed: {error}",
+      "restored": "Item restored"
     },
     "virtual": {
       "loadFailed": "Failed to load items",

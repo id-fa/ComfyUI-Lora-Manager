@@ -935,8 +935,16 @@
         },
         "duplicates": {
             "found": "{count} 個の重複グループが見つかりました",
+            "noGroups": "現在の一致基準では重複グループが見つかりませんでした",
             "keepLatest": "最新バージョンを保持",
-            "deleteSelected": "選択したものを削除"
+            "deleteSelected": "選択したものを削除",
+            "includePromptLabel": "一致判定にプロンプトを含める",
+            "basis": {
+                "loraCombo": "一致基準: LoRA の組み合わせ",
+                "loraComboAndPrompt": "一致基準: LoRA の組み合わせ + プロンプト",
+                "hintLoraCombo": "同じ LoRA を同じ強度で使用するレシピがグループ化されます。",
+                "hintPromptIncluded": "レシピは、同じ LoRA を同じ強度で使用し、かつプロンプトが同じ場合にのみグループ化されます。"
+            }
         },
         "contextMenu": {
             "copyRecipe": {
@@ -1269,8 +1277,13 @@
             }
         },
         "deleteModel": {
+            "freesSpace": "{size} を解放します",
             "title": "モデルを削除",
-            "message": "このモデルと関連するすべてのファイルを削除してもよろしいですか？"
+            "message": "このモデルと関連するすべてのファイルを削除してもよろしいですか？",
+            "recoverableWarning": "元に戻さない場合、このファイルは20秒後に完全に削除されます。"
+        },
+        "deleteRecipe": {
+            "recoverableWarning": "この操作は20秒以内であれば元に戻せます。"
         },
         "excludeModel": {
             "title": "モデルを除外",
@@ -1713,6 +1726,7 @@
             "recipeReplaced": "レシピがワークフローで置換されました",
             "recipeFailedToSend": "レシピをワークフローに送信できませんでした",
             "noMatchingNodes": "現在のワークフローには互換性のあるノードがありません",
+            "noPromptTargets": "[TODO: Translate] No compatible prompt targets in the workflow.\nRight-click a node in ComfyUI → Mark as → Send Prompt Target",
             "noTargetNodeSelected": "ターゲットノードが選択されていません",
             "modelUpdated": "モデルがワークフローで更新されました",
             "modelFailed": "モデルノードの更新に失敗しました",
@@ -2104,6 +2118,14 @@
             "updateSuccess": "トリガーワードが正常に更新されました",
             "updateFailed": "トリガーワードの更新に失敗しました",
             "copyFailed": "コピーに失敗しました"
+        },
+        "undo": {
+            "action": "元に戻す",
+            "deleted": "{name} を削除しました",
+            "deletedBulk": "{count} 個のアイテムを削除しました",
+            "expired": "元に戻せる時間が経過しました。アイテムは完全に削除されました。",
+            "failed": "元に戻せませんでした: {error}",
+            "restored": "アイテムを復元しました"
         },
         "virtual": {
             "loadFailed": "アイテムの読み込みに失敗しました",

@@ -18,6 +18,16 @@ from py.utils.models import BaseModelMetadata
 from py.utils.utils import calculate_recipe_fingerprint
 
 
+async def _wait_for_resort(scanner: RecipeScanner) -> None:
+    """Deterministically await any pending background cache resort.
+
+    Resort runs in a thread-pool executor; a bare sleep(0) races it.
+    """
+    tasks = list(getattr(scanner, "_resort_tasks", None) or [])
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+
 class StubHashIndex:
     def __init__(self) -> None:
         self._hash_to_path: dict[str, str] = {}
@@ -342,6 +352,7 @@ async def test_get_paginated_data_normalizes_legacy_checkpoint(recipe_scanner):
         }
     )
     await asyncio.sleep(0)
+    await _wait_for_resort(scanner)
 
     result = await scanner.get_paginated_data(page=1, page_size=5)
 
@@ -587,6 +598,7 @@ async def test_get_paginated_data_filters_by_checkpoint_hash(recipe_scanner):
         }
     )
     await asyncio.sleep(0)
+    await _wait_for_resort(scanner)
 
     result = await scanner.get_paginated_data(
         page=1,
@@ -619,6 +631,7 @@ async def test_get_paginated_data_normalizes_gen_params_aliases_without_dropping
         }
     )
     await asyncio.sleep(0)
+    await _wait_for_resort(scanner)
 
     result = await scanner.get_paginated_data(page=1, page_size=10)
     item = next(entry for entry in result["items"] if entry["id"] == "dirty-listing")
@@ -899,6 +912,7 @@ async def test_get_paginated_data_filters_by_favorite(recipe_scanner):
 
     # Wait for cache update (it's async in some places, add_recipe is usually enough but let's be safe)
     await asyncio.sleep(0)
+    await _wait_for_resort(scanner)
 
     # Test without filter (should return both)
     result_all = await scanner.get_paginated_data(page=1, page_size=10)
@@ -950,6 +964,7 @@ async def test_get_paginated_data_filters_by_prompt(recipe_scanner):
     )
 
     await asyncio.sleep(0)
+    await _wait_for_resort(scanner)
 
     # Test search in prompt
     result_prompt = await scanner.get_paginated_data(
@@ -1009,6 +1024,7 @@ async def test_get_paginated_data_sorting(recipe_scanner):
     )
 
     await asyncio.sleep(0)
+    await _wait_for_resort(scanner)
 
     # Test Name DESC: Gamma, Beta, Alpha
     res = await scanner.get_paginated_data(page=1, page_size=10, sort_by="name:desc")
@@ -3209,3 +3225,71 @@ async def test_rematch_all_autov3_cache_reuse_across_calls(
     # are read once across both calls (Oracle R2-F4).
     assert len(called) == 1
 
+
+
+async def test_find_all_duplicate_recipes_groups_by_fingerprint(recipe_scanner, monkeypatch):
+    scanner, _ = recipe_scanner
+    cache = SimpleNamespace(
+        raw_data=[
+            {"id": "r1", "fingerprint": "abc:0.8", "gen_params": {"prompt": "A Girl, blue hair"}},
+            {"id": "r2", "fingerprint": "abc:0.8", "gen_params": {"prompt": "a boy"}},
+            {"id": "r3", "fingerprint": "abc:0.8", "gen_params": {"prompt": "a boy"}},
+            {"id": "r4", "fingerprint": "def:1.0", "gen_params": {"prompt": "A Girl, blue hair"}},
+            {"id": "r5", "fingerprint": "", "gen_params": {"prompt": "landscape"}},
+            {"id": "r6", "fingerprint": "", "gen_params": {}},
+        ]
+    )
+    async def fake_get_cached_data():
+        return cache
+    monkeypatch.setattr(scanner, "get_cached_data", fake_get_cached_data)
+
+    groups = await scanner.find_all_duplicate_recipes()
+    assert groups == {"abc:0.8": ["r1", "r2", "r3"]}
+
+
+async def test_find_all_duplicate_recipes_include_prompt_composite_key(recipe_scanner, monkeypatch):
+    scanner, _ = recipe_scanner
+    cache = SimpleNamespace(
+        raw_data=[
+            {"id": "r1", "fingerprint": "abc:0.8", "gen_params": {"prompt": "A Girl,   blue hair"}},
+            {"id": "r2", "fingerprint": "abc:0.8", "gen_params": {"prompt": "a girl, blue hair"}},
+            {"id": "r3", "fingerprint": "abc:0.8", "gen_params": {"prompt": "a boy"}},
+            {"id": "r4", "fingerprint": "", "gen_params": {"prompt": "  landscape "}},
+            {"id": "r5", "fingerprint": "", "gen_params": {"prompt": "landscape"}},
+            {"id": "r6", "fingerprint": "", "gen_params": {}},
+            {"id": "r7", "fingerprint": "def:1.0", "gen_params": {"prompt": "a girl, blue hair"}},
+        ]
+    )
+    async def fake_get_cached_data():
+        return cache
+    monkeypatch.setattr(scanner, "get_cached_data", fake_get_cached_data)
+
+    groups = await scanner.find_all_duplicate_recipes(include_prompt=True)
+    assert groups == {
+        "abc:0.8\x1fa girl, blue hair": ["r1", "r2"],
+        "\x1flandscape": ["r4", "r5"],
+    }
+    # Same-lora recipes with different prompts are no longer duplicates
+    assert "abc:0.8\x1fa boy" not in groups
+    # Different-lora recipes with the same prompt are not grouped either
+    assert "def:1.0\x1fa girl, blue hair" not in groups
+    # Recipes with neither fingerprint nor prompt are skipped
+    assert "r6" not in [rid for ids in groups.values() for rid in ids]
+
+
+async def test_find_all_duplicate_recipes_include_prompt_missing_gen_params(recipe_scanner, monkeypatch):
+    scanner, _ = recipe_scanner
+    cache = SimpleNamespace(
+        raw_data=[
+            {"id": "r1", "fingerprint": "abc:0.8"},
+            {"id": "r2", "fingerprint": "abc:0.8"},
+            {"id": "r3", "fingerprint": "abc:0.8", "gen_params": {"prompt": "a boy"}},
+        ]
+    )
+    async def fake_get_cached_data():
+        return cache
+    monkeypatch.setattr(scanner, "get_cached_data", fake_get_cached_data)
+
+    groups = await scanner.find_all_duplicate_recipes(include_prompt=True)
+    # Recipes without gen_params/prompt normalize to empty prompt and match
+    assert groups == {"abc:0.8\x1f": ["r1", "r2"]}

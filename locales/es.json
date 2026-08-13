@@ -935,8 +935,16 @@
         },
         "duplicates": {
             "found": "Se encontraron {count} grupos de duplicados",
+            "noGroups": "No se encontraron grupos de duplicados con el criterio de coincidencia actual",
             "keepLatest": "Mantener versiones más recientes",
-            "deleteSelected": "Eliminar seleccionados"
+            "deleteSelected": "Eliminar seleccionados",
+            "includePromptLabel": "Incluir prompt en la coincidencia",
+            "basis": {
+                "loraCombo": "Coincidencia por: combinación de LoRA",
+                "loraComboAndPrompt": "Coincidencia por: combinación de LoRA + prompt",
+                "hintLoraCombo": "Se agrupan las recetas con los mismos LoRAs y las mismas intensidades.",
+                "hintPromptIncluded": "Las recetas solo se agrupan cuando usan los mismos LoRAs con intensidades idénticas Y tienen el mismo prompt."
+            }
         },
         "contextMenu": {
             "copyRecipe": {
@@ -1269,8 +1277,13 @@
             }
         },
         "deleteModel": {
+            "freesSpace": "Libera {size}",
             "title": "Eliminar modelo",
-            "message": "¿Estás seguro de que quieres eliminar este modelo y todos los archivos asociados?"
+            "message": "¿Estás seguro de que quieres eliminar este modelo y todos los archivos asociados?",
+            "recoverableWarning": "El archivo se eliminará permanentemente después de 20 segundos a menos que deshaga la acción."
+        },
+        "deleteRecipe": {
+            "recoverableWarning": "Esta acción se puede deshacer durante 20 segundos."
         },
         "excludeModel": {
             "title": "Excluir modelo",
@@ -1713,6 +1726,7 @@
             "recipeReplaced": "Receta reemplazada en el flujo de trabajo",
             "recipeFailedToSend": "Error al enviar receta al flujo de trabajo",
             "noMatchingNodes": "No hay nodos compatibles disponibles en el flujo de trabajo actual",
+            "noPromptTargets": "[TODO: Translate] No compatible prompt targets in the workflow.\nRight-click a node in ComfyUI → Mark as → Send Prompt Target",
             "noTargetNodeSelected": "No se ha seleccionado ningún nodo de destino",
             "modelUpdated": "Modelo actualizado en el flujo de trabajo",
             "modelFailed": "Error al actualizar nodo de modelo",
@@ -2104,6 +2118,14 @@
             "updateSuccess": "Palabras clave actualizadas exitosamente",
             "updateFailed": "Error al actualizar palabras clave",
             "copyFailed": "Error al copiar"
+        },
+        "undo": {
+            "action": "Deshacer",
+            "deleted": "Eliminado: {name}",
+            "deletedBulk": "{count} elemento(s) eliminado(s)",
+            "expired": "La ventana de deshacer ha caducado. El elemento se eliminó permanentemente.",
+            "failed": "No se pudo deshacer: {error}",
+            "restored": "Elemento restaurado"
         },
         "virtual": {
             "loadFailed": "Error al cargar elementos",
