@@ -8,11 +8,13 @@ import asyncio
 import json
 import logging
 import os
+import random
 import time
 from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, Union, cast
 from ..config import config
 from ..utils.constants import VALID_CHECKPOINT_SUB_TYPES, VALID_LORA_TYPES
 from ..utils.file_utils import calculate_autov3
+from ..utils.recipe_open_stats import RecipeOpenStats
 from .recipe_cache import RecipeCache
 from .recipes.errors import RecipeNotFoundError, RecipePersistenceError
 from natsort import natsorted
@@ -2781,7 +2783,11 @@ class RecipeScanner:
         Args:
             page: Current page number (1-based)
             page_size: Number of items per page
-            sort_by: Sort method ('name' or 'date')
+            sort_by: Sort method ('name', 'date', 'loras_count', 'opened',
+                or 'random' with an optional seed like 'random:abc123'; the
+                part after 'random:' is the shuffle seed, not a direction).
+                'opened' hides recipes that were never opened — it is a
+                "recently opened" view, not a plain reorder
             search: Search term
             filters: Dictionary of filters to apply
             search_options: Dictionary of search options to apply
@@ -2962,7 +2968,7 @@ class RecipeScanner:
                         ]
 
         # Apply sorting if not already handled by pre-sorted cache
-        if ":" in sort_by or sort_field == "loras_count":
+        if ":" in sort_by or sort_field in ("loras_count", "random", "opened"):
             field, order = (sort_by.split(":") + ["desc"])[:2]
             reverse = order.lower() == "desc"
 
@@ -2981,10 +2987,30 @@ class RecipeScanner:
                     ),
                     reverse=reverse,
                 )
+            elif field == "opened":
+                # "Recently Opened" view: recipes never opened are hidden.
+                # The open stats live outside recipe metadata; see
+                # RecipeOpenStats.
+                opened_map = RecipeOpenStats().get_opened_map()
+                filtered_data = [
+                    item
+                    for item in filtered_data
+                    if opened_map.get(str(item.get("id", ""))) is not None
+                ]
+                filtered_data.sort(
+                    key=lambda x: opened_map.get(str(x.get("id", "")), 0),
+                    reverse=reverse,
+                )
             elif field == "loras_count":
                 filtered_data.sort(
                     key=lambda x: len(x.get("loras", [])), reverse=reverse
                 )
+            elif field == "random":
+                # Seeded random shuffle: same seed -> same order (stable
+                # pagination across requests), matching the model pages.
+                seed = order if order.lower() not in ("asc", "desc") else None
+                rng = random.Random(seed or "random")
+                rng.shuffle(filtered_data)
 
         # Calculate pagination
         total_items = len(filtered_data)

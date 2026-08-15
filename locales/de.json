@@ -622,6 +622,10 @@
             "label": "Früher Zugriff Updates ausblenden",
             "help": "Nur Early-Access-Updates"
         },
+        "hidePaidUpdates": {
+            "label": "[TODO: Translate] Hide Paid Updates",
+            "help": "[TODO: Translate] When enabled, models with only paid updates will not show 'Update available' badge"
+        },
         "licenseIcons": {
             "useNewStyle": "Aktualisierte Lizenzsymbole verwenden",
             "useNewStyleHelp": "Lizenzberechtigungen mit farbigen Indikatoren (neuer Stil) oder nur Einschränkungssymbolen (klassischer Stil) anzeigen. Orientiert sich am aktuellen CivitAI-Design."
@@ -920,7 +924,9 @@
                 "dateAsc": "Älteste",
                 "lorasCount": "LoRA-Anzahl",
                 "lorasCountDesc": "Meiste",
-                "lorasCountAsc": "Wenigste"
+                "lorasCountAsc": "Wenigste",
+                "opened": "Zuletzt geöffnet",
+                "openedDesc": "Zuletzt geöffnet"
             },
             "refresh": {
                 "title": "Rezeptliste aktualisieren",
@@ -1548,6 +1554,8 @@
                     "newerTooltip": "Diese Version ist neuer als Ihre neueste lokale Version",
                     "earlyAccess": "Früher Zugriff",
                     "earlyAccessTooltip": "Für diese Version ist derzeit Civitai Early Access erforderlich",
+                    "paid": "[TODO: Translate] Paid",
+                    "paidTooltip": "[TODO: Translate] This version requires payment to download",
                     "ignored": "Ignoriert",
                     "ignoredTooltip": "Für diese Version sind Update-Benachrichtigungen deaktiviert",
                     "onSiteOnly": "Nur On-Site",
@@ -1557,6 +1565,7 @@
                     "download": "Herunterladen",
                     "downloadTooltip": "Diese Version herunterladen",
                     "downloadEarlyAccessTooltip": "Diese Early-Access-Version von Civitai herunterladen",
+                    "downloadPaidTooltip": "[TODO: Translate] Download this paid version from Civitai",
                     "downloadNotAllowedTooltip": "Diese Version ist nur für die On-Site-Generierung auf Civitai verfügbar",
                     "delete": "Löschen",
                     "deleteTooltip": "Diese lokale Version löschen",
@@ -2190,6 +2199,7 @@
             "fileRenameFailed": "Fehler beim Umbenennen der Datei: {error}",
             "previewUpdated": "Vorschau erfolgreich aktualisiert",
             "previewUploadFailed": "Fehler beim Hochladen des Vorschaubilds",
+            "previewDropInvalid": "Nicht unterstützter Dateityp: {name}. Ziehen Sie stattdessen ein Bild oder ein MP4-Video hinein.",
             "refreshComplete": "{action} abgeschlossen",
             "refreshFailed": "Fehler beim {action} der {type}s",
             "metadataRefreshed": "Metadaten erfolgreich aktualisiert",

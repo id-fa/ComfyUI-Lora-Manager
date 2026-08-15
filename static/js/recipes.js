@@ -10,7 +10,7 @@ import { DuplicatesManager } from './components/DuplicatesManager.js';
 import { refreshVirtualScroll, recreateVirtualScroll } from './utils/infiniteScroll.js';
 import { refreshRecipes, RecipeSidebarApiClient } from './api/recipeApi.js';
 import { sidebarManager } from './components/SidebarManager.js';
-import { initSortDropdown } from './components/controls/SortDropdown.js';
+import { initSortDropdown, applySortToSelect, randomizeSortValue } from './components/controls/SortDropdown.js';
 
 class RecipePageControls {
     constructor() {
@@ -245,10 +245,20 @@ class RecipeManager {
                 this.pageState.sortBy = savedSort;
             }
             initSortDropdown(sortSelect);
-            sortSelect.value = this.pageState.sortBy || 'date:desc';
+            applySortToSelect(this.pageState.sortBy || 'date:desc');
             sortSelect.addEventListener('change', () => {
-                this.pageState.sortBy = sortSelect.value;
-                setStorageItem('recipes_sort', sortSelect.value);
+                let value = sortSelect.value;
+                if (value.startsWith('random')) {
+                    // Every pick of Random reshuffles the list: generate a
+                    // fresh seed so the backend keeps a stable order across
+                    // paginated requests.
+                    value = randomizeSortValue();
+                }
+                this.pageState.sortBy = value;
+                setStorageItem('recipes_sort', value);
+                // Reset the seeded Random option when switching away from
+                // Random, or re-apply the fresh seed when picking it again.
+                applySortToSelect(value);
                 refreshVirtualScroll();
             });
         }

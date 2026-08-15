@@ -622,6 +622,10 @@
             "label": "早期アクセス更新を非表示",
             "help": "早期アクセスのみの更新"
         },
+        "hidePaidUpdates": {
+            "label": "[TODO: Translate] Hide Paid Updates",
+            "help": "[TODO: Translate] When enabled, models with only paid updates will not show 'Update available' badge"
+        },
         "licenseIcons": {
             "useNewStyle": "更新されたライセンスアイコンを使用",
             "useNewStyleHelp": "カラーインジケーター付きでライセンス許可を表示（新スタイル）するか、制限のみのアイコンを表示（クラシックスタイル）します。現在のCivitAIデザインを反映しています。"
@@ -920,7 +924,9 @@
                 "dateAsc": "古い順",
                 "lorasCount": "LoRA数",
                 "lorasCountDesc": "多い順",
-                "lorasCountAsc": "少ない順"
+                "lorasCountAsc": "少ない順",
+                "opened": "最近開いた",
+                "openedDesc": "最近開いた"
             },
             "refresh": {
                 "title": "レシピリストを更新",
@@ -1548,6 +1554,8 @@
                     "newerTooltip": "このバージョンはローカルの最新バージョンより新しいです",
                     "earlyAccess": "早期アクセス",
                     "earlyAccessTooltip": "このバージョンは現在 Civitai の早期アクセスが必要です",
+                    "paid": "[TODO: Translate] Paid",
+                    "paidTooltip": "[TODO: Translate] This version requires payment to download",
                     "ignored": "無視中",
                     "ignoredTooltip": "このバージョンの更新通知は無効です",
                     "onSiteOnly": "サイト内のみ",
@@ -1557,6 +1565,7 @@
                     "download": "ダウンロード",
                     "downloadTooltip": "このバージョンをダウンロード",
                     "downloadEarlyAccessTooltip": "Civitai からこの早期アクセス版をダウンロード",
+                    "downloadPaidTooltip": "[TODO: Translate] Download this paid version from Civitai",
                     "downloadNotAllowedTooltip": "このバージョンはCivitaiサイト内でのみ利用可能で、ダウンロードはできません",
                     "delete": "削除",
                     "deleteTooltip": "このローカルバージョンを削除",
@@ -2190,6 +2199,7 @@
             "fileRenameFailed": "ファイル名の変更に失敗しました：{error}",
             "previewUpdated": "プレビューが正常に更新されました",
             "previewUploadFailed": "プレビュー画像のアップロードに失敗しました",
+            "previewDropInvalid": "サポートされていないファイル形式：{name}。画像またはMP4ビデオをドロップしてください。",
             "refreshComplete": "{action} 完了",
             "refreshFailed": "{type}の{action}に失敗しました",
             "metadataRefreshed": "メタデータが正常に更新されました",
