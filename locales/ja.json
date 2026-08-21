@@ -623,8 +623,8 @@
             "help": "早期アクセスのみの更新"
         },
         "hidePaidUpdates": {
-            "label": "[TODO: Translate] Hide Paid Updates",
-            "help": "[TODO: Translate] When enabled, models with only paid updates will not show 'Update available' badge"
+            "label": "有料更新を非表示",
+            "help": "有効にすると、有料の更新のみがあるモデルには「更新あり」バッジが表示されません"
         },
         "licenseIcons": {
             "useNewStyle": "更新されたライセンスアイコンを使用",
@@ -853,20 +853,19 @@
     "recipes": {
         "title": "LoRAレシピ",
         "actions": {
-            "sendCheckpoint": "ComfyUIへ送信"
+            "sendCheckpoint": "ComfyUIへ送信",
+            "sendRecipe": "ComfyUIへ送信"
         },
         "controls": {
             "import": {
                 "action": "インポート",
                 "title": "画像またはURLからレシピをインポート",
-                "urlLocalPath": "URL / ローカルパス",
-                "uploadImage": "画像をアップロード",
-                "urlSectionDescription": "Civitai画像URLまたはローカルファイルパスを入力してレシピとしてインポートします。",
+                "dropZoneLabel": "画像をアップロード",
+                "dropZoneHint": "画像をここにドラッグ＆ドロップ、クリップボードから貼り付け、またはクリックして参照",
+                "orDivider": "または画像をドラッグ＆ドロップ / 貼り付け",
                 "imageUrlOrPath": "画像URLまたはファイルパス：",
                 "urlPlaceholder": "https://civitai.com/images/... または C:/path/to/image.png",
                 "fetchImage": "画像を取得",
-                "uploadSectionDescription": "LoRAメタデータを含む画像をアップロードしてレシピとしてインポートします。",
-                "selectImage": "画像を選択",
                 "recipeName": "レシピ名",
                 "recipeNamePlaceholder": "レシピ名を入力",
                 "tagsOptional": "タグ（任意）",
@@ -911,6 +910,8 @@
                 "errors": {
                     "selectImageFile": "画像ファイルを選択してください",
                     "enterUrlOrPath": "URLまたはファイルパスを入力してください",
+                    "invalidUrl": "有効なURLを入力してください",
+                    "invalidInputFormat": "画像のURLまたはローカルの画像ファイルパスを入力してください",
                     "selectLoraRoot": "LoRAルートディレクトリを選択してください"
                 }
             },
@@ -1243,11 +1244,13 @@
             "downloaded": "ダウンロード済み",
             "downloadedTooltip": "以前にダウンロード済みですが、現在はライブラリにありません。",
             "alreadyInLibrary": "既にライブラリ内",
+            "partiallyDownloaded": "一部ダウンロード済み",
             "autoOrganizedPath": "[パステンプレートによる自動整理]",
             "fileSelection": {
                 "title": "ファイル形式を選択",
                 "files": "ファイル",
-                "select": "ファイルを選択"
+                "select": "ファイルを選択",
+                "inLibrary": "ライブラリ内"
             },
             "errors": {
                 "invalidUrl": "無効なCivitai URL形式",
@@ -1532,6 +1535,30 @@
                 "examples": "例を読み込み中...",
                 "versions": "バージョンを読み込み中..."
             },
+            "showcase": {
+                "hiddenBySfw": "SFWのみ設定により{count}件非表示",
+                "showExamples": "例を表示",
+                "showCount": "例を表示（{count}）",
+                "hideExamples": "例を非表示",
+                "addExamples": "例を追加",
+                "previousExample": "前の例",
+                "nextExample": "次の例",
+                "noExamples": "利用可能な例画像がありません",
+                "addMoreExamples": "さらに例を追加",
+                "dragDrop": "画像または動画をここにドラッグ＆ドロップ",
+                "or": "または",
+                "selectFiles": "ファイルを選択",
+                "supportedFormats": "対応形式：jpg, png, gif, webp, avif, jxl, mp4, webm",
+                "importing": "ファイルをインポート中...",
+                "noSupportedFiles": "対応ファイルが選択されていません。画像または動画ファイルを選択してください。",
+                "allFiltered": "NSFWコンテンツ設定により、すべての例画像がフィルタリングされています",
+                "sfwOnlyEnabled": "現在の設定ではSFWコンテンツのみが表示されます",
+                "changeInSettings": "設定から変更できます",
+                "nsfwMature": "成人向けコンテンツ",
+                "nsfwR": "R指定コンテンツ",
+                "nsfwX": "X指定コンテンツ",
+                "nsfwXxx": "XXX指定コンテンツ"
+            },
             "versions": {
                 "heading": "モデルバージョン",
                 "copy": "このモデルのすべてのバージョンを一か所で管理します。",
@@ -1559,8 +1586,8 @@
                     "newerTooltip": "このバージョンはローカルの最新バージョンより新しいです",
                     "earlyAccess": "早期アクセス",
                     "earlyAccessTooltip": "このバージョンは現在 Civitai の早期アクセスが必要です",
-                    "paid": "[TODO: Translate] Paid",
-                    "paidTooltip": "[TODO: Translate] This version requires payment to download",
+                    "paid": "有料",
+                    "paidTooltip": "このバージョンのダウンロードには支払いが必要です",
                     "ignored": "無視中",
                     "ignoredTooltip": "このバージョンの更新通知は無効です",
                     "onSiteOnly": "サイト内のみ",
@@ -1569,8 +1596,9 @@
                 "actions": {
                     "download": "ダウンロード",
                     "downloadTooltip": "このバージョンをダウンロード",
+                    "downloadRemainingTooltip": "このバージョンの残りのファイルをダウンロード",
                     "downloadEarlyAccessTooltip": "Civitai からこの早期アクセス版をダウンロード",
-                    "downloadPaidTooltip": "[TODO: Translate] Download this paid version from Civitai",
+                    "downloadPaidTooltip": "Civitai からこの有料バージョンをダウンロード",
                     "downloadNotAllowedTooltip": "このバージョンはCivitaiサイト内でのみ利用可能で、ダウンロードはできません",
                     "delete": "削除",
                     "deleteTooltip": "このローカルバージョンを削除",
@@ -1740,7 +1768,7 @@
             "recipeReplaced": "レシピがワークフローで置換されました",
             "recipeFailedToSend": "レシピをワークフローに送信できませんでした",
             "noMatchingNodes": "現在のワークフローには互換性のあるノードがありません",
-            "noPromptTargets": "[TODO: Translate] No compatible prompt targets in the workflow.\nRight-click a node in ComfyUI → Mark as → Send Prompt Target",
+            "noPromptTargets": "ワークフロー内に互換性のあるプロンプトターゲットがありません。\nComfyUIでノードを右クリック → Mark as → Send Prompt Target",
             "noTargetNodeSelected": "ターゲットノードが選択されていません",
             "modelUpdated": "モデルがワークフローで更新されました",
             "modelFailed": "モデルノードの更新に失敗しました",
@@ -1917,6 +1945,7 @@
             "downloadPartialSuccess": "{total} LoRAのうち {completed} がダウンロードされました",
             "downloadPartialWithAccess": "{total} LoRAのうち {completed} がダウンロードされました。{accessFailures} はアクセス制限により失敗しました。設定でAPIキーまたはアーリーアクセス状況を確認してください。",
             "pleaseSelectVersion": "バージョンを選択してください",
+            "pleaseSelectFile": "ファイルを1つ以上選択してください",
             "versionExists": "このバージョンは既にライブラリに存在します",
             "downloadCompleted": "ダウンロードが正常に完了しました",
             "downloadSkippedByBaseModel": "ベースモデル {baseModel} が除外されているため、ダウンロードをスキップしました",

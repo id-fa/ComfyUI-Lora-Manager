@@ -853,20 +853,19 @@
   "recipes": {
     "title": "LoRA Recipes",
     "actions": {
-      "sendCheckpoint": "Send to ComfyUI"
+      "sendCheckpoint": "Send to ComfyUI",
+      "sendRecipe": "Send to ComfyUI"
     },
     "controls": {
       "import": {
         "action": "Import",
         "title": "Import a recipe from image or URL",
-        "urlLocalPath": "URL / Local Path",
-        "uploadImage": "Upload Image",
-        "urlSectionDescription": "Input a Civitai image URL from civitai.com or civitai.red, or a local file path, to import as a recipe.",
+        "dropZoneLabel": "Upload image",
+        "dropZoneHint": "Drag & drop an image here, paste from clipboard, or click to browse",
+        "orDivider": "or drag & drop / paste an image",
         "imageUrlOrPath": "Image URL or File Path:",
         "urlPlaceholder": "https://civitai.com/images/... or https://civitai.red/images/... or C:/path/to/image.png",
         "fetchImage": "Fetch Image",
-        "uploadSectionDescription": "Upload an image with LoRA metadata to import as a recipe.",
-        "selectImage": "Select Image",
         "recipeName": "Recipe Name",
         "recipeNamePlaceholder": "Enter recipe name",
         "tagsOptional": "Tags (optional)",
@@ -911,6 +910,8 @@
         "errors": {
           "selectImageFile": "Please select an image file",
           "enterUrlOrPath": "Please enter a URL or file path",
+          "invalidUrl": "Please enter a valid URL",
+          "invalidInputFormat": "Please enter an image URL or a local image file path",
           "selectLoraRoot": "Please select a LoRA root directory"
         }
       },
@@ -1243,11 +1244,13 @@
       "downloaded": "Downloaded",
       "downloadedTooltip": "Previously downloaded, but it is not currently in your library.",
       "alreadyInLibrary": "Already in Library",
+      "partiallyDownloaded": "Partially downloaded",
       "autoOrganizedPath": "[Auto-organized by path template]",
       "fileSelection": {
         "title": "Select File Format",
         "files": "files",
-        "select": "Select File"
+        "select": "Select File",
+        "inLibrary": "In Library"
       },
       "errors": {
         "invalidUrl": "Invalid Civitai URL format",
@@ -1532,6 +1535,30 @@
         "examples": "Loading examples...",
         "versions": "Loading versions..."
       },
+      "showcase": {
+        "hiddenBySfw": "{count} hidden by SFW-only setting",
+        "showExamples": "Show examples",
+        "showCount": "Show examples ({count})",
+        "hideExamples": "Hide examples",
+        "addExamples": "Add examples",
+        "previousExample": "Previous example",
+        "nextExample": "Next example",
+        "noExamples": "No example images available",
+        "addMoreExamples": "Add more examples",
+        "dragDrop": "Drag & drop images or videos here",
+        "or": "or",
+        "selectFiles": "Select Files",
+        "supportedFormats": "Supported formats: jpg, png, gif, webp, avif, jxl, mp4, webm",
+        "importing": "Importing files...",
+        "noSupportedFiles": "No supported files selected. Please select image or video files.",
+        "allFiltered": "All example images are filtered due to NSFW content settings",
+        "sfwOnlyEnabled": "Your settings are currently set to show only safe-for-work content",
+        "changeInSettings": "You can change this in Settings",
+        "nsfwMature": "Mature Content",
+        "nsfwR": "R-rated Content",
+        "nsfwX": "X-rated Content",
+        "nsfwXxx": "XXX-rated Content"
+      },
       "versions": {
         "heading": "Model versions",
         "copy": "Track and manage every version of this model in one place.",
@@ -1569,6 +1596,7 @@
         "actions": {
           "download": "Download",
           "downloadTooltip": "Download this version",
+          "downloadRemainingTooltip": "Download remaining files of this version",
           "downloadEarlyAccessTooltip": "Download this early access version from Civitai",
           "downloadPaidTooltip": "Download this paid version from Civitai",
           "downloadNotAllowedTooltip": "This version is only available for on-site generation on Civitai",
@@ -1917,6 +1945,7 @@
       "downloadPartialSuccess": "Downloaded {completed} of {total} LoRAs",
       "downloadPartialWithAccess": "Downloaded {completed} of {total} LoRAs. {accessFailures} failed due to access restrictions. Check your API key in settings or early access status.",
       "pleaseSelectVersion": "Please select a version",
+      "pleaseSelectFile": "Please select at least one file",
       "versionExists": "This version already exists in your library",
       "downloadCompleted": "Download completed successfully",
       "downloadSkippedByBaseModel": "Skipped download because base model {baseModel} is excluded",

@@ -623,8 +623,8 @@
             "help": "Только обновления раннего доступа"
         },
         "hidePaidUpdates": {
-            "label": "[TODO: Translate] Hide Paid Updates",
-            "help": "[TODO: Translate] When enabled, models with only paid updates will not show 'Update available' badge"
+            "label": "Скрывать платные обновления",
+            "help": "Если включено, у моделей, для которых доступны только платные обновления, не будет отображаться значок «Доступно обновление»"
         },
         "licenseIcons": {
             "useNewStyle": "Использовать обновлённые значки лицензии",
@@ -853,20 +853,19 @@
     "recipes": {
         "title": "Рецепты LoRA",
         "actions": {
-            "sendCheckpoint": "Отправить в ComfyUI"
+            "sendCheckpoint": "Отправить в ComfyUI",
+            "sendRecipe": "Отправить в ComfyUI"
         },
         "controls": {
             "import": {
                 "action": "Импортировать",
                 "title": "Импортировать рецепт из изображения или URL",
-                "urlLocalPath": "URL / Локальный путь",
-                "uploadImage": "Загрузить изображение",
-                "urlSectionDescription": "Введите URL изображения Civitai или локальный путь к файлу для импорта в качестве рецепта.",
+                "dropZoneLabel": "Загрузить изображение",
+                "dropZoneHint": "Перетащите изображение сюда, вставьте из буфера обмена или нажмите для выбора",
+                "orDivider": "или перетащите / вставьте изображение",
                 "imageUrlOrPath": "URL изображения или путь к файлу:",
                 "urlPlaceholder": "https://civitai.com/images/... или C:/path/to/image.png",
                 "fetchImage": "Получить изображение",
-                "uploadSectionDescription": "Загрузите изображение с метаданными LoRA для импорта в качестве рецепта.",
-                "selectImage": "Выбрать изображение",
                 "recipeName": "Название рецепта",
                 "recipeNamePlaceholder": "Введите название рецепта",
                 "tagsOptional": "Теги (необязательно)",
@@ -911,6 +910,8 @@
                 "errors": {
                     "selectImageFile": "Пожалуйста, выберите файл изображения",
                     "enterUrlOrPath": "Пожалуйста, введите URL или путь к файлу",
+                    "invalidUrl": "Введите корректный URL",
+                    "invalidInputFormat": "Введите URL изображения или путь к локальному файлу изображения",
                     "selectLoraRoot": "Пожалуйста, выберите корневую папку LoRA"
                 }
             },
@@ -1243,11 +1244,13 @@
             "downloaded": "Загружено",
             "downloadedTooltip": "Ранее загружено, но сейчас этого нет в вашей библиотеке.",
             "alreadyInLibrary": "Уже в библиотеке",
+            "partiallyDownloaded": "Загружено частично",
             "autoOrganizedPath": "[Автоматически организовано по шаблону пути]",
             "fileSelection": {
                 "title": "Выбрать формат файла",
                 "files": "файлов",
-                "select": "Выбрать файл"
+                "select": "Выбрать файл",
+                "inLibrary": "В библиотеке"
             },
             "errors": {
                 "invalidUrl": "Неверный формат URL Civitai",
@@ -1532,6 +1535,30 @@
                 "examples": "Загрузка примеров...",
                 "versions": "Загрузка версий..."
             },
+            "showcase": {
+                "hiddenBySfw": "{count} скрыто настройкой «только SFW»",
+                "showExamples": "Показать примеры",
+                "showCount": "Показать примеры ({count})",
+                "hideExamples": "Скрыть примеры",
+                "addExamples": "Добавить примеры",
+                "previousExample": "Предыдущий пример",
+                "nextExample": "Следующий пример",
+                "noExamples": "Примеры изображений недоступны",
+                "addMoreExamples": "Добавить ещё примеры",
+                "dragDrop": "Перетащите изображения или видео сюда",
+                "or": "или",
+                "selectFiles": "Выбрать файлы",
+                "supportedFormats": "Поддерживаемые форматы: jpg, png, gif, webp, avif, jxl, mp4, webm",
+                "importing": "Импорт файлов...",
+                "noSupportedFiles": "Не выбрано поддерживаемых файлов. Пожалуйста, выберите файлы изображений или видео.",
+                "allFiltered": "Все примеры изображений отфильтрованы из-за настроек NSFW-контента",
+                "sfwOnlyEnabled": "В настройках сейчас включён показ только безопасного для работы (SFW) контента",
+                "changeInSettings": "Вы можете изменить это в Настройках",
+                "nsfwMature": "Контент для взрослых",
+                "nsfwR": "Контент с рейтингом R",
+                "nsfwX": "Контент с рейтингом X",
+                "nsfwXxx": "Контент с рейтингом XXX"
+            },
             "versions": {
                 "heading": "Версии модели",
                 "copy": "Управляйте всеми версиями этой модели в одном месте.",
@@ -1559,8 +1586,8 @@
                     "newerTooltip": "Эта версия новее вашей последней локальной версии",
                     "earlyAccess": "Ранний доступ",
                     "earlyAccessTooltip": "Для этой версии сейчас требуется ранний доступ Civitai",
-                    "paid": "[TODO: Translate] Paid",
-                    "paidTooltip": "[TODO: Translate] This version requires payment to download",
+                    "paid": "Платная",
+                    "paidTooltip": "Скачивание этой версии платное",
                     "ignored": "Игнорируется",
                     "ignoredTooltip": "Уведомления об обновлениях для этой версии отключены",
                     "onSiteOnly": "Только на Сайте",
@@ -1569,8 +1596,9 @@
                 "actions": {
                     "download": "Скачать",
                     "downloadTooltip": "Скачать эту версию",
+                    "downloadRemainingTooltip": "Скачать оставшиеся файлы этой версии",
                     "downloadEarlyAccessTooltip": "Скачать эту версию раннего доступа с Civitai",
-                    "downloadPaidTooltip": "[TODO: Translate] Download this paid version from Civitai",
+                    "downloadPaidTooltip": "Скачать эту платную версию с Civitai",
                     "downloadNotAllowedTooltip": "Эта версия доступна только для генерации на сайте Civitai",
                     "delete": "Удалить",
                     "deleteTooltip": "Удалить эту локальную версию",
@@ -1740,7 +1768,7 @@
             "recipeReplaced": "Рецепт заменён в workflow",
             "recipeFailedToSend": "Не удалось отправить рецепт в workflow",
             "noMatchingNodes": "В текущем workflow нет совместимых узлов",
-            "noPromptTargets": "[TODO: Translate] No compatible prompt targets in the workflow.\nRight-click a node in ComfyUI → Mark as → Send Prompt Target",
+            "noPromptTargets": "В рабочем процессе нет совместимых целей для промпта.\nЩёлкните правой кнопкой мыши по узлу в ComfyUI → Отметить как → Send Prompt Target",
             "noTargetNodeSelected": "Целевой узел не выбран",
             "modelUpdated": "Модель обновлена в workflow",
             "modelFailed": "Не удалось обновить узел модели",
@@ -1917,6 +1945,7 @@
             "downloadPartialSuccess": "Загружено {completed} из {total} LoRAs",
             "downloadPartialWithAccess": "Загружено {completed} из {total} LoRAs. {accessFailures} не удалось из-за ограничений доступа. Проверьте ваш API ключ в настройках или статус раннего доступа.",
             "pleaseSelectVersion": "Пожалуйста, выберите версию",
+            "pleaseSelectFile": "Пожалуйста, выберите хотя бы один файл",
             "versionExists": "Эта версия уже существует в вашей библиотеке",
             "downloadCompleted": "Загрузка успешно завершена",
             "downloadSkippedByBaseModel": "Загрузка пропущена, потому что базовая модель {baseModel} исключена",

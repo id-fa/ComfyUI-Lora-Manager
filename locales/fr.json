@@ -623,8 +623,8 @@
             "help": "Seulement les mises à jour en accès anticipé"
         },
         "hidePaidUpdates": {
-            "label": "[TODO: Translate] Hide Paid Updates",
-            "help": "[TODO: Translate] When enabled, models with only paid updates will not show 'Update available' badge"
+            "label": "Masquer les mises à jour payantes",
+            "help": "Lorsque cette option est activée, les modèles n'ayant que des mises à jour payantes n'affichent pas le badge « Mise à jour disponible »"
         },
         "licenseIcons": {
             "useNewStyle": "Utiliser les icônes de licence mises à jour",
@@ -853,20 +853,19 @@
     "recipes": {
         "title": "LoRA Recipes",
         "actions": {
-            "sendCheckpoint": "Envoyer vers ComfyUI"
+            "sendCheckpoint": "Envoyer vers ComfyUI",
+            "sendRecipe": "Envoyer vers ComfyUI"
         },
         "controls": {
             "import": {
                 "action": "Importer",
                 "title": "Importer une recipe depuis une image ou une URL",
-                "urlLocalPath": "URL / Chemin local",
-                "uploadImage": "Téléverser une image",
-                "urlSectionDescription": "Saisissez une URL d'image Civitai ou un chemin de fichier local pour l'importer comme recipe.",
+                "dropZoneLabel": "Téléverser une image",
+                "dropZoneHint": "Glissez-déposez une image ici, collez-la depuis le presse-papiers ou cliquez pour parcourir",
+                "orDivider": "ou glissez-déposez / collez une image",
                 "imageUrlOrPath": "URL d'image ou chemin de fichier :",
                 "urlPlaceholder": "https://civitai.com/images/... ou C:/chemin/vers/image.png",
                 "fetchImage": "Récupérer l'image",
-                "uploadSectionDescription": "Téléversez une image avec des métadonnées LoRA pour l'importer comme recipe.",
-                "selectImage": "Sélectionner une image",
                 "recipeName": "Nom de la recipe",
                 "recipeNamePlaceholder": "Entrez le nom de la recipe",
                 "tagsOptional": "Tags (optionnel)",
@@ -911,6 +910,8 @@
                 "errors": {
                     "selectImageFile": "Veuillez sélectionner un fichier image",
                     "enterUrlOrPath": "Veuillez entrer une URL ou un chemin de fichier",
+                    "invalidUrl": "Veuillez saisir une URL valide",
+                    "invalidInputFormat": "Veuillez saisir l'URL d'une image ou un chemin de fichier local",
                     "selectLoraRoot": "Veuillez sélectionner un répertoire racine LoRA"
                 }
             },
@@ -1243,11 +1244,13 @@
             "downloaded": "Téléchargé",
             "downloadedTooltip": "Déjà téléchargé, mais il n'est actuellement pas dans votre bibliothèque.",
             "alreadyInLibrary": "Déjà dans la bibliothèque",
+            "partiallyDownloaded": "Téléchargé partiellement",
             "autoOrganizedPath": "[Auto-organisé par modèle de chemin]",
             "fileSelection": {
                 "title": "Choisir le format de fichier",
                 "files": "fichiers",
-                "select": "Choisir le fichier"
+                "select": "Choisir le fichier",
+                "inLibrary": "Dans la bibliothèque"
             },
             "errors": {
                 "invalidUrl": "Format d'URL Civitai invalide",
@@ -1532,6 +1535,30 @@
                 "examples": "Chargement des exemples...",
                 "versions": "Chargement des versions..."
             },
+            "showcase": {
+                "hiddenBySfw": "{count} masqué(s) par le paramètre « Contenu SFW uniquement »",
+                "showExamples": "Afficher les exemples",
+                "showCount": "Afficher les exemples ({count})",
+                "hideExamples": "Masquer les exemples",
+                "addExamples": "Ajouter des exemples",
+                "previousExample": "Exemple précédent",
+                "nextExample": "Exemple suivant",
+                "noExamples": "Aucune image d'exemple disponible",
+                "addMoreExamples": "Ajouter d'autres exemples",
+                "dragDrop": "Glissez-déposez des images ou des vidéos ici",
+                "or": "ou",
+                "selectFiles": "Sélectionner des fichiers",
+                "supportedFormats": "Formats pris en charge : jpg, png, gif, webp, avif, jxl, mp4, webm",
+                "importing": "Importation des fichiers...",
+                "noSupportedFiles": "Aucun fichier pris en charge sélectionné. Veuillez sélectionner des fichiers image ou vidéo.",
+                "allFiltered": "Toutes les images d'exemple sont filtrées en raison des paramètres de contenu NSFW",
+                "sfwOnlyEnabled": "Vos paramètres sont actuellement configurés pour n'afficher que du contenu tout public",
+                "changeInSettings": "Vous pouvez modifier cela dans les paramètres",
+                "nsfwMature": "Contenu pour adultes",
+                "nsfwR": "Contenu classé R",
+                "nsfwX": "Contenu classé X",
+                "nsfwXxx": "Contenu classé XXX"
+            },
             "versions": {
                 "heading": "Versions du modèle",
                 "copy": "Gérez toutes les versions de ce modèle en un seul endroit.",
@@ -1559,8 +1586,8 @@
                     "newerTooltip": "Cette version est plus récente que votre dernière version locale",
                     "earlyAccess": "Accès anticipé",
                     "earlyAccessTooltip": "Cette version nécessite actuellement l'accès anticipé Civitai",
-                    "paid": "[TODO: Translate] Paid",
-                    "paidTooltip": "[TODO: Translate] This version requires payment to download",
+                    "paid": "Payant",
+                    "paidTooltip": "Cette version nécessite un paiement pour être téléchargée",
                     "ignored": "Ignorée",
                     "ignoredTooltip": "Les notifications de mise à jour sont désactivées pour cette version",
                     "onSiteOnly": "Uniquement sur Site",
@@ -1569,8 +1596,9 @@
                 "actions": {
                     "download": "Télécharger",
                     "downloadTooltip": "Télécharger cette version",
+                    "downloadRemainingTooltip": "Télécharger les fichiers restants de cette version",
                     "downloadEarlyAccessTooltip": "Télécharger cette version en accès anticipé depuis Civitai",
-                    "downloadPaidTooltip": "[TODO: Translate] Download this paid version from Civitai",
+                    "downloadPaidTooltip": "Télécharger cette version payante depuis Civitai",
                     "downloadNotAllowedTooltip": "Cette version n'est disponible que pour la génération sur le site Civitai",
                     "delete": "Supprimer",
                     "deleteTooltip": "Supprimer cette version locale",
@@ -1740,7 +1768,7 @@
             "recipeReplaced": "Recipe remplacée dans le workflow",
             "recipeFailedToSend": "Échec de l'envoi de la recipe au workflow",
             "noMatchingNodes": "Aucun nœud compatible disponible dans le workflow actuel",
-            "noPromptTargets": "[TODO: Translate] No compatible prompt targets in the workflow.\nRight-click a node in ComfyUI → Mark as → Send Prompt Target",
+            "noPromptTargets": "Aucune cible de prompt compatible dans le workflow.\nFaites un clic droit sur un nœud dans ComfyUI → Marquer comme → Cible d'envoi du prompt",
             "noTargetNodeSelected": "Aucun nœud cible sélectionné",
             "modelUpdated": "Modèle mis à jour dans le workflow",
             "modelFailed": "Échec de la mise à jour du nœud modèle",
@@ -1917,6 +1945,7 @@
             "downloadPartialSuccess": "{completed} sur {total} LoRAs téléchargés",
             "downloadPartialWithAccess": "{completed} sur {total} LoRAs téléchargés. {accessFailures} ont échoué en raison de restrictions d'accès. Vérifiez votre clé API dans les paramètres ou le statut d'accès anticipé.",
             "pleaseSelectVersion": "Veuillez sélectionner une version",
+            "pleaseSelectFile": "Veuillez sélectionner au moins un fichier",
             "versionExists": "Cette version existe déjà dans votre bibliothèque",
             "downloadCompleted": "Téléchargement terminé avec succès",
             "downloadSkippedByBaseModel": "Téléchargement ignoré, car le modèle de base {baseModel} est exclu",

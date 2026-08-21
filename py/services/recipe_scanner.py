@@ -15,6 +15,7 @@ from ..config import config
 from ..utils.constants import VALID_CHECKPOINT_SUB_TYPES, VALID_LORA_TYPES
 from ..utils.file_utils import calculate_autov3
 from ..utils.recipe_open_stats import RecipeOpenStats
+from .model_scanner import WEIGHT_FILE_EXTENSIONS
 from .recipe_cache import RecipeCache
 from .recipes.errors import RecipeNotFoundError, RecipePersistenceError
 from natsort import natsorted
@@ -35,11 +36,6 @@ logger = logging.getLogger(__name__)
 # lowercase to "diffusionmodel", which is not a valid sub-type. Map it
 # explicitly to "diffusion_model" (mirrors Oracle R2-F1).
 _CHECKPOINT_MODEL_TYPE_ALIASES = {"diffusionmodel": "diffusion_model"}
-
-# Known weight-file extensions stripped by _normalize_filename_key. Names are
-# stored extensionless on both sides, so splitext would misread dotted stems
-# ("my.mix" -> "my") and silently collide distinct models.
-_WEIGHT_FILE_EXTS = (".safetensors", ".ckpt", ".pt", ".pth", ".gguf", ".bin", ".safebin", ".sft")
 
 
 class RecipeScanner:
@@ -179,13 +175,15 @@ class RecipeScanner:
 
         Only known weight-file extensions are stripped — names are stored
         extensionless on both sides, so splitext would misread dotted stems
-        ("my.mix" -> "my") and collide distinct models.
+        ("my.mix" -> "my") and collide distinct models. The extension set is
+        shared with ModelScanner.find_matching_models, and is iterated longest
+        first to keep the strip ordering identical to that function.
         """
         if not name:
             return ""
         basename = os.path.basename(name.replace("\\", "/"))
         lower = basename.lower()
-        for ext in _WEIGHT_FILE_EXTS:
+        for ext in sorted(WEIGHT_FILE_EXTENSIONS, key=len, reverse=True):
             if lower.endswith(ext):
                 basename = basename[: -len(ext)]
                 break
@@ -2926,13 +2924,45 @@ class RecipeScanner:
 
         return normalized
 
-    async def get_local_lora(self, name: str) -> Optional[Dict[str, Any]]:
-        """Lookup a local LoRA model by name."""
+    async def get_local_lora(
+        self, name: str, base_model: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Lookup an unambiguous local LoRA by name and optional base model."""
 
         if not self._lora_scanner or not name:
             return None
 
-        return await self._lora_scanner.get_model_info_by_name(name)
+        return await self._lora_scanner.get_model_info_by_name(
+            name, require_unique=True, base_model=base_model
+        )
+
+    async def find_local_loras_by_name(
+        self, name: str, base_model: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Return every local LoRA matching ``name`` (used to explain lookup misses)."""
+
+        if not self._lora_scanner or not name:
+            return []
+
+        return await self._lora_scanner.find_models_by_name(name, base_model=base_model)
+
+    async def get_local_lora_by_hash(self, hash_value: str) -> Optional[Dict[str, Any]]:
+        """Lookup a local LoRA through the scanner's hash index."""
+
+        if not self._lora_scanner or not hash_value:
+            return None
+
+        file_path = self._lora_scanner.get_path_by_hash(hash_value)
+        if not file_path:
+            return None
+
+        target_path = os.path.normcase(os.path.abspath(file_path))
+        cached_data = await self._lora_scanner.get_cached_data()
+        for model in cached_data.raw_data:
+            model_path = model.get("file_path")
+            if model_path and os.path.normcase(os.path.abspath(model_path)) == target_path:
+                return model
+        return None
 
     async def get_local_checkpoint(self, name: str) -> Optional[Dict[str, Any]]:
         """Lookup a local checkpoint model by name."""
@@ -3590,9 +3620,6 @@ class RecipeScanner:
 
         syntax_parts: List[str] = []
         for lora in loras:
-            if lora.get("isDeleted", False):
-                continue
-
             file_name = None
             folder = ""
             hash_value = (lora.get("hash") or "").lower()
@@ -3627,6 +3654,8 @@ class RecipeScanner:
                         break
 
             if not file_name:
+                if lora.get("isDeleted", False):
+                    continue
                 file_name = lora.get("file_name", "unknown-lora")
                 folder = lora.get("folder", "")
 
