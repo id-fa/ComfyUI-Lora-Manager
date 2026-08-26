@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import sqlite3
+import threading
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -389,6 +390,74 @@ async def test_load_persisted_cache_populates_cache(tmp_path: Path, monkeypatch)
     assert scanner._tags_count == {'alpha': 1}
     assert ws_stub.payloads[-1]['stage'] == 'loading_cache'
     assert ws_stub.payloads[-1]['progress'] == 1
+
+
+@pytest.mark.asyncio
+async def test_load_persisted_cache_rebuilds_off_event_loop(tmp_path: Path, monkeypatch):
+    """The SQLite read and per-model rebuild must not run on the event loop."""
+    monkeypatch.setenv('LORA_MANAGER_DISABLE_PERSISTENT_CACHE', '0')
+    db_path = tmp_path / 'cache.sqlite'
+    store = PersistentModelCache(db_path=str(db_path))
+
+    file_path = tmp_path / 'one.txt'
+    file_path.write_text('one', encoding='utf-8')
+    normalized = _normalize_path(file_path)
+
+    raw_model = {
+        'file_path': normalized,
+        'file_name': 'one',
+        'model_name': 'one',
+        'folder': '',
+        'size': 3,
+        'modified': 123.0,
+        'sha256': 'hash-one',
+        'base_model': 'test',
+        'preview_url': '',
+        'preview_nsfw_level': 0,
+        'from_civitai': True,
+        'favorite': False,
+        'notes': '',
+        'usage_tips': '',
+        'exclude': False,
+        'db_checked': False,
+        'last_checked_at': 0.0,
+        'tags': ['alpha'],
+        'civitai': {'id': 11, 'modelId': 22, 'name': 'ver', 'trainedWords': ['abc']},
+    }
+
+    store.save_cache('dummy', [raw_model], {'hash-one': [normalized]}, [])
+
+    monkeypatch.setattr(model_scanner, 'get_persistent_cache', lambda: store)
+
+    scanner = DummyScanner(tmp_path)
+    ws_stub = RecordingWebSocketManager()
+    monkeypatch.setattr(model_scanner, 'ws_manager', ws_stub)
+
+    loop_thread = threading.get_ident()
+    worker_threads: List[int] = []
+
+    original_load_cache = store.load_cache
+    def tracking_load_cache(model_type):
+        worker_threads.append(threading.get_ident())
+        return original_load_cache(model_type)
+    monkeypatch.setattr(store, 'load_cache', tracking_load_cache)
+
+    original_adjust = scanner.adjust_cached_entry
+    def tracking_adjust(entry):
+        worker_threads.append(threading.get_ident())
+        return original_adjust(entry)
+    monkeypatch.setattr(scanner, 'adjust_cached_entry', tracking_adjust)
+
+    loaded = await scanner._load_persisted_cache('dummy')
+    assert loaded is True
+
+    # Both the SQLite read and the per-entry adjustment ran off the loop
+    assert len(worker_threads) == 2
+    assert all(tid != loop_thread for tid in worker_threads)
+
+    cache = await scanner.get_cached_data()
+    assert len(cache.raw_data) == 1
+    assert cache.raw_data[0]['file_path'] == normalized
 
 
 @pytest.mark.asyncio
@@ -1210,3 +1279,111 @@ async def test_bulk_delete_cancelled_after_one_staged_batch_present(
     assert not first.exists()
     # The second file was never touched.
     assert second.exists()
+
+
+@pytest.mark.asyncio
+async def test_get_all_folders_enumerates_empty_directories_live(tmp_path: Path):
+    _create_files(tmp_path)
+    (tmp_path / "empty").mkdir()
+    (tmp_path / "empty" / "nested_empty").mkdir()
+    (tmp_path / ".hidden").mkdir()
+    (tmp_path / "visible" / ".hidden_child").mkdir(parents=True)
+    (tmp_path / PENDING_DELETE_DIR_NAME).mkdir()
+
+    scanner = DummyScanner(tmp_path)
+    await scanner._initialize_cache()
+    cache = await scanner.get_cached_data()
+
+    all_folders = await scanner.get_all_folders()
+
+    # cache.folders stays models-only
+    assert sorted(cache.folders) == ["", "nested"]
+
+    # Live enumeration includes empty directories and stays a superset
+    assert set(cache.folders) <= set(all_folders)
+    assert "empty" in all_folders
+    assert "empty/nested_empty" in all_folders
+    assert "visible" in all_folders
+
+    # Hidden directories (any segment starting with '.') are excluded
+    assert not any(
+        segment.startswith(".")
+        for folder in all_folders
+        for segment in folder.split("/")
+    )
+    # The pending-delete staging dir is excluded
+    assert PENDING_DELETE_DIR_NAME not in all_folders
+
+
+@pytest.mark.asyncio
+async def test_get_all_folders_uses_ttl_cache(tmp_path: Path, monkeypatch):
+    _create_files(tmp_path)
+    scanner = DummyScanner(tmp_path)
+    await scanner._initialize_cache()
+
+    walk_calls = {"n": 0}
+    real_walk = os.walk
+
+    def counting_walk(*args, **kwargs):
+        walk_calls["n"] += 1
+        return real_walk(*args, **kwargs)
+
+    monkeypatch.setattr(model_scanner.os, "walk", counting_walk)
+
+    first = await scanner.get_all_folders()
+    assert walk_calls["n"] == 1
+
+    # Second call within the TTL reuses the cached result without re-walking
+    second = await scanner.get_all_folders()
+    assert walk_calls["n"] == 1
+    assert second == first
+
+    # After the TTL expires the roots are walked again
+    real_monotonic = time.monotonic
+    monkeypatch.setattr(
+        model_scanner.time,
+        "monotonic",
+        lambda: real_monotonic() + model_scanner.ALL_FOLDERS_CACHE_TTL_SECONDS + 1,
+    )
+    third = await scanner.get_all_folders()
+    assert walk_calls["n"] == 2
+    assert third == first
+
+
+@pytest.mark.asyncio
+async def test_get_all_folders_invalidated_after_move(tmp_path: Path):
+    first, _, _ = _create_files(tmp_path)
+    scanner = DummyScanner(tmp_path)
+
+    await scanner._initialize_cache()
+
+    cached = await scanner.get_all_folders()
+    assert scanner._all_folders_ttl_cache is not None
+    assert "new/deep" not in cached
+
+    # Simulate a move: target directories exist on disk (created by
+    # os.makedirs in move_model) and the cache entry is relocated.
+    (tmp_path / "new" / "deep").mkdir(parents=True)
+    original = _normalize_path(first)
+    new_path = _normalize_path(tmp_path / "new" / "deep" / "one.txt")
+    moved_metadata = {
+        "file_path": new_path,
+        "file_name": "one",
+        "model_name": "one",
+        "sha256": "hash-one",
+        "tags": ["alpha"],
+        "size": 1,
+        "modified": 1.0,
+    }
+
+    await scanner.update_single_model_cache(original, new_path, moved_metadata)
+
+    # The TTL cache was invalidated by the move
+    assert scanner._all_folders_ttl_cache is None
+
+    all_folders = await scanner.get_all_folders()
+    cache = await scanner.get_cached_data()
+    assert sorted(cache.folders) == ["nested", "new/deep"]
+    assert "new" in all_folders
+    assert "new/deep" in all_folders
+    assert set(cache.folders) <= set(all_folders)

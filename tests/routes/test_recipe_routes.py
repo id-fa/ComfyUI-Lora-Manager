@@ -632,6 +632,43 @@ async def test_list_recipes_passes_checkpoint_hash_filter(
         assert harness.scanner.last_paginated_params["checkpoint_hash"] == "ckpt123"
 
 
+async def test_list_recipes_passes_lora_availability_filter(
+    monkeypatch, tmp_path: Path
+) -> None:
+    async with recipe_harness(monkeypatch, tmp_path) as harness:
+        response = await harness.client.get(
+            "/api/lm/recipes?lora_availability=missing,deleted"
+        )
+        payload = await response.json()
+
+        assert response.status == 200
+        assert payload["items"] == []
+        assert harness.scanner.last_paginated_params is not None
+        filters = harness.scanner.last_paginated_params["filters"]
+        assert filters["lora_availability"] == {"missing", "deleted"}
+
+
+async def test_list_recipes_ignores_invalid_lora_availability_values(
+    monkeypatch, tmp_path: Path
+) -> None:
+    async with recipe_harness(monkeypatch, tmp_path) as harness:
+        # Valid values are kept, invalid ones dropped
+        response = await harness.client.get(
+            "/api/lm/recipes?lora_availability=bogus,ready"
+        )
+        assert response.status == 200
+        assert harness.scanner.last_paginated_params is not None
+        filters = harness.scanner.last_paginated_params["filters"]
+        assert filters["lora_availability"] == {"ready"}
+
+        # No valid values at all -> no availability filter
+        response = await harness.client.get("/api/lm/recipes?lora_availability=bogus")
+        assert response.status == 200
+        assert harness.scanner.last_paginated_params is not None
+        filters = harness.scanner.last_paginated_params["filters"]
+        assert "lora_availability" not in filters
+
+
 async def test_get_recipes_for_checkpoint(monkeypatch, tmp_path: Path) -> None:
     async with recipe_harness(monkeypatch, tmp_path) as harness:
         harness.scanner.checkpoint_lookup["abc123"] = [
@@ -1966,10 +2003,10 @@ async def test_find_duplicates_defaults_to_fingerprint_only(
     monkeypatch, tmp_path: Path
 ) -> None:
     async with recipe_harness(monkeypatch, tmp_path) as harness:
-        harness.scanner.recipes = {
-            "r1": {"id": "r1", "title": "One", "modified": 100},
-            "r2": {"id": "r2", "title": "Two", "modified": 200},
-        }
+        harness.scanner.cached_raw = [
+            {"id": "r1", "title": "One", "modified": 100},
+            {"id": "r2", "title": "Two", "modified": 200},
+        ]
         harness.scanner.duplicate_groups_override = {"abc:0.8": ["r1", "r2"]}
         harness.scanner.duplicate_source_groups_override = {}
 
@@ -1991,12 +2028,12 @@ async def test_find_duplicates_forwards_include_prompt_and_assigns_unique_keys(
     monkeypatch, tmp_path: Path
 ) -> None:
     async with recipe_harness(monkeypatch, tmp_path) as harness:
-        harness.scanner.recipes = {
-            "r1": {"id": "r1", "title": "One", "modified": 100},
-            "r2": {"id": "r2", "title": "Two", "modified": 200},
-            "r3": {"id": "r3", "title": "Three", "modified": 300},
-            "r4": {"id": "r4", "title": "Four", "modified": 400},
-        }
+        harness.scanner.cached_raw = [
+            {"id": "r1", "title": "One", "modified": 100},
+            {"id": "r2", "title": "Two", "modified": 200},
+            {"id": "r3", "title": "Three", "modified": 300},
+            {"id": "r4", "title": "Four", "modified": 400},
+        ]
         harness.scanner.duplicate_groups_override = {"abc:0.8\x1fa girl": ["r1", "r2"]}
         harness.scanner.duplicate_source_groups_override = {
             "civitai.com/images/9": ["r3", "r4"]

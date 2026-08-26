@@ -108,7 +108,10 @@ function handleModelCardEvent_internal(event, modelType) {
     }
 
     // If no specific element was clicked, handle the card click (show modal or toggle selection)
-    handleCardClick(card, modelType);
+    if (state.bulkMode && event.shiftKey) {
+        event.preventDefault(); // keep shift+click from extending a text selection
+    }
+    handleCardClick(card, modelType, event.shiftKey);
     return false; // Continue with other handlers (e.g., bulk selection)
 }
 
@@ -289,12 +292,12 @@ function handleViewLocalVersionsFromCard(card, modelType) {
     }
 }
 
-function handleCardClick(card, modelType) {
+function handleCardClick(card, modelType, extendSelection = false) {
     const pageState = getCurrentPageState();
 
     if (state.bulkMode) {
         // Toggle selection using the bulk manager
-        bulkManager.toggleCardSelection(card);
+        bulkManager.toggleCardSelection(card, extendSelection);
     } else if (pageState && pageState.duplicatesMode) {
         // In duplicates mode, don't open modal when clicking cards
         return;
@@ -317,6 +320,7 @@ async function showModelModalFromCard(card, modelType) {
     // Create model metadata object
     const modelMeta = {
         sha256: card.dataset.sha256,
+        autov3: card.dataset.autov3 || '',
         preview_url: getCardPreviewUrl(card),
         file_path: card.dataset.filepath,
         model_name: card.dataset.name,
@@ -407,6 +411,7 @@ function showExampleAccessModal(card, modelType) {
             // Get the model data from card dataset (works for both lora and checkpoint)
             const modelMeta = {
                 sha256: card.dataset.sha256,
+                autov3: card.dataset.autov3 || '',
                 preview_url: getCardPreviewUrl(card),
                 file_path: card.dataset.filepath,
                 model_name: card.dataset.name,
@@ -461,6 +466,7 @@ export function createModelCard(model, modelType) {
     // below, which ignore internal card drags via MODEL_CARD_DRAG_MIME_TYPE.
     card.draggable = true;
     card.dataset.sha256 = model.sha256;
+    card.dataset.autov3 = model.autov3 || '';
     card.dataset.filepath = model.file_path;
     card.dataset.name = model.model_name;
     card.dataset.file_name = model.file_name;
@@ -541,8 +547,9 @@ export function createModelCard(model, modelType) {
         card.classList.add('excluded-model');
     }
 
-    // Apply selection state if in bulk mode and this card is in the selected set (LoRA only)
-    if (modelType === MODEL_TYPES.LORA && state.bulkMode && state.selectedLoras.has(model.file_path)) {
+    // state.selectedModels resolves to the active page's set (selectedLoras
+    // included) - do not narrow this back to selectedLoras/LORA-only.
+    if (state.bulkMode && state.selectedModels.has(model.file_path)) {
         card.classList.add('selected');
     }
 

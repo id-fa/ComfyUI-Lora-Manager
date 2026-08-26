@@ -222,6 +222,7 @@
                 "modelname": "モデル名",
                 "tags": "タグ",
                 "creator": "作成者",
+                "hash": "ハッシュ",
                 "title": "レシピタイトル",
                 "loraName": "LoRAファイル名",
                 "loraModel": "LoRAモデル名",
@@ -259,7 +260,11 @@
             "any": "いずれか",
             "all": "すべて",
             "tagLogicAny": "いずれかのタグに一致 (OR)",
-            "tagLogicAll": "すべてのタグに一致 (AND)"
+            "tagLogicAll": "すべてのタグに一致 (AND)",
+            "loraAvailability": "LoRA の利用状況",
+            "availabilityReady": "使用可能",
+            "availabilityMissing": "不足 LoRA あり",
+            "availabilityDeleted": "削除済み LoRA あり"
         },
         "theme": {
             "toggle": "テーマの切り替え",
@@ -854,13 +859,19 @@
         "title": "LoRAレシピ",
         "actions": {
             "sendCheckpoint": "ComfyUIへ送信",
-            "sendRecipe": "ComfyUIへ送信"
+            "sendRecipe": "ComfyUIへ送信",
+            "deleteRecipeWithShortcut": "レシピを削除（Del）"
+        },
+        "navigation": {
+            "label": "レシピナビゲーション",
+            "previousWithShortcut": "前のレシピ（←）",
+            "nextWithShortcut": "次のレシピ（→）"
         },
         "workflow": {
-            "sendWorkflow": "[TODO: Translate] Send Workflow to ComfyUI",
-            "sent": "[TODO: Translate] Workflow sent to ComfyUI",
-            "sendFailed": "[TODO: Translate] Failed to send workflow to ComfyUI",
-            "noWorkflow": "[TODO: Translate] No embedded workflow found in this recipe"
+            "sendWorkflow": "ワークフローをComfyUIへ送信",
+            "sent": "ワークフローをComfyUIへ送信しました",
+            "sendFailed": "ワークフローをComfyUIへ送信できませんでした",
+            "noWorkflow": "このレシピに埋め込まれたワークフローが見つかりません"
         },
         "controls": {
             "import": {
@@ -952,6 +963,7 @@
             }
         },
         "duplicates": {
+            "finding": "重複レシピをスキャンしています...",
             "found": "{count} 個の重複グループが見つかりました",
             "noGroups": "現在の一致基準では重複グループが見つかりませんでした",
             "keepLatest": "最新バージョンを保持",
@@ -1410,13 +1422,14 @@
             },
             "proceedText": "これが本当に必要な場合のみ続行してください。",
             "urlLabel": "CivitaiモデルURL：",
-            "urlPlaceholder": "https://civitai.com/models/649516/model-name?modelVersionId=726676",
+            "urlPlaceholder": "https://civitai.com/models/12345/model-name?modelVersionId=67890",
             "helpText": {
-                "title": "CivitaiモデルURLを貼り付けてください。対応形式：",
-                "format1": "https://civitai.com/models/649516",
-                "format2": "https://civitai.com/models/649516?modelVersionId=726676",
-                "format3": "https://civitai.com/models/649516/model-name?modelVersionId=726676",
-                "note": "注：modelVersionIdが提供されていない場合、最新バージョンが使用されます。"
+                "title": "CivitaiまたはCivitArchiveのモデルURLを貼り付けてください。対応形式：",
+                "format1": "https://civitai.com/models/12345",
+                "format2": "https://civitai.com/models/12345?modelVersionId=67890",
+                "format3": "https://civitai.com/models/12345/model-name?modelVersionId=67890",
+                "note": "注：modelVersionIdが提供されていない場合、最新バージョンが使用されます。",
+                "format4": "https://civarchive.com/models/12345 (CivitArchive)"
             },
             "confirmAction": "再リンクを確認"
         },
@@ -1433,7 +1446,9 @@
                 "viewCreatorProfile": "作成者プロフィールを表示",
                 "openFileLocation": "ファイルの場所を開く",
                 "sendToWorkflow": "ComfyUI に送信",
-                "sendToWorkflowText": "ComfyUI に送信"
+                "sendToWorkflowText": "ComfyUI に送信",
+                "copyHash": "ハッシュをコピー",
+                "deleteModelWithShortcut": "モデルを削除（Del）"
             },
             "openFileLocation": {
                 "success": "ファイルの場所を正常に開きました",
@@ -1450,6 +1465,7 @@
                 "location": "場所",
                 "baseModel": "ベースモデル",
                 "size": "サイズ",
+                "hashes": "ハッシュ",
                 "unknown": "不明",
                 "usageTips": "使用のヒント",
                 "additionalNotes": "追加メモ",
@@ -1602,7 +1618,7 @@
                 "actions": {
                     "download": "ダウンロード",
                     "downloadTooltip": "このバージョンをダウンロード",
-                    "downloadRemainingTooltip": "このバージョンの残りのファイルをダウンロード",
+                    "downloadChooseFilesTooltip": "ダウンロードするファイルを選択",
                     "downloadEarlyAccessTooltip": "Civitai からこの早期アクセス版をダウンロード",
                     "downloadPaidTooltip": "Civitai からこの有料バージョンをダウンロード",
                     "downloadNotAllowedTooltip": "このバージョンはCivitaiサイト内でのみ利用可能で、ダウンロードはできません",
@@ -1985,6 +2001,8 @@
             "createMissingData": "レシピ作成に必要なデータが不足しています",
             "created": "レシピを作成しました",
             "noMissingLoras": "ダウンロードする不足LoRAがありません",
+            "noPreviousRecipe": "前のレシピがありません",
+            "noNextRecipe": "次のレシピがありません",
             "missingLorasInfoFailed": "不足LoRAの情報取得に失敗しました",
             "preparingForDownloadFailed": "ダウンロード用LoRAの準備中にエラーが発生しました",
             "enterLoraName": "LoRA名または構文を入力してください",
@@ -2038,9 +2056,9 @@
             "reimportBulkFailed": "一部のレシピの再インポートに失敗しました",
             "noMissingLorasInSelection": "選択したレシピに不足している LoRA が見つかりませんでした",
             "noLoraRootConfigured": "LoRA ルートディレクトリが設定されていません。設定でデフォルトの LoRA ルートを設定してください。",
-            "workflowSent": "[TODO: Translate] Workflow sent to ComfyUI",
-            "workflowSendFailed": "[TODO: Translate] Failed to send workflow to ComfyUI: {error}",
-            "workflowNoWorkflow": "[TODO: Translate] No embedded workflow found in this recipe"
+            "workflowSent": "ワークフローをComfyUIへ送信しました",
+            "workflowSendFailed": "ワークフローをComfyUIへ送信できませんでした: {error}",
+            "workflowNoWorkflow": "このレシピに埋め込まれたワークフローが見つかりません"
         },
         "models": {
             "noModelsSelected": "モデルが選択されていません",
@@ -2208,6 +2226,7 @@
             "relinkFailed": "エラー：{message}",
             "linkHfSuccess": "モデルを HuggingFace にリンクしました",
             "linkHfFailed": "エラー：{message}",
+            "linkCivArchSuccess": "モデルがCivitArchive経由で正常に再リンクされました",
             "fetchMetadataFirst": "最初にCivitAIからメタデータを取得してください",
             "noCivitaiInfo": "CivitAI情報が利用できません",
             "missingHash": "モデルハッシュが利用できません"

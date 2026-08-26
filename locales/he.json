@@ -222,6 +222,7 @@
                 "modelname": "שם מודל",
                 "tags": "תגיות",
                 "creator": "יוצר",
+                "hash": "האש",
                 "title": "כותרת מתכון",
                 "loraName": "שם קובץ LoRA",
                 "loraModel": "שם מודל LoRA",
@@ -259,7 +260,11 @@
             "any": "כלשהו",
             "all": "כל התגים",
             "tagLogicAny": "התאם כל תג (או)",
-            "tagLogicAll": "התאם את כל התגים (וגם)"
+            "tagLogicAll": "התאם את כל התגים (וגם)",
+            "loraAvailability": "זמינות LoRA",
+            "availabilityReady": "מוכנים לשימוש",
+            "availabilityMissing": "עם LoRAs חסרים",
+            "availabilityDeleted": "עם LoRAs שנמחקו"
         },
         "theme": {
             "toggle": "החלף ערכת נושא",
@@ -854,13 +859,19 @@
         "title": "מתכוני LoRA",
         "actions": {
             "sendCheckpoint": "שלח ל-ComfyUI",
-            "sendRecipe": "שלח ל-ComfyUI"
+            "sendRecipe": "שלח ל-ComfyUI",
+            "deleteRecipeWithShortcut": "מחק מתכון (Del)"
+        },
+        "navigation": {
+            "label": "ניווט מתכונים",
+            "previousWithShortcut": "המתכון הקודם (←)",
+            "nextWithShortcut": "המתכון הבא (→)"
         },
         "workflow": {
-            "sendWorkflow": "[TODO: Translate] Send Workflow to ComfyUI",
-            "sent": "[TODO: Translate] Workflow sent to ComfyUI",
-            "sendFailed": "[TODO: Translate] Failed to send workflow to ComfyUI",
-            "noWorkflow": "[TODO: Translate] No embedded workflow found in this recipe"
+            "sendWorkflow": "שלח workflow ל-ComfyUI",
+            "sent": "ה-workflow נשלח ל-ComfyUI",
+            "sendFailed": "שליחת ה-workflow ל-ComfyUI נכשלה",
+            "noWorkflow": "לא נמצא workflow מוטבע במתכון זה"
         },
         "controls": {
             "import": {
@@ -952,6 +963,7 @@
             }
         },
         "duplicates": {
+            "finding": "סורק למציאת מתכונים כפולים...",
             "found": "נמצאו {count} קבוצות כפולות",
             "noGroups": "לא נמצאו קבוצות כפולות לפי קריטריון ההתאמה הנוכחי",
             "keepLatest": "שמור גרסאות אחרונות",
@@ -1410,13 +1422,14 @@
             },
             "proceedText": "המשך רק אם אתה בטוח שזה מה שאתה רוצה.",
             "urlLabel": "כתובת URL של מודל ב-Civitai:",
-            "urlPlaceholder": "https://civitai.com/models/649516/model-name?modelVersionId=726676",
+            "urlPlaceholder": "https://civitai.com/models/12345/model-name?modelVersionId=67890",
             "helpText": {
-                "title": "הדבק כל כתובת URL של מודל מ-Civitai. פורמטים נתמכים:",
-                "format1": "https://civitai.com/models/649516",
-                "format2": "https://civitai.com/models/649516?modelVersionId=726676",
-                "format3": "https://civitai.com/models/649516/model-name?modelVersionId=726676",
-                "note": "הערה: אם לא סופק modelVersionId, תילקח הגרסה האחרונה."
+                "title": "הדבק כל כתובת URL של מודל מ-Civitai או מ-CivitArchive. פורמטים נתמכים:",
+                "format1": "https://civitai.com/models/12345",
+                "format2": "https://civitai.com/models/12345?modelVersionId=67890",
+                "format3": "https://civitai.com/models/12345/model-name?modelVersionId=67890",
+                "note": "הערה: אם לא סופק modelVersionId, תילקח הגרסה האחרונה.",
+                "format4": "https://civarchive.com/models/12345 (CivitArchive)"
             },
             "confirmAction": "אשר קישור מחדש"
         },
@@ -1433,7 +1446,9 @@
                 "viewCreatorProfile": "הצג פרופיל יוצר",
                 "openFileLocation": "פתח מיקום קובץ",
                 "sendToWorkflow": "שלח ל-ComfyUI",
-                "sendToWorkflowText": "שלח ל-ComfyUI"
+                "sendToWorkflowText": "שלח ל-ComfyUI",
+                "copyHash": "העתק האש",
+                "deleteModelWithShortcut": "מחק מודל (Del)"
             },
             "openFileLocation": {
                 "success": "מיקום הקובץ נפתח בהצלחה",
@@ -1450,6 +1465,7 @@
                 "location": "מיקום",
                 "baseModel": "מודל בסיס",
                 "size": "גודל",
+                "hashes": "האשים",
                 "unknown": "לא ידוע",
                 "usageTips": "טיפים לשימוש",
                 "additionalNotes": "הערות נוספות",
@@ -1602,7 +1618,7 @@
                 "actions": {
                     "download": "הורדה",
                     "downloadTooltip": "הורד את הגרסה הזו",
-                    "downloadRemainingTooltip": "הורד את הקבצים הנותרים של גרסה זו",
+                    "downloadChooseFilesTooltip": "בחר אילו קבצים להוריד",
                     "downloadEarlyAccessTooltip": "הורד את גרסת ה-Early Access הזו מ-Civitai",
                     "downloadPaidTooltip": "הורד את הגרסה בתשלום הזו מ-Civitai",
                     "downloadNotAllowedTooltip": "גרסה זו זמינה רק ליצירה באתר Civitai",
@@ -1985,6 +2001,8 @@
             "createMissingData": "חסרים נתונים נדרשים ליצירת המתכון",
             "created": "המתכון נוצר בהצלחה",
             "noMissingLoras": "אין LoRAs חסרים להורדה",
+            "noPreviousRecipe": "אין מתכון קודם זמין",
+            "noNextRecipe": "אין מתכון נוסף זמין",
             "missingLorasInfoFailed": "קבלת מידע עבור LoRAs חסרים נכשלה",
             "preparingForDownloadFailed": "שגיאה בהכנת LoRAs להורדה",
             "enterLoraName": "אנא הזן שם LoRA או תחביר",
@@ -2038,9 +2056,9 @@
             "reimportBulkFailed": "ייבוא מחדש של חלק מהמתכונים נכשל",
             "noMissingLorasInSelection": "לא נמצאו LoRAs חסרים במתכונים שנבחרו",
             "noLoraRootConfigured": "תיקיית השורש של LoRA לא מוגדרת. אנא הגדר תיקיית שורש LoRA ברירת מחדל בהגדרות.",
-            "workflowSent": "[TODO: Translate] Workflow sent to ComfyUI",
-            "workflowSendFailed": "[TODO: Translate] Failed to send workflow to ComfyUI: {error}",
-            "workflowNoWorkflow": "[TODO: Translate] No embedded workflow found in this recipe"
+            "workflowSent": "ה-workflow נשלח ל-ComfyUI",
+            "workflowSendFailed": "שליחת ה-workflow ל-ComfyUI נכשלה: {error}",
+            "workflowNoWorkflow": "לא נמצא workflow מוטבע במתכון זה"
         },
         "models": {
             "noModelsSelected": "לא נבחרו מודלים",
@@ -2208,6 +2226,7 @@
             "relinkFailed": "שגיאה: {message}",
             "linkHfSuccess": "המודל נקשר בהצלחה ל-HuggingFace",
             "linkHfFailed": "שגיאה: {message}",
+            "linkCivArchSuccess": "המודל קושר מחדש דרך CivitArchive בהצלחה",
             "fetchMetadataFirst": "אנא אחזר מטא-דאטה מ-CivitAI תחילה",
             "noCivitaiInfo": "אין מידע מ-CivitAI זמין",
             "missingHash": "ה-hash של המודל אינו זמין"

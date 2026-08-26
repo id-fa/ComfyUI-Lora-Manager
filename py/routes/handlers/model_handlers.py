@@ -364,6 +364,7 @@ class ModelListingHandler:
             == "true",
             "tags": request.query.get("search_tags", "false").lower() == "true",
             "creator": request.query.get("search_creator", "false").lower() == "true",
+            "hash": request.query.get("search_hash", "false").lower() == "true",
             "recursive": request.query.get("recursive", "true").lower() == "true",
         }
 
@@ -633,6 +634,16 @@ class ModelManagementHandler:
             file_path = data.get("file_path")
             model_id = data.get("model_id")
             model_version_id = data.get("model_version_id")
+            source = data.get("source")
+
+            if source not in (None, "", "civarchive"):
+                return web.json_response(
+                    {
+                        "success": False,
+                        "error": f"Unsupported relink source: {source}",
+                    },
+                    status=400,
+                )
 
             if not file_path or model_id is None:
                 return web.json_response(
@@ -648,20 +659,33 @@ class ModelManagementHandler:
                 metadata_path
             )
 
+            relink_kwargs = {
+                "file_path": file_path,
+                "metadata": local_metadata,
+                "model_id": int(model_id),
+                "model_version_id": int(model_version_id) if model_version_id else None,
+            }
+            if source == "civarchive":
+                relink_kwargs["provider_name"] = "civarchive_api"
+
             updated_metadata = await self._metadata_sync.relink_metadata(
-                file_path=file_path,
-                metadata=local_metadata,
-                model_id=int(model_id),
-                model_version_id=int(model_version_id) if model_version_id else None,
+                **relink_kwargs
             )
 
             await self._service.scanner.update_single_model_cache(
                 file_path, file_path, updated_metadata
             )
 
-            message = f"Model successfully re-linked to Civitai model {model_id}" + (
-                f" version {model_version_id}" if model_version_id else ""
-            )
+            if source == "civarchive":
+                message = (
+                    f"Model successfully re-linked to CivArchive model {model_id}"
+                    + (f" version {model_version_id}" if model_version_id else "")
+                )
+            else:
+                message = (
+                    f"Model successfully re-linked to Civitai model {model_id}"
+                    + (f" version {model_version_id}" if model_version_id else "")
+                )
             return web.json_response(
                 {
                     "success": True,
@@ -669,6 +693,8 @@ class ModelManagementHandler:
                     "hash": updated_metadata.get("sha256", ""),
                 }
             )
+        except ValueError as exc:
+            return web.json_response({"success": False, "error": str(exc)}, status=400)
         except Exception as exc:
             if is_expected_offline_error(str(exc)):
                 return web.json_response(
@@ -1029,6 +1055,11 @@ class ModelQueryHandler:
         self._service = service
         self._logger = logger
 
+    @staticmethod
+    def _parse_include_empty(request: web.Request) -> bool:
+        """Parse the include_empty query flag (``1``/``true``)."""
+        return request.query.get("include_empty", "").lower() in ("1", "true")
+
     async def get_top_tags(self, request: web.Request) -> web.Response:
         try:
             limit = int(request.query.get("limit", "20"))
@@ -1123,8 +1154,14 @@ class ModelQueryHandler:
 
     async def get_folders(self, request: web.Request) -> web.Response:
         try:
-            cache = await self._service.scanner.get_cached_data()
-            return web.json_response({"folders": cache.folders})
+            include_empty = self._parse_include_empty(request)
+            if include_empty:
+                # Live enumeration includes empty OS-created directories.
+                folders = await self._service.scanner.get_all_folders()
+            else:
+                cache = await self._service.scanner.get_cached_data()
+                folders = cache.folders
+            return web.json_response({"folders": folders})
         except Exception as exc:
             self._logger.error("Error getting folders: %s", exc)
             return web.json_response({"success": False, "error": str(exc)}, status=500)
@@ -1149,7 +1186,9 @@ class ModelQueryHandler:
                     {"success": False, "error": "model_root parameter is required"},
                     status=400,
                 )
-            folder_tree = await self._service.get_folder_tree(model_root)
+            folder_tree = await self._service.get_folder_tree(
+                model_root, include_empty=self._parse_include_empty(request)
+            )
             return web.json_response({"success": True, "tree": folder_tree})
         except Exception as exc:
             self._logger.error("Error getting folder tree: %s", exc)
@@ -1157,7 +1196,9 @@ class ModelQueryHandler:
 
     async def get_unified_folder_tree(self, request: web.Request) -> web.Response:
         try:
-            unified_tree = await self._service.get_unified_folder_tree()
+            unified_tree = await self._service.get_unified_folder_tree(
+                include_empty=self._parse_include_empty(request)
+            )
             return web.json_response({"success": True, "tree": unified_tree})
         except Exception as exc:
             self._logger.error("Error getting unified folder tree: %s", exc)
@@ -1888,8 +1929,18 @@ class ModelDownloadHandler:
         try:
             status_filter = request.query.get("status") or None
             service = await DownloadQueueService.get_instance()
-            cleared = await service.clear_queue(status_filter=status_filter)
-            return web.json_response({"success": True, "cleared": cleared})
+            cleared_ids = await service.clear_queue(status_filter=status_filter)
+            # Clearing the queue rows alone would orphan any in-memory tasks
+            # and persisted aria2 state for those downloads, leaving them
+            # polling the daemon invisibly.  Tear that tracking down too.
+            try:
+                await self._download_coordinator.discard_cleared_downloads(cleared_ids)
+            except Exception:
+                self._logger.warning(
+                    "Failed to discard in-memory state for cleared downloads",
+                    exc_info=True,
+                )
+            return web.json_response({"success": True, "cleared": len(cleared_ids)})
         except Exception as exc:
             self._logger.error(
                 "Error clearing download queue: %s", exc, exc_info=True
@@ -1972,9 +2023,11 @@ class ModelDownloadHandler:
                 item_id=item_id, download_id=download_id
             )
             if item is None:
+                # Missing or non-retryable history entry is a business
+                # outcome, not a routing error: 200 lets the extension's
+                # apiFetch 404-fallback and error middleware stay quiet.
                 return web.json_response(
-                    {"success": False, "error": "History item not found or not retryable"},
-                    status=404,
+                    {"success": False, "error": "History item not found or not retryable"}
                 )
             return web.json_response({"success": True, "item": item})
         except Exception as exc:
@@ -2025,8 +2078,12 @@ class ModelDownloadHandler:
                 completed_at=completed_at,
             )
             if item is None:
+                # A missing queue item (already completed, or never queued) is
+                # a normal business outcome, not a routing error. Return 200
+                # so the browser extension's apiFetch 404-fallback and the
+                # error middleware stay quiet.
                 return web.json_response(
-                    {"success": False, "error": "Download not found in queue"}, status=404
+                    {"success": False, "error": "Download not found in queue"}
                 )
             return web.json_response({"success": True, "item": item})
         except Exception as exc:
@@ -2068,9 +2125,10 @@ class ModelDownloadHandler:
             service = await DownloadQueueService.get_instance()
             updated = await service.update_status(download_id, status)
             if not updated:
+                # Same rationale as complete_download_in_queue: a missing
+                # queue item is a business outcome, not a routing error.
                 return web.json_response(
-                    {"success": False, "error": "Download not found in queue"},
-                    status=404,
+                    {"success": False, "error": "Download not found in queue"}
                 )
             return web.json_response({"success": True})
         except Exception as exc:
@@ -2621,10 +2679,20 @@ class ModelUpdateHandler:
             except Exception:
                 pass
 
+        same_base_scope = self._uses_same_base_update_scope()
+
         serialized_records = []
         for record in records.values():
             has_update_fn = getattr(record, "has_update", None)
-            if callable(has_update_fn) and has_update_fn(
+            if not callable(has_update_fn):
+                continue
+            scoped_fn = (
+                getattr(record, "has_update_for_local_bases", None)
+                if same_base_scope
+                else None
+            )
+            qualifies_fn = scoped_fn if callable(scoped_fn) else has_update_fn
+            if qualifies_fn(
                 hide_early_access=hide_early_access,
                 hide_paid=hide_paid,
             ):
@@ -2636,6 +2704,26 @@ class ModelUpdateHandler:
                 "records": serialized_records,
             }
         )
+
+    def _uses_same_base_update_scope(self) -> bool:
+        """Return True when update reporting must honor same-base scoping.
+
+        Mirrors ``BaseModelService._annotate_update_flags``: the Updates filter
+        evaluates updates per local base model when ``version_grouping`` is
+        ``same_base`` (its default). The refresh summary counts with the same
+        scope so the "Found N update(s)" toast matches what the filter
+        displays. See issue #1083.
+        """
+
+        if self._settings is None:
+            return True
+        try:
+            strategy_value = self._settings.get("version_grouping")
+        except Exception:
+            return True
+        if isinstance(strategy_value, str) and strategy_value.strip():
+            return strategy_value.strip().lower() == "same_base"
+        return True
 
     async def set_model_update_ignore(self, request: web.Request) -> web.Response:
         payload = await self._read_json(request)
@@ -3104,6 +3192,9 @@ class ModelUpdateHandler:
             "paidAccess": paid_access_payload,
             "filePath": context.get("file_path"),
             "fileName": context.get("file_name"),
+            # Weight-file variant count (None when unknown); lets the UI hide
+            # the download affordance for single-file in-library versions.
+            "fileCount": getattr(version, "file_count", None),
         }
 
     async def _build_version_context(

@@ -19,6 +19,7 @@ from ..utils.recipe_open_stats import RecipeOpenStats
 from .model_scanner import WEIGHT_FILE_EXTENSIONS
 from .recipe_cache import RecipeCache
 from .recipes.errors import RecipeNotFoundError, RecipePersistenceError
+from .websocket_manager import ws_manager
 from natsort import natsorted
 import sys
 import re
@@ -37,6 +38,9 @@ logger = logging.getLogger(__name__)
 # lowercase to "diffusionmodel", which is not a valid sub-type. Map it
 # explicitly to "diffusion_model" (mirrors Oracle R2-F1).
 _CHECKPOINT_MODEL_TYPE_ALIASES = {"diffusionmodel": "diffusion_model"}
+
+# Valid LoRA availability statuses for the recipe listing filter.
+_VALID_LORA_AVAILABILITY_STATUSES = frozenset({"ready", "missing", "deleted"})
 
 
 class RecipeScanner:
@@ -480,6 +484,10 @@ class RecipeScanner:
             if value:
                 return str(value)
         return "unknown"
+
+    def is_initializing(self) -> bool:
+        """Check if the scanner is currently initializing"""
+        return self._is_initializing
 
     def on_library_changed(self) -> None:
         """Reset cached state when the active library changes."""
@@ -1404,7 +1412,20 @@ class RecipeScanner:
 
     async def initialize_in_background(self) -> None:
         """Initialize cache in background using thread pool"""
+        # Mark as initializing before any await so concurrent callers can
+        # wait on this task instead of observing the placeholder empty cache
+        # (the LoRA scanner wait below can take a while at startup).
+        self._is_initializing = True
+        self._initialization_task = asyncio.current_task()
         try:
+            await ws_manager.broadcast_init_progress({
+                'stage': 'loading_cache',
+                'progress': 0,
+                'details': 'Loading recipe cache...',
+                'scanner_type': 'recipe',
+                'pageType': 'recipes',
+            })
+
             await self._wait_for_lora_scanner()
 
             # Set initial empty cache to avoid None reference errors
@@ -1417,39 +1438,61 @@ class RecipeScanner:
                     folder_tree={},
                 )
 
-            # Mark as initializing to prevent concurrent initializations
-            self._is_initializing = True
-            self._initialization_task = asyncio.current_task()
+            # Start timer
+            start_time = time.time()
 
-            try:
-                # Start timer
-                start_time = time.time()
+            # Use thread pool to execute CPU-intensive operations
+            loop = asyncio.get_event_loop()
+            cache = await loop.run_in_executor(
+                None,  # Use default thread pool
+                self._initialize_recipe_cache_sync,  # Run synchronous version in thread
+            )
+            if cache is not None:
+                self._cache = cache
 
-                # Use thread pool to execute CPU-intensive operations
-                loop = asyncio.get_event_loop()
-                cache = await loop.run_in_executor(
-                    None,  # Use default thread pool
-                    self._initialize_recipe_cache_sync,  # Run synchronous version in thread
-                )
-                if cache is not None:
-                    self._cache = cache
-
-                # Calculate elapsed time and log it
-                elapsed_time = time.time() - start_time
-                recipe_count = (
-                    len(cache.raw_data) if cache and hasattr(cache, "raw_data") else 0
-                )
-                logger.info(
-                    f"Recipe cache initialized in {elapsed_time:.2f} seconds. Found {recipe_count} recipes"
-                )
-                self._schedule_post_scan_enrichment()
-                # Schedule FTS index build in background (non-blocking)
-                self._schedule_fts_index_build()
-            finally:
-                # Mark initialization as complete regardless of outcome
-                self._is_initializing = False
+            # Calculate elapsed time and log it
+            elapsed_time = time.time() - start_time
+            recipe_count = (
+                len(cache.raw_data) if cache and hasattr(cache, "raw_data") else 0
+            )
+            logger.info(
+                f"Recipe cache initialized in {elapsed_time:.2f} seconds. Found {recipe_count} recipes"
+            )
+            await ws_manager.broadcast_init_progress({
+                'stage': 'finalizing',
+                'progress': 100,
+                'status': 'complete',
+                'details': f'Found {recipe_count} recipes.',
+                'scanner_type': 'recipe',
+                'pageType': 'recipes',
+            })
+            self._schedule_post_scan_enrichment()
+            # Schedule FTS index build in background (non-blocking)
+            self._schedule_fts_index_build()
         except Exception as e:
             logger.error(f"Recipe Scanner: Error initializing cache in background: {e}")
+            # Ensure the cache is never None so the page stops showing the
+            # initialization screen, and let waiting clients reload into the
+            # regular (possibly empty) view instead of stalling.
+            if self._cache is None:
+                self._cache = RecipeCache(
+                    raw_data=[],
+                    sorted_by_name=[],
+                    sorted_by_date=[],
+                    folders=[],
+                    folder_tree={},
+                )
+            await ws_manager.broadcast_init_progress({
+                'stage': 'finalizing',
+                'progress': 100,
+                'status': 'complete',
+                'details': 'Recipe cache initialization failed.',
+                'scanner_type': 'recipe',
+                'pageType': 'recipes',
+            })
+        finally:
+            # Mark initialization as complete regardless of outcome
+            self._is_initializing = False
 
     def _initialize_recipe_cache_sync(self):
         """Synchronous version of recipe cache initialization for thread pool execution.
@@ -1504,7 +1547,7 @@ class RecipeScanner:
                     self._cache.raw_data = recipes
                     self._update_folder_metadata(self._cache)
                     self._sort_cache_sync()
-                    # Backfill source_path from JSON files if missing (schema migration)
+                    # Backfill source_path from JSON files if missing (one-shot schema migration)
                     if self._backfill_source_path_if_needed(recipes, json_paths):
                         self._cache.image_id_map = self._build_image_id_map()
                         self._persistent_cache.save_cache(
@@ -1531,7 +1574,7 @@ class RecipeScanner:
                     self._cache.raw_data = recipes
                     self._update_folder_metadata(self._cache)
                     self._sort_cache_sync()
-                    # Backfill source_path from JSON files if missing (schema migration)
+                    # Backfill source_path from JSON files if missing (one-shot schema migration)
                     self._backfill_source_path_if_needed(recipes, json_paths)
                     self._cache.image_id_map = self._build_image_id_map()
                     # Persist updated cache
@@ -1668,6 +1711,9 @@ class RecipeScanner:
 
         return recipes, changed, json_paths
 
+    # Metadata key recording that the one-shot source_path backfill has run.
+    _SOURCE_PATH_BACKFILL_MARKER = "source_path_backfilled"
+
     def _backfill_source_path_if_needed(
         self,
         recipes: List[Dict[str, Any]],
@@ -1675,8 +1721,21 @@ class RecipeScanner:
     ) -> bool:
         """Backfill source_path from recipe JSON files if missing from cache.
 
+        This is a one-shot schema migration: once it has run, a completion
+        marker is stored in the persistent cache metadata and later startups
+        skip it entirely. Recipes without a source_path in their JSON file
+        would otherwise be re-read and re-parsed on every startup. New or
+        changed recipe files still get source_path from the normal parse path
+        during reconciliation.
+
         Returns True if any recipes were updated (caller should persist cache).
         """
+        cache = self._persistent_cache
+        if (
+            cache is not None
+            and cache.get_metadata_value(self._SOURCE_PATH_BACKFILL_MARKER) == "1"
+        ):
+            return False
         updated = False
         for recipe in recipes:
             if recipe.get("source_path"):
@@ -1694,6 +1753,8 @@ class RecipeScanner:
                     updated = True
             except Exception:
                 pass
+        if cache is not None:
+            cache.set_metadata_value(self._SOURCE_PATH_BACKFILL_MARKER, "1")
         return updated
 
     def _full_directory_scan_sync(
@@ -2254,20 +2315,27 @@ class RecipeScanner:
 
     async def get_cached_data(self, force_refresh: bool = False) -> RecipeCache:
         """Get cached recipe data, refresh if needed"""
+        # If a background initialization is in progress, wait for it to
+        # complete so callers never observe the placeholder empty cache.
+        initialization_task = self._initialization_task
+        if (
+            self._is_initializing
+            and not force_refresh
+            and initialization_task is not None
+            and initialization_task is not asyncio.current_task()
+            and not initialization_task.done()
+        ):
+            try:
+                await initialization_task
+            except Exception:
+                # Initialization failures are logged by the task itself; fall
+                # through and return whatever cache state we have.
+                pass
+
         # If cache is already initialized and no refresh is needed, return it immediately
         if self._cache is not None and not force_refresh:
             self._update_folder_metadata()
             return cast(RecipeCache, self._cache)
-
-        # If another initialization is already in progress, wait for it to complete
-        if self._is_initializing and not force_refresh:
-            return self._cache or RecipeCache(
-                raw_data=[],
-                sorted_by_name=[],
-                sorted_by_date=[],
-                folders=[],
-                folder_tree={},
-            )
 
         # If force refresh is requested, re-scan in a thread pool to avoid
         # blocking the event loop (which is shared with ComfyUI).
@@ -2947,6 +3015,43 @@ class RecipeScanner:
 
         return lora
 
+    def _compute_availability_statuses(self, recipe: Dict[str, Any]) -> Set[str]:
+        """Compute the LoRA availability status set for a recipe.
+
+        Returns ``{"ready"}`` when every non-excluded LoRA resolves to the
+        local library (recipes without LoRAs count as ready); otherwise a
+        subset of ``{"missing", "deleted"}``. Uses the same inLibrary
+        resolution as ``_enrich_lora_entry`` (hash index with modelVersionId
+        fallback) but performs only in-memory lookups.
+        """
+
+        statuses: Set[str] = set()
+        for lora in recipe.get("loras") or []:
+            if not isinstance(lora, dict) or lora.get("exclude"):
+                continue
+
+            in_library = False
+            if self._lora_scanner:
+                hash_value = (lora.get("hash") or "").lower()
+                if hash_value:
+                    in_library = self._lora_scanner.has_hash(hash_value)
+                elif lora.get("modelVersionId") is not None:
+                    in_library = (
+                        self._get_lora_from_version_index(lora.get("modelVersionId"))
+                        is not None
+                    )
+
+            if in_library:
+                continue
+            if lora.get("isDeleted"):
+                statuses.add("deleted")
+            else:
+                statuses.add("missing")
+
+        if not statuses:
+            statuses.add("ready")
+        return statuses
+
     def _normalize_preview_url(self, preview_url: Optional[str]) -> Optional[str]:
         """Return a preview URL that is reachable from the browser."""
 
@@ -3212,6 +3317,22 @@ class RecipeScanner:
                             item
                             for item in filtered_data
                             if not matches_exclude(item.get("tags"))
+                        ]
+
+                # Filter by LoRA availability status
+                availability = filters.get("lora_availability")
+                if availability:
+                    selected = {
+                        status
+                        for status in availability
+                        if status in _VALID_LORA_AVAILABILITY_STATUSES
+                    }
+                    # Selecting every status (or none) means no filtering.
+                    if 0 < len(selected) < len(_VALID_LORA_AVAILABILITY_STATUSES):
+                        filtered_data = [
+                            item
+                            for item in filtered_data
+                            if self._compute_availability_statuses(item) & selected
                         ]
 
         # Apply sorting if not already handled by pre-sorted cache

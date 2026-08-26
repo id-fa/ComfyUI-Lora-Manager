@@ -222,6 +222,7 @@
                 "modelname": "모델명",
                 "tags": "태그",
                 "creator": "제작자",
+                "hash": "해시",
                 "title": "레시피 제목",
                 "loraName": "LoRA 파일명",
                 "loraModel": "LoRA 모델명",
@@ -259,7 +260,11 @@
             "any": "아무",
             "all": "모두",
             "tagLogicAny": "모든 태그 일치 (OR)",
-            "tagLogicAll": "모든 태그 일치 (AND)"
+            "tagLogicAll": "모든 태그 일치 (AND)",
+            "loraAvailability": "LoRA 가용성",
+            "availabilityReady": "바로 사용 가능",
+            "availabilityMissing": "누락된 LoRA 있음",
+            "availabilityDeleted": "삭제된 LoRA 있음"
         },
         "theme": {
             "toggle": "테마 토글",
@@ -854,13 +859,19 @@
         "title": "LoRA 레시피",
         "actions": {
             "sendCheckpoint": "ComfyUI로 보내기",
-            "sendRecipe": "ComfyUI로 보내기"
+            "sendRecipe": "ComfyUI로 보내기",
+            "deleteRecipeWithShortcut": "레시피 삭제(Del)"
+        },
+        "navigation": {
+            "label": "레시피 탐색",
+            "previousWithShortcut": "이전 레시피(←)",
+            "nextWithShortcut": "다음 레시피(→)"
         },
         "workflow": {
-            "sendWorkflow": "[TODO: Translate] Send Workflow to ComfyUI",
-            "sent": "[TODO: Translate] Workflow sent to ComfyUI",
-            "sendFailed": "[TODO: Translate] Failed to send workflow to ComfyUI",
-            "noWorkflow": "[TODO: Translate] No embedded workflow found in this recipe"
+            "sendWorkflow": "워크플로를 ComfyUI로 보내기",
+            "sent": "워크플로를 ComfyUI로 보냈습니다",
+            "sendFailed": "워크플로를 ComfyUI로 보내지 못했습니다",
+            "noWorkflow": "이 레시피에서 임베드된 워크플로를 찾을 수 없습니다"
         },
         "controls": {
             "import": {
@@ -952,6 +963,7 @@
             }
         },
         "duplicates": {
+            "finding": "중복 레시피를 스캔하는 중...",
             "found": "{count}개의 중복 그룹 발견",
             "noGroups": "현재 일치 기준으로 중복 그룹을 찾을 수 없습니다",
             "keepLatest": "최신 버전 유지",
@@ -1410,13 +1422,14 @@
             },
             "proceedText": "원하는 작업이 확실한 경우에만 진행하세요.",
             "urlLabel": "Civitai 모델 URL:",
-            "urlPlaceholder": "https://civitai.com/models/649516/model-name?modelVersionId=726676",
+            "urlPlaceholder": "https://civitai.com/models/12345/model-name?modelVersionId=67890",
             "helpText": {
-                "title": "모든 Civitai 모델 URL을 붙여넣으세요. 지원되는 형식:",
-                "format1": "https://civitai.com/models/649516",
-                "format2": "https://civitai.com/models/649516?modelVersionId=726676",
-                "format3": "https://civitai.com/models/649516/model-name?modelVersionId=726676",
-                "note": "참고: modelVersionId가 제공되지 않으면 최신 버전이 사용됩니다."
+                "title": "Civitai 또는 CivitArchive 모델 URL을 붙여넣으세요. 지원되는 형식:",
+                "format1": "https://civitai.com/models/12345",
+                "format2": "https://civitai.com/models/12345?modelVersionId=67890",
+                "format3": "https://civitai.com/models/12345/model-name?modelVersionId=67890",
+                "note": "참고: modelVersionId가 제공되지 않으면 최신 버전이 사용됩니다.",
+                "format4": "https://civarchive.com/models/12345 (CivitArchive)"
             },
             "confirmAction": "다시 연결 확인"
         },
@@ -1433,7 +1446,9 @@
                 "viewCreatorProfile": "제작자 프로필 보기",
                 "openFileLocation": "파일 위치 열기",
                 "sendToWorkflow": "ComfyUI로 보내기",
-                "sendToWorkflowText": "ComfyUI로 보내기"
+                "sendToWorkflowText": "ComfyUI로 보내기",
+                "copyHash": "해시 복사",
+                "deleteModelWithShortcut": "모델 삭제(Del)"
             },
             "openFileLocation": {
                 "success": "파일 위치가 성공적으로 열렸습니다",
@@ -1450,6 +1465,7 @@
                 "location": "위치",
                 "baseModel": "베이스 모델",
                 "size": "크기",
+                "hashes": "해시",
                 "unknown": "알 수 없음",
                 "usageTips": "사용 팁",
                 "additionalNotes": "추가 메모",
@@ -1602,7 +1618,7 @@
                 "actions": {
                     "download": "다운로드",
                     "downloadTooltip": "이 버전 다운로드",
-                    "downloadRemainingTooltip": "이 버전의 나머지 파일 다운로드",
+                    "downloadChooseFilesTooltip": "다운로드할 파일 선택",
                     "downloadEarlyAccessTooltip": "Civitai에서 이 얼리 액세스 버전 다운로드",
                     "downloadPaidTooltip": "Civitai에서 이 유료 버전 다운로드",
                     "downloadNotAllowedTooltip": "이 버전은 Civitai 사이트 내에서만 사용 가능하며 다운로드할 수 없습니다",
@@ -1985,6 +2001,8 @@
             "createMissingData": "레시피 생성에 필요한 데이터가 없습니다",
             "created": "레시피가 생성되었습니다",
             "noMissingLoras": "다운로드할 누락된 LoRA가 없습니다",
+            "noPreviousRecipe": "이전 레시피가 없습니다",
+            "noNextRecipe": "다음 레시피가 없습니다",
             "missingLorasInfoFailed": "누락된 LoRA 정보를 가져오는데 실패했습니다",
             "preparingForDownloadFailed": "LoRA 다운로드 준비 오류",
             "enterLoraName": "LoRA 이름 또는 문법을 입력해주세요",
@@ -2038,9 +2056,9 @@
             "reimportBulkFailed": "일부 레시피를 다시 가져오지 못했습니다",
             "noMissingLorasInSelection": "선택한 레시피에서 누락된 LoRA를 찾을 수 없습니다",
             "noLoraRootConfigured": "LoRA 루트 디렉토리가 구성되지 않았습니다. 설정에서 기본 LoRA 루트를 설정하세요.",
-            "workflowSent": "[TODO: Translate] Workflow sent to ComfyUI",
-            "workflowSendFailed": "[TODO: Translate] Failed to send workflow to ComfyUI: {error}",
-            "workflowNoWorkflow": "[TODO: Translate] No embedded workflow found in this recipe"
+            "workflowSent": "워크플로를 ComfyUI로 보냈습니다",
+            "workflowSendFailed": "워크플로를 ComfyUI로 보내지 못했습니다: {error}",
+            "workflowNoWorkflow": "이 레시피에서 임베드된 워크플로를 찾을 수 없습니다"
         },
         "models": {
             "noModelsSelected": "선택된 모델이 없습니다",
@@ -2208,6 +2226,7 @@
             "relinkFailed": "오류: {message}",
             "linkHfSuccess": "모델이 HuggingFace에 연결되었습니다",
             "linkHfFailed": "오류: {message}",
+            "linkCivArchSuccess": "모델이 CivitArchive을 통해 성공적으로 다시 연결되었습니다",
             "fetchMetadataFirst": "먼저 CivitAI에서 메타데이터를 가져와주세요",
             "noCivitaiInfo": "사용 가능한 CivitAI 정보가 없습니다",
             "missingHash": "모델 해시를 사용할 수 없습니다"

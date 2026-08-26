@@ -222,6 +222,7 @@
                 "modelname": "Название модели",
                 "tags": "Теги",
                 "creator": "Автор",
+                "hash": "Хэш",
                 "title": "Название рецепта",
                 "loraName": "Имя файла LoRA",
                 "loraModel": "Название модели LoRA",
@@ -259,7 +260,11 @@
             "any": "Любой",
             "all": "Все",
             "tagLogicAny": "Совпадение с любым тегом (ИЛИ)",
-            "tagLogicAll": "Совпадение со всеми тегами (И)"
+            "tagLogicAll": "Совпадение со всеми тегами (И)",
+            "loraAvailability": "Доступность LoRAs",
+            "availabilityReady": "Готовы к использованию",
+            "availabilityMissing": "Есть отсутствующие",
+            "availabilityDeleted": "Есть удалённые"
         },
         "theme": {
             "toggle": "Переключить тему",
@@ -854,13 +859,19 @@
         "title": "Рецепты LoRA",
         "actions": {
             "sendCheckpoint": "Отправить в ComfyUI",
-            "sendRecipe": "Отправить в ComfyUI"
+            "sendRecipe": "Отправить в ComfyUI",
+            "deleteRecipeWithShortcut": "Удалить рецепт (Del)"
+        },
+        "navigation": {
+            "label": "Навигация по рецептам",
+            "previousWithShortcut": "Предыдущий рецепт (←)",
+            "nextWithShortcut": "Следующий рецепт (→)"
         },
         "workflow": {
-            "sendWorkflow": "[TODO: Translate] Send Workflow to ComfyUI",
-            "sent": "[TODO: Translate] Workflow sent to ComfyUI",
-            "sendFailed": "[TODO: Translate] Failed to send workflow to ComfyUI",
-            "noWorkflow": "[TODO: Translate] No embedded workflow found in this recipe"
+            "sendWorkflow": "Отправить workflow в ComfyUI",
+            "sent": "Workflow отправлен в ComfyUI",
+            "sendFailed": "Не удалось отправить workflow в ComfyUI",
+            "noWorkflow": "В этом рецепте не найден встроенный workflow"
         },
         "controls": {
             "import": {
@@ -952,6 +963,7 @@
             }
         },
         "duplicates": {
+            "finding": "Поиск дублирующихся рецептов...",
             "found": "Найдено {count} групп дубликатов",
             "noGroups": "Дубликатов с текущим критерием не найдено",
             "keepLatest": "Оставить последние версии",
@@ -1410,13 +1422,14 @@
             },
             "proceedText": "Продолжайте только если вы уверены, что это то, что вам нужно.",
             "urlLabel": "URL модели Civitai:",
-            "urlPlaceholder": "https://civitai.com/models/649516/model-name?modelVersionId=726676",
+            "urlPlaceholder": "https://civitai.com/models/12345/model-name?modelVersionId=67890",
             "helpText": {
-                "title": "Вставьте любой URL модели Civitai. Поддерживаемые форматы:",
-                "format1": "https://civitai.com/models/649516",
-                "format2": "https://civitai.com/models/649516?modelVersionId=726676",
-                "format3": "https://civitai.com/models/649516/model-name?modelVersionId=726676",
-                "note": "Примечание: Если modelVersionId не указан, будет использована последняя версия."
+                "title": "Вставьте любой URL модели Civitai или CivitArchive. Поддерживаемые форматы:",
+                "format1": "https://civitai.com/models/12345",
+                "format2": "https://civitai.com/models/12345?modelVersionId=67890",
+                "format3": "https://civitai.com/models/12345/model-name?modelVersionId=67890",
+                "note": "Примечание: Если modelVersionId не указан, будет использована последняя версия.",
+                "format4": "https://civarchive.com/models/12345 (CivitArchive)"
             },
             "confirmAction": "Подтвердить пересвязывание"
         },
@@ -1433,7 +1446,9 @@
                 "viewCreatorProfile": "Посмотреть профиль создателя",
                 "openFileLocation": "Открыть расположение файла",
                 "sendToWorkflow": "Отправить в ComfyUI",
-                "sendToWorkflowText": "Отправить в ComfyUI"
+                "sendToWorkflowText": "Отправить в ComfyUI",
+                "copyHash": "Копировать хэш",
+                "deleteModelWithShortcut": "Удалить модель (Del)"
             },
             "openFileLocation": {
                 "success": "Расположение файла успешно открыто",
@@ -1450,6 +1465,7 @@
                 "location": "Расположение",
                 "baseModel": "Базовая модель",
                 "size": "Размер",
+                "hashes": "Хэши",
                 "unknown": "Неизвестно",
                 "usageTips": "Советы по использованию",
                 "additionalNotes": "Дополнительные заметки",
@@ -1602,7 +1618,7 @@
                 "actions": {
                     "download": "Скачать",
                     "downloadTooltip": "Скачать эту версию",
-                    "downloadRemainingTooltip": "Скачать оставшиеся файлы этой версии",
+                    "downloadChooseFilesTooltip": "Выбрать файлы для скачивания",
                     "downloadEarlyAccessTooltip": "Скачать эту версию раннего доступа с Civitai",
                     "downloadPaidTooltip": "Скачать эту платную версию с Civitai",
                     "downloadNotAllowedTooltip": "Эта версия доступна только для генерации на сайте Civitai",
@@ -1985,6 +2001,8 @@
             "createMissingData": "Отсутствуют необходимые данные для создания рецепта",
             "created": "Рецепт успешно создан",
             "noMissingLoras": "Нет отсутствующих LoRAs для загрузки",
+            "noPreviousRecipe": "Предыдущий рецепт отсутствует",
+            "noNextRecipe": "Следующий рецепт отсутствует",
             "missingLorasInfoFailed": "Не удалось получить информацию для отсутствующих LoRAs",
             "preparingForDownloadFailed": "Ошибка подготовки LoRAs для загрузки",
             "enterLoraName": "Пожалуйста, введите название LoRA или синтаксис",
@@ -2038,9 +2056,9 @@
             "reimportBulkFailed": "Не удалось переимпортировать некоторые рецепты",
             "noMissingLorasInSelection": "В выбранных рецептах не найдены отсутствующие LoRAs",
             "noLoraRootConfigured": "Корневой каталог LoRA не настроен. Пожалуйста, установите корневой каталог LoRA по умолчанию в настройках.",
-            "workflowSent": "[TODO: Translate] Workflow sent to ComfyUI",
-            "workflowSendFailed": "[TODO: Translate] Failed to send workflow to ComfyUI: {error}",
-            "workflowNoWorkflow": "[TODO: Translate] No embedded workflow found in this recipe"
+            "workflowSent": "Workflow отправлен в ComfyUI",
+            "workflowSendFailed": "Не удалось отправить workflow в ComfyUI: {error}",
+            "workflowNoWorkflow": "В этом рецепте не найден встроенный workflow"
         },
         "models": {
             "noModelsSelected": "Модели не выбраны",
@@ -2208,6 +2226,7 @@
             "relinkFailed": "Ошибка: {message}",
             "linkHfSuccess": "Модель успешно связана с HuggingFace",
             "linkHfFailed": "Ошибка: {message}",
+            "linkCivArchSuccess": "Модель успешно пересвязана через CivitArchive",
             "fetchMetadataFirst": "Пожалуйста, сначала получите метаданные с CivitAI",
             "noCivitaiInfo": "Информация CivitAI недоступна",
             "missingHash": "Хеш модели недоступен"
