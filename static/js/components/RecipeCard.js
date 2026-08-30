@@ -41,9 +41,36 @@ class RecipeCard {
         const loras = this.recipe.loras || [];
         const lorasCount = loras.length;
 
-        // Check if all LoRAs are available in the library
-        const missingLorasCount = loras.filter(lora => !lora.inLibrary && !lora.isDeleted).length;
-        const allLorasAvailable = missingLorasCount === 0 && lorasCount > 0;
+        // Count LoRAs by availability: in library, missing (still downloadable
+        // from the source), or unobtainable (deleted from the source, or an
+        // unresolvable hash) which is silently skipped when the recipe is used.
+        const availableLorasCount = loras.filter(lora => lora.inLibrary).length;
+        const missingLorasCount = loras.filter(lora => !lora.inLibrary && !lora.isDeleted && !lora.hashInvalid).length;
+        const unavailableLorasCount = lorasCount - availableLorasCount - missingLorasCount;
+
+        // Compact status pill: state icon + available/total fraction.
+        // Icon switches by state so status never relies on color alone.
+        // - missing (red): something can still be downloaded, most actionable
+        // - partial (amber): usable but degraded, unobtainable LoRAs are skipped
+        // - unavailable (gray, ban): no usable LoRA at all
+        let loraCountStateClass = '';
+        let loraCountIcon = 'fa-layer-group';
+        if (lorasCount > 0) {
+            if (availableLorasCount === lorasCount) {
+                loraCountStateClass = 'ready';
+                loraCountIcon = 'fa-check';
+            } else if (missingLorasCount > 0) {
+                loraCountStateClass = 'missing';
+                loraCountIcon = 'fa-exclamation-triangle';
+            } else if (availableLorasCount > 0) {
+                loraCountStateClass = 'partial';
+                loraCountIcon = 'fa-circle-minus';
+            } else {
+                loraCountStateClass = 'unavailable';
+                loraCountIcon = 'fa-ban';
+            }
+        }
+        const loraCountLabel = lorasCount > 0 ? `${availableLorasCount}/${lorasCount}` : `${lorasCount}`;
 
         // Ensure file_url exists, fallback to API URL if needed
         let previewUrl = this.recipe.file_url;
@@ -128,9 +155,8 @@ class RecipeCard {
                         <span class="model-name">${this.recipe.title}</span>
                     </div>
                     ${!isDuplicatesMode ? `
-                    <div class="lora-count ${allLorasAvailable ? 'ready' : (lorasCount > 0 ? 'missing' : '')}" 
-                         title="${this.getLoraStatusTitle(lorasCount, missingLorasCount)}">
-                        <i class="fas fa-layer-group"></i> ${lorasCount}
+                    <div class="lora-count ${loraCountStateClass}" title="${this.getLoraStatusTitle(lorasCount, availableLorasCount, missingLorasCount, unavailableLorasCount)}">
+                        <i class="fas ${loraCountIcon}" aria-hidden="true"></i> ${loraCountLabel}
                     </div>
                     ` : ''}
                 </div>
@@ -148,10 +174,39 @@ class RecipeCard {
         return card;
     }
 
-    getLoraStatusTitle(totalCount, missingCount) {
-        if (totalCount === 0) return "No LoRAs in this recipe";
-        if (missingCount === 0) return "All LoRAs available - Ready to use";
-        return `${missingCount} of ${totalCount} LoRAs missing`;
+    getLoraStatusTitle(totalCount, availableCount, missingCount, unavailableCount) {
+        if (totalCount === 0) {
+            return translate('recipes.loraStatus.none', {}, 'No LoRAs in this recipe');
+        }
+        if (availableCount === totalCount) {
+            return translate('recipes.loraStatus.allAvailable', {}, 'All LoRAs available - Ready to use');
+        }
+        if (missingCount > 0 && unavailableCount > 0) {
+            return translate(
+                'recipes.loraStatus.missingAndUnavailable',
+                { missing: missingCount, unavailable: unavailableCount, total: totalCount },
+                `${missingCount} of ${totalCount} LoRAs missing, ${unavailableCount} unavailable (deleted from source or unresolvable hash)`
+            );
+        }
+        if (missingCount > 0) {
+            return translate(
+                'recipes.loraStatus.missing',
+                { missing: missingCount, total: totalCount },
+                `${missingCount} of ${totalCount} LoRAs missing`
+            );
+        }
+        if (availableCount > 0) {
+            return translate(
+                'recipes.loraStatus.partial',
+                { unavailable: unavailableCount, total: totalCount },
+                `${unavailableCount} of ${totalCount} LoRAs unavailable (deleted from source or unresolvable hash) - skipped when recipe is used`
+            );
+        }
+        return translate(
+            'recipes.loraStatus.noneUsable',
+            { unavailable: unavailableCount, total: totalCount },
+            `No usable LoRAs - ${unavailableCount} of ${totalCount} deleted from source or unresolvable hash`
+        );
     }
 
     async toggleFavorite(card) {
