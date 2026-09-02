@@ -868,6 +868,21 @@
             "previousWithShortcut": "上一個配方（←）",
             "nextWithShortcut": "下一個配方（→）"
         },
+        "modal": {
+            "metadata": {
+                "id": "ID"
+            },
+            "actions": {
+                "openFileLocation": "開啟檔案位置",
+                "copyId": "複製配方 ID"
+            },
+            "openFileLocation": {
+                "success": "檔案位置已成功開啟",
+                "failed": "開啟檔案位置失敗",
+                "copied": "路徑已複製到剪貼簿：{{path}}",
+                "clipboardFallback": "路徑：{{path}}"
+            }
+        },
         "workflow": {
             "sendWorkflow": "傳送工作流到 ComfyUI",
             "sent": "工作流已傳送到 ComfyUI",
@@ -898,14 +913,64 @@
             "notInLibraryTooltip": "此模型不在您的本地庫中",
             "deletedTooltip": "此 LoRA 已從來源站刪除，無法下載",
             "hashInvalidTooltip": "此 LoRA 雜湊無法在 CivitAI 上解析——模型可能已更新",
+            "noLorasAssociated": "此配方未關聯任何 LoRA",
+            "noLorasWhyToggle": "為什麼沒有 LoRA？",
+            "noLorasImportMethod": "匯入方式",
+            "noLorasInferredNote": "可能的原因（推斷）——此配方是在記錄匯入診斷資訊之前匯入的。",
+            "noLorasChannels": {
+                "batch_import_url": "批量匯入（圖片 URL）",
+                "batch_import_local": "批量匯入（本機檔案）",
+                "url": "圖片 URL 匯入",
+                "local": "本機檔案匯入",
+                "upload": "圖片上傳",
+                "widget": "從工作流儲存",
+                "reimport_url": "重新匯入（圖片 URL）",
+                "reimport_local": "重新匯入（本機檔案）"
+            },
+            "noLorasReasons": {
+                "no_loras_used": "生成中繼資料完整，且未引用任何 LoRA。",
+                "api_meta_no_lora_resources": "來源 API 未回傳此圖片的 LoRA 資源資料。CivitAI 頁面上顯示的 LoRA 可能來自公開 API 未開放的內部資料。",
+                "api_meta_missing": "來源 API 未回傳此圖片的生成中繼資料。",
+                "no_embedded_metadata": "圖片沒有內嵌生成中繼資料，因此無法復原 LoRA 資訊。",
+                "workflow_metadata_limited": "圖片內嵌的中繼資料是 ComfyUI 工作流；從工作流中提取 LoRA 資訊的能力有限。",
+                "video_no_metadata": "影片檔案不攜帶內嵌生成中繼資料。",
+                "metadata_unsupported": "圖片包含的中繼資料格式無法解析。",
+                "unknown": "無法從儲存的配方資料中確定原因。"
+            },
+            "noLorasDetails": {
+                "apiMetaFields": "API 中繼資料欄位",
+                "modelVersionIds": "回報的模型版本 ID 數",
+                "embeddedMetadata": "內嵌中繼資料",
+                "present": "已找到",
+                "absent": "無"
+            },
             "download": "下載",
             "downloadLoraTooltip": "下載此 LoRA",
             "preparingDownload": "正在準備下載...",
             "reconnect": "重新關聯",
             "reconnectTooltip": "與本地 LoRA 重新關聯",
+            "reconnectInstructions": "輸入 LoRA 語法或名稱以重新關聯：",
+            "reconnectExample": "範例：<lora:name:1> 或只填名稱",
+            "reconnectPlaceholder": "輸入 LoRA 名稱或語法",
+            "reconnectSuggestionsLoading": "正在搜尋本地庫...",
+            "reconnectSuggestionsEmpty": "本地庫中沒有符合的 LoRA",
+            "reconnectMatchSameHash": "相同雜湊",
+            "reconnectMatchSameVersion": "相同模型版本",
+            "reconnectMatchSimilarFilename": "相似檔案名稱",
+            "reconnectMatchSimilarName": "相似名稱",
+            "undoReconnect": "撤銷",
+            "undoReconnectTooltip": "恢復此條目在重新關聯前的關聯",
+            "undoReconnectTooltipNamed": "恢復為 {name}（重新關聯前的關聯）",
             "viewOnCivitai": "在 CivitAI 上檢視",
             "openLoraDetails": "在 LoRA 庫中檢視 {name}",
-            "openCheckpointDetails": "在模型庫中檢視 {name}"
+            "openCheckpointDetails": "在模型庫中檢視 {name}",
+            "checkpointDeletedTooltip": "此 Checkpoint 已從來源刪除，無法再下載 - 請使用本地模型重新關聯",
+            "checkpointHashInvalidTooltip": "此 Checkpoint 的雜湊無法在 CivitAI 上解析 - 模型可能已更新",
+            "reconnectCheckpoint": "重新關聯",
+            "reconnectCheckpointTooltip": "與本地 Checkpoint 重新關聯",
+            "checkpointReconnectInstructions": "輸入 Checkpoint 名稱以重新關聯：",
+            "checkpointReconnectPlaceholder": "輸入 Checkpoint 名稱",
+            "checkpointReconnectSuggestionsEmpty": "本地庫中沒有符合的 Checkpoint"
         },
         "controls": {
             "import": {
@@ -1599,8 +1664,8 @@
                 "showCount": "顯示範例（{count}）",
                 "hideExamples": "隱藏範例",
                 "addExamples": "新增範例",
-                "previousExample": "上一個範例",
-                "nextExample": "下一個範例",
+                "previousExample": "上一個範例（[）",
+                "nextExample": "下一個範例（]）",
                 "noExamples": "沒有可用的範例圖片",
                 "addMoreExamples": "新增更多範例",
                 "dragDrop": "拖放圖片或影片到此處",
@@ -2043,7 +2108,10 @@
             "preparingForDownloadFailed": "準備下載 LoRA 時發生錯誤",
             "enterLoraName": "請輸入 LoRA 名稱或語法",
             "reconnectedSuccessfully": "LoRA 重新連結成功",
+            "reconnectBaseModelMismatch": "已重新關聯，但基礎模型不同（配方：{recipe}，LoRA：{lora}）——兩者架構相容",
             "reconnectFailed": "LoRA 重新連結錯誤：{message}",
+            "loraRestored": "LoRA 已恢復為重新關聯前的關聯",
+            "loraRestoreFailed": "LoRA 恢復錯誤：{message}",
             "noPromptToSend": "沒有可發送的提示詞",
             "cannotSend": "無法傳送配方：缺少配方 ID",
             "sendFailed": "傳送配方到工作流失敗",
@@ -2051,6 +2119,13 @@
             "missingCheckpointPath": "缺少Checkpoint路徑",
             "missingCheckpointInfo": "缺少Checkpoint資訊",
             "downloadCheckpointFailed": "下載Checkpoint失敗：{message}",
+            "enterCheckpointName": "請輸入 Checkpoint 名稱",
+            "checkpointReconnectedSuccessfully": "Checkpoint 重新連結成功",
+            "reconnectCheckpointBaseModelMismatch": "已重新關聯，但基礎模型不同（配方：{recipe}，Checkpoint：{checkpoint}）——兩者架構相容",
+            "checkpointReconnectFailed": "Checkpoint 重新連結錯誤：{message}",
+            "checkpointRestored": "Checkpoint 已恢復為重新關聯前的關聯",
+            "checkpointRestoreFailed": "Checkpoint 恢復錯誤：{message}",
+            "checkpointDownloadUnavailable": "缺少 CivitAI 標識，無法下載此 Checkpoint - 請嘗試使用本地 Checkpoint 重新關聯",
             "missingLoraDownloadInfo": "缺少此 LoRA 的下載資訊",
             "hashNotFoundOnCivitai": "此 LoRA 雜湊無法在 CivitAI 上解析——模型可能已更新或雜湊無效",
             "downloadLoraFailed": "下載 LoRA 失敗：{message}",

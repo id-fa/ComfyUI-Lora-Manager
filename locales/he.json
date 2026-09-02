@@ -868,6 +868,21 @@
             "previousWithShortcut": "המתכון הקודם (←)",
             "nextWithShortcut": "המתכון הבא (→)"
         },
+        "modal": {
+            "metadata": {
+                "id": "ID"
+            },
+            "actions": {
+                "openFileLocation": "פתח מיקום קובץ",
+                "copyId": "העתק מזהה מתכון"
+            },
+            "openFileLocation": {
+                "success": "מיקום הקובץ נפתח בהצלחה",
+                "failed": "פתיחת מיקום הקובץ נכשלה",
+                "copied": "הנתיב הועתק ללוח העריכה: {{path}}",
+                "clipboardFallback": "נתיב: {{path}}"
+            }
+        },
         "workflow": {
             "sendWorkflow": "שלח workflow ל-ComfyUI",
             "sent": "ה-workflow נשלח ל-ComfyUI",
@@ -898,14 +913,64 @@
             "notInLibraryTooltip": "מודל זה לא נמצא בספרייה שלך",
             "deletedTooltip": "LoRA זה נמחק מהמקור ואינו זמין יותר להורדה",
             "hashInvalidTooltip": "לא ניתן לפתור את ה-hash של ה-LoRA ב-CivitAI - ייתכן שהמודל עודכן",
+            "noLorasAssociated": "אין LoRAs המשויכים למתכון זה",
+            "noLorasWhyToggle": "למה אין LoRAs?",
+            "noLorasImportMethod": "שיטת ייבוא",
+            "noLorasInferredNote": "סיבה אפשרית (משוערת) — מתכון זה יובא לפני שנרשמו אבחוני ייבוא.",
+            "noLorasChannels": {
+                "batch_import_url": "ייבוא בכמות גדולה (URL של תמונה)",
+                "batch_import_local": "ייבוא בכמות גדולה (קובץ מקומי)",
+                "url": "ייבוא מ-URL של תמונה",
+                "local": "ייבוא קובץ מקומי",
+                "upload": "העלאת תמונה",
+                "widget": "נשמר מה-workflow",
+                "reimport_url": "ייבוא מחדש (URL של תמונה)",
+                "reimport_local": "ייבוא מחדש (קובץ מקומי)"
+            },
+            "noLorasReasons": {
+                "no_loras_used": "מטא-הנתונים של היצירה שלמים ואינם מפנים ל-LoRAs כלשהם.",
+                "api_meta_no_lora_resources": "ה-API של המקור לא החזיר נתוני משאבי LoRA עבור תמונה זו. LoRAs המוצגים בעמוד CivitAI עשויים להגיע מנתונים פנימיים שה-API הציבורי אינו חושף.",
+                "api_meta_missing": "ה-API של המקור לא החזיר מטא-נתוני יצירה עבור תמונה זו.",
+                "no_embedded_metadata": "לתמונה אין מטא-נתוני יצירה מוטבעים, ולכן לא ניתן היה לשחזר את מידע ה-LoRA.",
+                "workflow_metadata_limited": "המטא-נתונים המוטבעים של התמונה הם workflow של ComfyUI; חילוץ מידע LoRA מתוך workflows מוגבל.",
+                "video_no_metadata": "קבצי וידאו אינם נושאים מטא-נתוני יצירה מוטבעים.",
+                "metadata_unsupported": "התמונה מכילה מטא-נתונים בפורמט שלא ניתן לנתח.",
+                "unknown": "לא ניתן היה לקבוע את הסיבה מנתוני המתכון השמורים."
+            },
+            "noLorasDetails": {
+                "apiMetaFields": "שדות מטא-נתונים של API",
+                "modelVersionIds": "מספר מזהי גרסת מודל שדווחו",
+                "embeddedMetadata": "מטא-נתונים מוטבעים",
+                "present": "נמצאו",
+                "absent": "אין"
+            },
             "download": "הורדה",
             "downloadLoraTooltip": "הורד את ה-LoRA הזה",
             "preparingDownload": "מכין את ההורדה...",
             "reconnect": "חבר מחדש",
             "reconnectTooltip": "חבר מחדש עם LoRA מקומי",
+            "reconnectInstructions": "הזן תחביר או שם של LoRA לחיבור מחדש:",
+            "reconnectExample": "דוגמה: <lora:name:1> או רק את השם",
+            "reconnectPlaceholder": "הזן שם או תחביר של LoRA",
+            "reconnectSuggestionsLoading": "מחפש בספרייה המקומית...",
+            "reconnectSuggestionsEmpty": "לא נמצאו LoRAs תואמים בספרייה המקומית שלך",
+            "reconnectMatchSameHash": "אותו hash",
+            "reconnectMatchSameVersion": "אותה גרסת מודל",
+            "reconnectMatchSimilarFilename": "שם קובץ דומה",
+            "reconnectMatchSimilarName": "שם דומה",
+            "undoReconnect": "בטל",
+            "undoReconnectTooltip": "שחזר את השיוך שהיה לרשומה זו לפני החיבור מחדש",
+            "undoReconnectTooltipNamed": "שחזר ל-{name} (השיוך לפני החיבור מחדש)",
             "viewOnCivitai": "הצג ב-CivitAI",
             "openLoraDetails": "הצג את {name} בספריית ה-LoRA",
-            "openCheckpointDetails": "הצג את {name} בספריית המודלים"
+            "openCheckpointDetails": "הצג את {name} בספריית המודלים",
+            "checkpointDeletedTooltip": "Checkpoint זה נמחק מהמקור ואינו זמין עוד להורדה - חבר אותו מחדש עם מודל מקומי",
+            "checkpointHashInvalidTooltip": "לא ניתן לפתור את ה-hash של Checkpoint זה ב-CivitAI - ייתכן שהמודל עודכן",
+            "reconnectCheckpoint": "חבר מחדש",
+            "reconnectCheckpointTooltip": "חבר מחדש עם Checkpoint מקומי",
+            "checkpointReconnectInstructions": "הזן שם של Checkpoint לחיבור מחדש:",
+            "checkpointReconnectPlaceholder": "הזן שם של Checkpoint",
+            "checkpointReconnectSuggestionsEmpty": "לא נמצאו Checkpoints תואמים בספרייה המקומית שלך"
         },
         "controls": {
             "import": {
@@ -1599,8 +1664,8 @@
                 "showCount": "הצג דוגמאות ({count})",
                 "hideExamples": "הסתר דוגמאות",
                 "addExamples": "הוסף דוגמאות",
-                "previousExample": "דוגמה קודמת",
-                "nextExample": "דוגמה הבאה",
+                "previousExample": "דוגמה קודמת ([)",
+                "nextExample": "דוגמה הבאה (])",
                 "noExamples": "אין תמונות דוגמה זמינות",
                 "addMoreExamples": "הוסף עוד דוגמאות",
                 "dragDrop": "גרור ושחרר תמונות או סרטונים כאן",
@@ -2043,7 +2108,10 @@
             "preparingForDownloadFailed": "שגיאה בהכנת LoRAs להורדה",
             "enterLoraName": "אנא הזן שם LoRA או תחביר",
             "reconnectedSuccessfully": "LoRA קושר מחדש בהצלחה",
+            "reconnectBaseModelMismatch": "הקישור מחדש הצליח, אך מודלי הבסיס שונים (מתכון: {recipe}, LoRA: {lora}) — הם תואמים מבחינת הארכיטקטורה",
             "reconnectFailed": "שגיאה בקישור מחדש של LoRA: {message}",
+            "loraRestored": "LoRA שוחזר לשיוך הקודם",
+            "loraRestoreFailed": "שגיאה בשחזור LoRA: {message}",
             "noPromptToSend": "אין פרומפט לשליחה",
             "cannotSend": "לא ניתן לשלוח מתכון: חסר מזהה מתכון",
             "sendFailed": "שליחת המתכון ל-workflow נכשלה",
@@ -2051,6 +2119,13 @@
             "missingCheckpointPath": "נתיב ה-checkpoint אינו זמין",
             "missingCheckpointInfo": "חסרים פרטי checkpoint",
             "downloadCheckpointFailed": "הורדת checkpoint נכשלה: {message}",
+            "enterCheckpointName": "הזן שם של Checkpoint",
+            "checkpointReconnectedSuccessfully": "Checkpoint קושר מחדש בהצלחה",
+            "reconnectCheckpointBaseModelMismatch": "הקישור מחדש הצליח, אך מודלי הבסיס שונים (מתכון: {recipe}, Checkpoint: {checkpoint}) — הם תואמים מבחינת הארכיטקטורה",
+            "checkpointReconnectFailed": "שגיאה בקישור מחדש של Checkpoint: {message}",
+            "checkpointRestored": "Checkpoint שוחזר לשיוך הקודם",
+            "checkpointRestoreFailed": "שגיאה בשחזור Checkpoint: {message}",
+            "checkpointDownloadUnavailable": "לא ניתן להוריד Checkpoint זה ללא מזהי CivitAI - נסה לחבר אותו מחדש עם Checkpoint מקומי",
             "missingLoraDownloadInfo": "חסר מידע הורדה עבור LoRA זה",
             "hashNotFoundOnCivitai": "לא ניתן לפתור את ה-hash של ה-LoRA ב-CivitAI - ייתכן שהמודל עודכן או שה-hash אינו תקין",
             "downloadLoraFailed": "הורדת ה-LoRA נכשלה: {message}",

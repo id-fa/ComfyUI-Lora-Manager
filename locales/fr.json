@@ -868,6 +868,21 @@
             "previousWithShortcut": "Recette précédente (←)",
             "nextWithShortcut": "Recette suivante (→)"
         },
+        "modal": {
+            "metadata": {
+                "id": "ID"
+            },
+            "actions": {
+                "openFileLocation": "Ouvrir l’emplacement du fichier",
+                "copyId": "Copier l’ID de la Recipe"
+            },
+            "openFileLocation": {
+                "success": "Emplacement du fichier ouvert avec succès",
+                "failed": "Échec de l’ouverture de l’emplacement du fichier",
+                "copied": "Chemin copié dans le presse-papiers: {{path}}",
+                "clipboardFallback": "Chemin: {{path}}"
+            }
+        },
         "workflow": {
             "sendWorkflow": "Envoyer le workflow vers ComfyUI",
             "sent": "Workflow envoyé vers ComfyUI",
@@ -898,14 +913,64 @@
             "notInLibraryTooltip": "Ce modèle n'est pas dans votre bibliothèque",
             "deletedTooltip": "Ce LoRA a été supprimé de la source et ne peut plus être téléchargé",
             "hashInvalidTooltip": "Ce hash de LoRA ne peut pas être résolu sur CivitAI - le modèle a peut-être été mis à jour",
+            "noLorasAssociated": "Aucune LoRA associée à cette Recipe",
+            "noLorasWhyToggle": "Pourquoi aucune LoRA ?",
+            "noLorasImportMethod": "Méthode d'import",
+            "noLorasInferredNote": "Raison possible (déduite) — cette Recipe a été importée avant l'enregistrement des diagnostics d'import.",
+            "noLorasChannels": {
+                "batch_import_url": "Import groupé (URL d'image)",
+                "batch_import_local": "Import groupé (fichier local)",
+                "url": "Import d'une URL d'image",
+                "local": "Import d'un fichier local",
+                "upload": "Téléversement d'image",
+                "widget": "Enregistrée depuis le Workflow",
+                "reimport_url": "Réimport (URL d'image)",
+                "reimport_local": "Réimport (fichier local)"
+            },
+            "noLorasReasons": {
+                "no_loras_used": "Les métadonnées de génération sont complètes et ne référencent aucune LoRA.",
+                "api_meta_no_lora_resources": "L'API source n'a renvoyé aucune donnée de ressource LoRA pour cette image. Les LoRAs affichées sur la page CivitAI peuvent provenir de données internes que l'API publique n'expose pas.",
+                "api_meta_missing": "L'API source n'a renvoyé aucune métadonnée de génération pour cette image.",
+                "no_embedded_metadata": "L'image ne contient aucune métadonnée de génération intégrée ; les informations LoRA n'ont donc pas pu être récupérées.",
+                "workflow_metadata_limited": "Les métadonnées intégrées à l'image sont un Workflow ComfyUI ; l'extraction des informations LoRA à partir des Workflows est limitée.",
+                "video_no_metadata": "Les fichiers vidéo ne contiennent pas de métadonnées de génération intégrées.",
+                "metadata_unsupported": "L'image contient des métadonnées dans un format non analysable.",
+                "unknown": "La raison n'a pas pu être déterminée à partir des données de la Recipe enregistrée."
+            },
+            "noLorasDetails": {
+                "apiMetaFields": "Champs de métadonnées de l'API",
+                "modelVersionIds": "IDs de version de modèle signalés",
+                "embeddedMetadata": "Métadonnées intégrées",
+                "present": "trouvées",
+                "absent": "aucune"
+            },
             "download": "Télécharger",
             "downloadLoraTooltip": "Télécharger ce LoRA",
             "preparingDownload": "Préparation du téléchargement...",
             "reconnect": "Reconnecter",
             "reconnectTooltip": "Reconnecter avec un LoRA local",
+            "reconnectInstructions": "Entrez la syntaxe ou le nom du LoRA à reconnecter:",
+            "reconnectExample": "Exemple: <lora:name:1> ou simplement le nom",
+            "reconnectPlaceholder": "Entrez le nom ou la syntaxe du LoRA",
+            "reconnectSuggestionsLoading": "Recherche dans la bibliothèque locale...",
+            "reconnectSuggestionsEmpty": "Aucun LoRA correspondant dans votre bibliothèque locale",
+            "reconnectMatchSameHash": "Hash identique",
+            "reconnectMatchSameVersion": "Même version du modèle",
+            "reconnectMatchSimilarFilename": "Nom de fichier similaire",
+            "reconnectMatchSimilarName": "Nom similaire",
+            "undoReconnect": "Annuler",
+            "undoReconnectTooltip": "Restaurer l'association que cette entrée avait avant la reconnexion",
+            "undoReconnectTooltipNamed": "Restaurer vers {name} (l'association avant la reconnexion)",
             "viewOnCivitai": "Voir sur CivitAI",
             "openLoraDetails": "Voir {name} dans la bibliothèque LoRA",
-            "openCheckpointDetails": "Voir {name} dans la bibliothèque de modèles"
+            "openCheckpointDetails": "Voir {name} dans la bibliothèque de modèles",
+            "checkpointDeletedTooltip": "Ce checkpoint a été supprimé de la source et ne peut plus être téléchargé - reconnectez-le avec un modèle local",
+            "checkpointHashInvalidTooltip": "Le hash de ce checkpoint ne peut pas être résolu sur CivitAI - le modèle a peut-être été mis à jour",
+            "reconnectCheckpoint": "Reconnecter",
+            "reconnectCheckpointTooltip": "Reconnecter avec un checkpoint local",
+            "checkpointReconnectInstructions": "Entrez le nom du checkpoint à reconnecter:",
+            "checkpointReconnectPlaceholder": "Entrez le nom du checkpoint",
+            "checkpointReconnectSuggestionsEmpty": "Aucun checkpoint correspondant dans votre bibliothèque locale"
         },
         "controls": {
             "import": {
@@ -1599,8 +1664,8 @@
                 "showCount": "Afficher les exemples ({count})",
                 "hideExamples": "Masquer les exemples",
                 "addExamples": "Ajouter des exemples",
-                "previousExample": "Exemple précédent",
-                "nextExample": "Exemple suivant",
+                "previousExample": "Exemple précédent ([)",
+                "nextExample": "Exemple suivant (])",
                 "noExamples": "Aucune image d'exemple disponible",
                 "addMoreExamples": "Ajouter d'autres exemples",
                 "dragDrop": "Glissez-déposez des images ou des vidéos ici",
@@ -2043,7 +2108,10 @@
             "preparingForDownloadFailed": "Erreur lors de la préparation des LoRAs pour le téléchargement",
             "enterLoraName": "Veuillez entrer un nom ou une syntaxe LoRA",
             "reconnectedSuccessfully": "LoRA reconnecté avec succès",
+            "reconnectBaseModelMismatch": "Reconnexion effectuée, mais les modèles de base diffèrent (Recipe : {recipe}, LoRA : {lora}) — ils sont compatibles au niveau architectural",
             "reconnectFailed": "Erreur lors de la reconnexion du LoRA : {message}",
+            "loraRestored": "LoRA restauré à son association précédente",
+            "loraRestoreFailed": "Erreur lors de la restauration du LoRA : {message}",
             "noPromptToSend": "Aucun prompt à envoyer",
             "cannotSend": "Impossible d'envoyer la recipe : ID de recipe manquant",
             "sendFailed": "Échec de l'envoi de la recipe vers le workflow",
@@ -2051,6 +2119,13 @@
             "missingCheckpointPath": "Chemin du checkpoint indisponible",
             "missingCheckpointInfo": "Informations sur le checkpoint manquantes",
             "downloadCheckpointFailed": "Échec du téléchargement du checkpoint : {message}",
+            "enterCheckpointName": "Veuillez saisir un nom de checkpoint",
+            "checkpointReconnectedSuccessfully": "Checkpoint reconnecté avec succès",
+            "reconnectCheckpointBaseModelMismatch": "Reconnexion effectuée, mais les modèles de base diffèrent (Recipe : {recipe}, checkpoint : {checkpoint}) — ils sont compatibles au niveau architectural",
+            "checkpointReconnectFailed": "Erreur lors de la reconnexion du checkpoint : {message}",
+            "checkpointRestored": "Checkpoint restauré à son association précédente",
+            "checkpointRestoreFailed": "Erreur lors de la restauration du checkpoint : {message}",
+            "checkpointDownloadUnavailable": "Ce checkpoint ne peut pas être téléchargé sans identifiants CivitAI - essayez de le reconnecter avec un checkpoint local",
             "missingLoraDownloadInfo": "Informations de téléchargement manquantes pour ce LoRA",
             "hashNotFoundOnCivitai": "Ce hash de LoRA ne peut pas être résolu sur CivitAI - le modèle a peut-être été mis à jour ou le hash est invalide",
             "downloadLoraFailed": "Échec du téléchargement du LoRA : {message}",

@@ -868,6 +868,21 @@
             "previousWithShortcut": "前のレシピ（←）",
             "nextWithShortcut": "次のレシピ（→）"
         },
+        "modal": {
+            "metadata": {
+                "id": "ID"
+            },
+            "actions": {
+                "openFileLocation": "ファイルの場所を開く",
+                "copyId": "レシピIDをコピー"
+            },
+            "openFileLocation": {
+                "success": "ファイルの場所を正常に開きました",
+                "failed": "ファイルの場所を開くのに失敗しました",
+                "copied": "パスをクリップボードにコピーしました: {{path}}",
+                "clipboardFallback": "パス: {{path}}"
+            }
+        },
         "workflow": {
             "sendWorkflow": "ワークフローをComfyUIへ送信",
             "sent": "ワークフローをComfyUIへ送信しました",
@@ -898,14 +913,64 @@
             "notInLibraryTooltip": "このモデルはライブラリにありません",
             "deletedTooltip": "この LoRA は配信元から削除されたため、ダウンロードできません",
             "hashInvalidTooltip": "このLoRAハッシュはCivitAIで解決できません - モデルが更新された可能性があります",
+            "noLorasAssociated": "このレシピに関連付けられた LoRA はありません",
+            "noLorasWhyToggle": "LoRA がない理由",
+            "noLorasImportMethod": "インポート方法",
+            "noLorasInferredNote": "考えられる理由（推定）— このレシピはインポート診断が記録される前にインポートされました。",
+            "noLorasChannels": {
+                "batch_import_url": "一括インポート（画像 URL）",
+                "batch_import_local": "一括インポート（ローカルファイル）",
+                "url": "画像 URL からのインポート",
+                "local": "ローカルファイルのインポート",
+                "upload": "画像のアップロード",
+                "widget": "ワークフローから保存",
+                "reimport_url": "再インポート（画像 URL）",
+                "reimport_local": "再インポート（ローカルファイル）"
+            },
+            "noLorasReasons": {
+                "no_loras_used": "生成メタデータは完全で、LoRA への参照は含まれていません。",
+                "api_meta_no_lora_resources": "ソース API がこの画像の LoRA リソースデータを返しませんでした。CivitAI ページに表示される LoRA は、公開 API では公開されない内部データに由来する場合があります。",
+                "api_meta_missing": "ソース API がこの画像の生成メタデータを返しませんでした。",
+                "no_embedded_metadata": "画像に埋め込まれた生成メタデータがないため、LoRA 情報を復元できませんでした。",
+                "workflow_metadata_limited": "画像に埋め込まれたメタデータは ComfyUI ワークフローです。ワークフローからの LoRA 情報の抽出には限界があります。",
+                "video_no_metadata": "動画ファイルには埋め込み生成メタデータがありません。",
+                "metadata_unsupported": "画像に解析できない形式のメタデータが含まれています。",
+                "unknown": "保存されたレシピデータから理由を特定できませんでした。"
+            },
+            "noLorasDetails": {
+                "apiMetaFields": "API メタデータフィールド",
+                "modelVersionIds": "報告されたモデルバージョン ID 数",
+                "embeddedMetadata": "埋め込みメタデータ",
+                "present": "あり",
+                "absent": "なし"
+            },
             "download": "ダウンロード",
             "downloadLoraTooltip": "この LoRA をダウンロード",
             "preparingDownload": "ダウンロードを準備中...",
             "reconnect": "再接続",
             "reconnectTooltip": "ローカルの LoRA と再接続",
+            "reconnectInstructions": "再接続する LoRA の構文または名前を入力してください：",
+            "reconnectExample": "例：<lora:name:1> または名前のみ",
+            "reconnectPlaceholder": "LoRA 名または構文を入力",
+            "reconnectSuggestionsLoading": "ローカルライブラリを検索中...",
+            "reconnectSuggestionsEmpty": "ローカルライブラリに一致するLoRAがありません",
+            "reconnectMatchSameHash": "同じハッシュ",
+            "reconnectMatchSameVersion": "同じモデルバージョン",
+            "reconnectMatchSimilarFilename": "類似のファイル名",
+            "reconnectMatchSimilarName": "類似の名前",
+            "undoReconnect": "元に戻す",
+            "undoReconnectTooltip": "このエントリーを再接続前の関連付けに戻します",
+            "undoReconnectTooltipNamed": "{name} に戻す（再接続前の関連付け）",
             "viewOnCivitai": "CivitAI で表示",
             "openLoraDetails": "LoRA ライブラリで {name} を表示",
-            "openCheckpointDetails": "モデルライブラリで {name} を表示"
+            "openCheckpointDetails": "モデルライブラリで {name} を表示",
+            "checkpointDeletedTooltip": "この Checkpoint はソースから削除されたため、ダウンロードできません - ローカルモデルで再接続してください",
+            "checkpointHashInvalidTooltip": "この Checkpoint のハッシュは CivitAI で解決できません - モデルが更新された可能性があります",
+            "reconnectCheckpoint": "再接続",
+            "reconnectCheckpointTooltip": "ローカルの Checkpoint と再接続",
+            "checkpointReconnectInstructions": "再接続する Checkpoint の名前を入力してください：",
+            "checkpointReconnectPlaceholder": "Checkpoint 名を入力",
+            "checkpointReconnectSuggestionsEmpty": "ローカルライブラリに一致するCheckpointがありません"
         },
         "controls": {
             "import": {
@@ -1599,8 +1664,8 @@
                 "showCount": "例を表示（{count}）",
                 "hideExamples": "例を非表示",
                 "addExamples": "例を追加",
-                "previousExample": "前の例",
-                "nextExample": "次の例",
+                "previousExample": "前の例（[）",
+                "nextExample": "次の例（]）",
                 "noExamples": "利用可能な例画像がありません",
                 "addMoreExamples": "さらに例を追加",
                 "dragDrop": "画像または動画をここにドラッグ＆ドロップ",
@@ -2043,7 +2108,10 @@
             "preparingForDownloadFailed": "ダウンロード用LoRAの準備中にエラーが発生しました",
             "enterLoraName": "LoRA名または構文を入力してください",
             "reconnectedSuccessfully": "LoRAが正常に再接続されました",
+            "reconnectBaseModelMismatch": "再接続しましたが、ベースモデルが異なります（レシピ：{recipe}、LoRA：{lora}）— アーキテクチャ互換です",
             "reconnectFailed": "LoRA再接続エラー：{message}",
+            "loraRestored": "LoRAが以前の関連付けに復元されました",
+            "loraRestoreFailed": "LoRA復元エラー：{message}",
             "noPromptToSend": "送信するプロンプトがありません",
             "cannotSend": "レシピを送信できません：レシピIDがありません",
             "sendFailed": "レシピのワークフローへの送信に失敗しました",
@@ -2051,6 +2119,13 @@
             "missingCheckpointPath": "Checkpointのパスがありません",
             "missingCheckpointInfo": "Checkpoint情報が不足しています",
             "downloadCheckpointFailed": "Checkpointのダウンロードに失敗しました: {message}",
+            "enterCheckpointName": "Checkpoint 名を入力してください",
+            "checkpointReconnectedSuccessfully": "Checkpointが正常に再接続されました",
+            "reconnectCheckpointBaseModelMismatch": "再接続しましたが、ベースモデルが異なります（レシピ：{recipe}、Checkpoint：{checkpoint}）— アーキテクチャ互換です",
+            "checkpointReconnectFailed": "Checkpoint再接続エラー：{message}",
+            "checkpointRestored": "Checkpoint が以前の関連付けに復元されました",
+            "checkpointRestoreFailed": "Checkpoint復元エラー：{message}",
+            "checkpointDownloadUnavailable": "CivitAI の識別子がないため、この Checkpoint をダウンロードできません - ローカルの Checkpoint と再接続してみてください",
             "missingLoraDownloadInfo": "この LoRA のダウンロード情報がありません",
             "hashNotFoundOnCivitai": "このLoRAハッシュはCivitAIで解決できません - モデルが更新されたか、ハッシュが無効な可能性があります",
             "downloadLoraFailed": "LoRA のダウンロードに失敗しました: {message}",
