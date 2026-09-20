@@ -40,6 +40,9 @@ COMMON_ROUTE_DEFINITIONS: tuple[RouteDefinition, ...] = (
     RouteDefinition("POST", "/api/lm/{prefix}/verify-duplicates", "verify_duplicates"),
     RouteDefinition("POST", "/api/lm/{prefix}/move_model", "move_model"),
     RouteDefinition("POST", "/api/lm/{prefix}/move_models_bulk", "move_models_bulk"),
+    RouteDefinition("POST", "/api/lm/{prefix}/create-folder", "create_folder"),
+    RouteDefinition("POST", "/api/lm/{prefix}/delete-folder", "delete_folder"),
+    RouteDefinition("POST", "/api/lm/{prefix}/rename-folder", "rename_folder"),
     RouteDefinition("GET", "/api/lm/{prefix}/auto-organize", "auto_organize_models"),
     RouteDefinition("POST", "/api/lm/{prefix}/auto-organize", "auto_organize_models"),
     RouteDefinition(
@@ -68,6 +71,8 @@ COMMON_ROUTE_DEFINITIONS: tuple[RouteDefinition, ...] = (
         "GET", "/api/lm/{prefix}/model-description", "get_model_description"
     ),
     RouteDefinition("GET", "/api/lm/{prefix}/relative-paths", "get_relative_paths"),
+    RouteDefinition("PUT", "/api/lm/{prefix}/active-filters", "update_active_filters"),
+    RouteDefinition("GET", "/api/lm/{prefix}/active-filters", "get_active_filters"),
     RouteDefinition(
         "GET", "/api/lm/{prefix}/civitai/versions/{model_id}", "get_civitai_versions"
     ),

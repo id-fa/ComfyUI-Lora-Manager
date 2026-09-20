@@ -6,17 +6,19 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import sqlite3
 import time
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
+from typing import Any, Dict, Iterable, Iterator, List, Mapping, Optional, Sequence
 
 from .errors import RateLimitError, ResourceNotFoundError
 from .settings_manager import get_settings_manager
 from ..utils.cache_paths import CacheType, resolve_cache_path_with_migration
+from ..utils.constants import MODEL_WEIGHT_FILE_TYPES
 from ..utils.civitai_utils import rewrite_preview_url
 from ..utils.preview_selection import resolve_mature_threshold, select_preview_media
 
@@ -74,6 +76,12 @@ class ModelVersionRecord:
     sort_index: int = 0
     is_early_access: bool = False
     usage_control: Optional[str] = None  # "Download", "Generation", "InternalGeneration"
+    paid_access: Optional[str] = None  # JSON string of the CivitAI paidAccess DTO
+    is_paid: bool = False  # True when paidAccess.permanent is True (permanent paid gate)
+    # Number of downloadable weight files for the version (None when unknown,
+    # e.g. records persisted before this field existed or locally-synthesized
+    # entries). Mirrors the frontend isModelWeightFile() filter.
+    file_count: Optional[int] = None
 
 
 @dataclass
@@ -107,13 +115,17 @@ class ModelUpdateRecord:
         return [version.version_id for version in self.versions if version.is_in_library]
 
     def has_update(
-        self, hide_early_access: bool = False, hide_non_downloadable: bool = True
+        self,
+        hide_early_access: bool = False,
+        hide_non_downloadable: bool = True,
+        hide_paid: bool = False,
     ) -> bool:
         """Return True when a non-ignored remote version newer than the newest local copy is available.
 
         Args:
             hide_early_access: If True, exclude early access versions from update check.
             hide_non_downloadable: If True, exclude versions that don't allow downloads.
+            hide_paid: If True, exclude permanent paid versions from update check.
         """
 
         if self.should_ignore_model:
@@ -129,6 +141,7 @@ class ModelUpdateRecord:
                 not version.is_in_library
                 and not version.should_ignore
                 and not (hide_early_access and ModelUpdateRecord._is_early_access_active(version))
+                and not (hide_paid and version.is_paid)
                 and not (hide_non_downloadable and not ModelUpdateRecord._is_downloadable(version))
                 for version in self.versions
             )
@@ -137,6 +150,8 @@ class ModelUpdateRecord:
             if version.is_in_library or version.should_ignore:
                 continue
             if hide_early_access and ModelUpdateRecord._is_early_access_active(version):
+                continue
+            if hide_paid and version.is_paid:
                 continue
             if hide_non_downloadable and not ModelUpdateRecord._is_downloadable(version):
                 continue
@@ -152,6 +167,11 @@ class ModelUpdateRecord:
         1. If exact EA end time available (from single version API), use it for precise check
         2. Otherwise fallback to basic EA flag (from bulk API)
         """
+        # Permanent paid versions are not early access; they are filtered by
+        # hide_paid instead. Only timed gates count as early access.
+        if version.is_paid and not version.early_access_ends_at:
+            return False
+
         # Phase 2: Precise check with exact end time
         if version.early_access_ends_at:
             try:
@@ -178,6 +198,7 @@ class ModelUpdateRecord:
         local_base_model: Optional[str],
         hide_early_access: bool = False,
         hide_non_downloadable: bool = True,
+        hide_paid: bool = False,
     ) -> bool:
         """Return True when a newer remote version with the same base model exists.
 
@@ -186,6 +207,7 @@ class ModelUpdateRecord:
             local_base_model: The base model to filter by.
             hide_early_access: If True, exclude early access versions from update check.
             hide_non_downloadable: If True, exclude versions that don't allow downloads.
+            hide_paid: If True, exclude permanent paid versions from update check.
         """
 
         if self.should_ignore_model:
@@ -216,6 +238,8 @@ class ModelUpdateRecord:
                 continue
             if hide_early_access and ModelUpdateRecord._is_early_access_active(version):
                 continue
+            if hide_paid and version.is_paid:
+                continue
             if hide_non_downloadable and not ModelUpdateRecord._is_downloadable(version):
                 continue
             version_base = _normalize_base_model(version.base_model)
@@ -225,6 +249,51 @@ class ModelUpdateRecord:
                 return True
 
         return False
+
+    def has_update_for_local_bases(
+        self,
+        hide_early_access: bool = False,
+        hide_non_downloadable: bool = True,
+        hide_paid: bool = False,
+    ) -> bool:
+        """Return True when any locally-held base model scope has an update.
+
+        Aggregates :meth:`has_update_for_base` across every distinct base model
+        present among in-library versions. This mirrors the per-item evaluation
+        performed by ``BaseModelService._annotate_update_flags`` when the
+        ``version_grouping`` setting is ``same_base``, so callers reporting
+        "how many models have updates" stay aligned with what the Updates
+        filter displays. Use this instead of :meth:`has_update` for such
+        summaries; see issue #1083.
+
+        When no local base model is known (nothing held locally, or versions
+        never seen in any remote listing), falls back to :meth:`has_update` so
+        a model the item-level filter may still flag is not silently dropped
+        from summaries.
+        """
+
+        bases = {
+            _normalize_base_model(version.base_model)
+            for version in self.versions
+            if version.is_in_library
+        }
+        bases.discard(None)
+        if not bases:
+            return self.has_update(
+                hide_early_access=hide_early_access,
+                hide_non_downloadable=hide_non_downloadable,
+                hide_paid=hide_paid,
+            )
+        return any(
+            self.has_update_for_base(
+                None,
+                base,
+                hide_early_access=hide_early_access,
+                hide_non_downloadable=hide_non_downloadable,
+                hide_paid=hide_paid,
+            )
+            for base in bases
+        )
 
 
 class ModelUpdateService:
@@ -252,6 +321,9 @@ class ModelUpdateService:
             is_in_library INTEGER NOT NULL DEFAULT 0,
             should_ignore INTEGER NOT NULL DEFAULT 0,
             usage_control TEXT,
+            paid_access TEXT,
+            is_paid INTEGER NOT NULL DEFAULT 0,
+            file_count INTEGER,
             PRIMARY KEY (model_id, version_id),
             FOREIGN KEY(model_id) REFERENCES model_update_status(model_id) ON DELETE CASCADE
         );
@@ -491,6 +563,18 @@ class ModelUpdateService:
                 "ALTER TABLE model_update_versions "
                 "ADD COLUMN usage_control TEXT"
             ),
+            "paid_access": (
+                "ALTER TABLE model_update_versions "
+                "ADD COLUMN paid_access TEXT"
+            ),
+            "is_paid": (
+                "ALTER TABLE model_update_versions "
+                "ADD COLUMN is_paid INTEGER NOT NULL DEFAULT 0"
+            ),
+            "file_count": (
+                "ALTER TABLE model_update_versions "
+                "ADD COLUMN file_count INTEGER"
+            ),
         }
 
         for column, statement in migrations.items():
@@ -592,6 +676,9 @@ class ModelUpdateService:
                 should_ignore INTEGER NOT NULL DEFAULT 0,
                 early_access_ends_at TEXT,
                 is_early_access INTEGER NOT NULL DEFAULT 0,
+                paid_access TEXT,
+                is_paid INTEGER NOT NULL DEFAULT 0,
+                file_count INTEGER,
                 PRIMARY KEY (model_id, version_id),
                 FOREIGN KEY(model_id) REFERENCES model_update_status(model_id) ON DELETE CASCADE
             )
@@ -611,6 +698,9 @@ class ModelUpdateService:
             "should_ignore",
             "early_access_ends_at",
             "is_early_access",
+            "paid_access",
+            "is_paid",
+            "file_count",
         ]
         defaults = {
             "sort_index": "0",
@@ -623,6 +713,9 @@ class ModelUpdateService:
             "should_ignore": "0",
             "early_access_ends_at": "NULL",
             "is_early_access": "0",
+            "paid_access": "NULL",
+            "is_paid": "0",
+            "file_count": "NULL",
         }
 
         select_parts = []
@@ -738,6 +831,11 @@ class ModelUpdateService:
                 target_model_ids=target_filter,
             )
 
+        local_base_models = await self._collect_local_version_bases(
+            scanner,
+            target_model_ids=target_filter,
+        )
+
         results: Dict[int, ModelUpdateRecord] = {}
         prefetched: Dict[int, Mapping[Any, Any]] = {}
 
@@ -790,6 +888,7 @@ class ModelUpdateService:
                 force_refresh=force_refresh,
                 prefetched_response=prefetched.get(model_id),
                 all_local_version_ids=all_vids,
+                local_base_models=local_base_models,
             )
             if scanner.is_cancelled():
                 logger.info(f"{model_type.capitalize()} Update Service: Refresh cancelled by user")
@@ -824,12 +923,14 @@ class ModelUpdateService:
 
         local_versions = await self._collect_local_versions(scanner)
         version_ids = local_versions.get(model_id, [])
+        local_base_models = await self._collect_local_version_bases(scanner)
         return await self._refresh_single_model(
             model_type,
             model_id,
             version_ids,
             metadata_provider,
             force_refresh=force_refresh,
+            local_base_models=local_base_models,
         )
 
     async def update_in_library_versions(
@@ -936,17 +1037,30 @@ class ModelUpdateService:
         async with self._lock:
             return self._get_record(model_type, model_id)
 
-    async def has_update(self, model_type: str, model_id: int, hide_early_access: bool = False) -> bool:
+    async def has_update(
+        self,
+        model_type: str,
+        model_id: int,
+        hide_early_access: bool = False,
+        hide_paid: bool = False,
+    ) -> bool:
         """Determine if a model has updates pending."""
 
         record = await self.get_record(model_type, model_id)
-        return record.has_update(hide_early_access=hide_early_access) if record else False
+        return (
+            record.has_update(
+                hide_early_access=hide_early_access, hide_paid=hide_paid
+            )
+            if record
+            else False
+        )
 
     async def has_updates_bulk(
         self,
         model_type: str,
         model_ids: Sequence[int],
         hide_early_access: bool = False,
+        hide_paid: bool = False,
     ) -> Dict[int, bool]:
         """Return update availability for each model id in a single database pass."""
 
@@ -959,7 +1073,9 @@ class ModelUpdateService:
 
         return {
             model_id: (
-                records[model_id].has_update(hide_early_access=hide_early_access)
+                records[model_id].has_update(
+                    hide_early_access=hide_early_access, hide_paid=hide_paid
+                )
                 if model_id in records
                 else False
             )
@@ -990,6 +1106,7 @@ class ModelUpdateService:
         force_refresh: bool = False,
         prefetched_response: Optional[Mapping[str, Any]] = None,
         all_local_version_ids: Optional[Sequence[int]] = None,
+        local_base_models: Optional[Mapping[int, str]] = None,
     ) -> Optional[ModelUpdateRecord]:
         normalized_local = self._normalize_sequence(local_versions)
         # When folder-filtering, this carries the cross-folder version set
@@ -1114,6 +1231,7 @@ class ModelUpdateService:
                     existing,
                     now,
                     all_local_version_ids=normalized_all,
+                    local_base_models=local_base_models,
                 )
             else:
                 record = self._merge_with_local_versions(
@@ -1190,6 +1308,7 @@ class ModelUpdateService:
                         "earlyAccessEndsAt": _normalize_string(
                             entry.get("earlyAccessEndsAt")
                         ),
+                        "paidAccess": entry.get("paidAccess"),
                     }
         except RateLimitError:
             raise
@@ -1214,6 +1333,17 @@ class ModelUpdateService:
                     "earlyAccessEndsAt"
                 ):
                     version["earlyAccessEndsAt"] = extra["earlyAccessEndsAt"]
+                # Only backfill when the model-level response carries no *active*
+                # paidAccess signal: a present-but-empty DTO (e.g.
+                # {"permanent": false, "endsAt": null}) would otherwise block
+                # the authoritative by-hash data.
+                extra_paid = ModelUpdateService._normalize_paid_access(
+                    extra.get("paidAccess")
+                )
+                if extra_paid and not ModelUpdateService._normalize_paid_access(
+                    version.get("paidAccess")
+                ):
+                    version["paidAccess"] = extra["paidAccess"]
 
     @staticmethod
     def _collect_hashes_from_response(response: Mapping[str, Any]) -> Dict[int, str]:
@@ -1308,27 +1438,17 @@ class ModelUpdateService:
         await self._enrich_version_entries(metadata_provider, aggregated)
         return aggregated
 
-    async def _collect_local_versions(
-        self,
-        scanner,
+    @staticmethod
+    def _iter_local_civitai_items(
+        cache,
         *,
-        target_model_ids: Optional[Sequence[int]] = None,
-        folder_path: Optional[str] = None,
-    ) -> Dict[int, List[int]]:
-        cache = await scanner.get_cached_data()
-        mapping: Dict[int, set[int]] = {}
+        target_set: Optional[set[int]] = None,
+        normalized_folder: Optional[str] = None,
+    ) -> Iterator[tuple[int, int, Any]]:
+        """Yield ``(modelId, versionId, base_model)`` for each scannable item."""
+
         if not cache or not getattr(cache, "raw_data", None):
-            return {}
-
-        target_set = None
-        if target_model_ids:
-            target_set = set(target_model_ids)
-            if not target_set:
-                return {}
-
-        normalized_folder = None
-        if folder_path is not None:
-            normalized_folder = folder_path.replace("\\", "/").strip("/")
+            return
 
         for item in cache.raw_data:
             # Apply folder filter first (cheapest check)
@@ -1348,9 +1468,74 @@ class ModelUpdateService:
                 continue
             if target_set is not None and model_id not in target_set:
                 continue
+            yield model_id, version_id, item.get("base_model")
+
+    def _prepare_collection_filters(
+        self,
+        target_model_ids: Optional[Sequence[int]],
+        folder_path: Optional[str],
+    ) -> tuple[Optional[set[int]], Optional[str]]:
+        target_set: Optional[set[int]] = None
+        if target_model_ids:
+            target_set = set(target_model_ids)
+
+        normalized_folder = None
+        if folder_path is not None:
+            normalized_folder = folder_path.replace("\\", "/").strip("/")
+        return target_set, normalized_folder
+
+    async def _collect_local_versions(
+        self,
+        scanner,
+        *,
+        target_model_ids: Optional[Sequence[int]] = None,
+        folder_path: Optional[str] = None,
+    ) -> Dict[int, List[int]]:
+        cache = await scanner.get_cached_data()
+        mapping: Dict[int, set[int]] = {}
+        target_set, normalized_folder = self._prepare_collection_filters(
+            target_model_ids, folder_path
+        )
+
+        if target_model_ids and not target_set:
+            return {}
+
+        for model_id, version_id, _base_model in self._iter_local_civitai_items(
+            cache, target_set=target_set, normalized_folder=normalized_folder
+        ):
             mapping.setdefault(model_id, set()).add(version_id)
 
         return {model_id: sorted(ids) for model_id, ids in mapping.items()}
+
+    async def _collect_local_version_bases(
+        self,
+        scanner,
+        *,
+        target_model_ids: Optional[Sequence[int]] = None,
+    ) -> Dict[int, str]:
+        """Map version id -> base model from cache items.
+
+        Deliberately unfiltered by folder: synthesized in-library entries must
+        carry a base regardless of which folder triggered the refresh.
+        """
+
+        cache = await scanner.get_cached_data()
+        bases: Dict[int, str] = {}
+        target_set, _normalized_folder = self._prepare_collection_filters(
+            target_model_ids, None
+        )
+
+        if target_model_ids and not target_set:
+            return {}
+
+        for _model_id, version_id, base_model in self._iter_local_civitai_items(
+            cache, target_set=target_set
+        ):
+            normalized_base = _normalize_string(base_model)
+            if normalized_base:
+                bases[version_id] = normalized_base
+
+        return bases
 
     def _merge_with_local_versions(
         self,
@@ -1431,6 +1616,7 @@ class ModelUpdateService:
         timestamp: float,
         *,
         all_local_version_ids: Optional[Sequence[int]] = None,
+        local_base_models: Optional[Mapping[int, str]] = None,
     ) -> ModelUpdateRecord:
         local_set = set(local_versions)
         # When folder-filtering, also consider versions in other folders
@@ -1442,6 +1628,7 @@ class ModelUpdateService:
         )
         ignore_map = {version.version_id: version.should_ignore for version in existing.versions} if existing else {}
         preview_map = {version.version_id: version.preview_url for version in existing.versions} if existing else {}
+        file_count_map = {version.version_id: version.file_count for version in existing.versions} if existing else {}
         sort_map = {version.version_id: version.sort_index for version in existing.versions} if existing else {}
         existing_map = {version.version_id: version for version in existing.versions} if existing else {}
 
@@ -1464,11 +1651,19 @@ class ModelUpdateService:
                     early_access_ends_at=remote_version.early_access_ends_at,
                     is_early_access=remote_version.is_early_access,
                     usage_control=remote_version.usage_control,
+                    paid_access=remote_version.paid_access,
+                    is_paid=remote_version.is_paid,
+                    file_count=(
+                        remote_version.file_count
+                        if remote_version.file_count is not None
+                        else file_count_map.get(version_id)
+                    ),
                 )
             )
 
         missing_local = local_set - seen_ids
         if missing_local:
+            item_base_models = local_base_models or {}
             for version_id in sorted(missing_local):
                 existing_version = existing_map.get(version_id)
                 if existing_version:
@@ -1483,7 +1678,7 @@ class ModelUpdateService:
                         ModelVersionRecord(
                             version_id=version_id,
                             name=None,
-                            base_model=None,
+                            base_model=item_base_models.get(version_id),
                             released_at=None,
                             size_bytes=None,
                             preview_url=None,
@@ -1556,6 +1751,7 @@ class ModelUpdateService:
         base_model = _normalize_string(entry.get("baseModel"))
         released_at = _normalize_string(entry.get("publishedAt") or entry.get("createdAt"))
         size_bytes = self._extract_size_bytes(entry.get("files"))
+        file_count = self._extract_file_count(entry.get("files"))
         preview_url = self._extract_preview_url(entry.get("images"))
         early_access_ends_at = _normalize_string(entry.get("earlyAccessEndsAt"))
 
@@ -1563,6 +1759,18 @@ class ModelUpdateService:
         availability = _normalize_string(entry.get("availability"))
         is_early_access = availability == "EarlyAccess"
         usage_control = _normalize_string(entry.get("usageControl"))
+
+        # CivitAI's paidAccess DTO ({"permanent": bool, "endsAt": ISO|null})
+        # gates versions behind a paid tier while availability stays "Public".
+        paid_access = self._normalize_paid_access(entry.get("paidAccess"))
+        paid_access_json = json.dumps(paid_access) if paid_access else None
+        is_paid = bool(paid_access.get("permanent")) if paid_access else False
+        if early_access_ends_at is None and paid_access and paid_access.get("endsAt"):
+            early_access_ends_at = _normalize_string(paid_access.get("endsAt"))
+        # Only timed gates are early access; permanent paid versions are not
+        # (consumers filter them via is_paid), so the stored flag stays accurate.
+        if not is_early_access and paid_access and paid_access.get("endsAt"):
+            is_early_access = True
 
         return ModelVersionRecord(
             version_id=version_id,
@@ -1577,7 +1785,55 @@ class ModelUpdateService:
             sort_index=index,
             is_early_access=is_early_access,
             usage_control=usage_control,
+            paid_access=paid_access_json,
+            is_paid=is_paid,
+            file_count=file_count,
         )
+
+    @staticmethod
+    def _normalize_paid_access(value) -> Optional[Dict[str, Any]]:
+        """Normalize a CivitAI ``paidAccess`` DTO into a mapping.
+
+        Accepts a dict, None, or a JSON string (as carried by the by-hash
+        enrichment path) and returns ``{"permanent": bool, "endsAt": str|None}``
+        or None when the input carries no paid-access signal.
+        """
+        if value is None:
+            return None
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+            except (TypeError, ValueError):
+                return None
+            if not isinstance(parsed, dict):
+                return None
+            value = parsed
+        if not isinstance(value, Mapping):
+            return None
+        permanent = bool(value.get("permanent"))
+        ends_at = _normalize_string(value.get("endsAt"))
+        if not permanent and ends_at is None:
+            return None
+        return {"permanent": permanent, "endsAt": ends_at}
+
+    @staticmethod
+    def _extract_file_count(files) -> Optional[int]:
+        """Count downloadable weight files in a version entry's ``files`` list.
+
+        Returns None when the payload carries no files array (unknown), so
+        callers can distinguish "no weight files" from "no data".
+        """
+
+        if not isinstance(files, list):
+            return None
+        count = 0
+        for entry in files:
+            if not isinstance(entry, Mapping):
+                continue
+            entry_type = entry.get("type")
+            if isinstance(entry_type, str) and entry_type in MODEL_WEIGHT_FILE_TYPES:
+                count += 1
+        return count
 
     def _extract_size_bytes(self, files) -> Optional[int]:
         if not isinstance(files, Iterable):
@@ -1691,7 +1947,7 @@ class ModelUpdateService:
                     f"""
                     SELECT model_id, version_id, sort_index, name, base_model, released_at,
                            size_bytes, preview_url, is_in_library, should_ignore, early_access_ends_at,
-                           is_early_access, usage_control
+                           is_early_access, usage_control, paid_access, is_paid, file_count
                     FROM model_update_versions
                     WHERE model_id IN ({placeholders})
                     ORDER BY model_id ASC, sort_index ASC, version_id ASC
@@ -1720,6 +1976,9 @@ class ModelUpdateService:
                     sort_index=_normalize_int(row["sort_index"]) or 0,
                     is_early_access=bool(row["is_early_access"]),
                     usage_control=row["usage_control"],
+                    paid_access=row["paid_access"],
+                    is_paid=bool(row["is_paid"]),
+                    file_count=_normalize_int(row["file_count"]),
                 )
             )
 
@@ -1771,13 +2030,19 @@ class ModelUpdateService:
                 (record.model_id,),
             )
             for version in record.versions:
+                paid_access_value = (
+                    version.paid_access
+                    if version.paid_access is None
+                    or isinstance(version.paid_access, str)
+                    else json.dumps(version.paid_access)
+                )
                 conn.execute(
                     """
                     INSERT INTO model_update_versions (
                         version_id, model_id, sort_index, name, base_model, released_at,
                         size_bytes, preview_url, is_in_library, should_ignore, early_access_ends_at,
-                        is_early_access, usage_control
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        is_early_access, usage_control, paid_access, is_paid, file_count
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         version.version_id,
@@ -1793,6 +2058,9 @@ class ModelUpdateService:
                         version.early_access_ends_at,
                         1 if version.is_early_access else 0,
                         version.usage_control,
+                        paid_access_value,
+                        1 if version.is_paid else 0,
+                        version.file_count,
                     ),
                 )
             conn.commit()

@@ -5,7 +5,7 @@ import asyncio
 import time
 import shutil
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable, Dict, List, Mapping, Optional, Sequence, Set, Type, Union, cast
+from typing import Any, Awaitable, Callable, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Type, Union, cast
 
 from ..utils.models import BaseModelMetadata, autov3_from_civitai_files
 from ..config import config
@@ -15,6 +15,7 @@ from ..utils.civitai_utils import resolve_license_info
 from .model_cache import ModelCache
 from .model_hash_index import ModelHashIndex
 from .model_lifecycle_service import delete_model_artifacts, _require_path_in_library_roots
+from .model_sources import normalize_metadata_source
 from .service_registry import ServiceRegistry
 from .websocket_manager import ws_manager
 from .persistent_model_cache import get_persistent_cache
@@ -25,6 +26,28 @@ from .cache_health_monitor import CacheHealthMonitor, CacheHealthStatus
 
 logger = logging.getLogger(__name__)
 
+# Canonical set of weight-file extensions stripped when normalizing model
+# names for matching (ModelScanner.find_matching_models and the recipe rematch
+# filename key share this set). It is the union of the LoRA scanner set
+# ({".safetensors"}) and the Checkpoint scanner set (ComfyUI's
+# supported_pt_extensions plus ".gguf") so type-blind lookups (lora +
+# checkpoint merged) cover every format either scanner indexes. ".safebin"
+# is deliberately absent — no scanner indexes it, so a recipe entry
+# "model.safebin" must not be bound to a local "model.safetensors".
+WEIGHT_FILE_EXTENSIONS = frozenset(
+    {
+        ".safetensors",
+        ".ckpt",
+        ".pt",
+        ".pt2",
+        ".bin",
+        ".pth",
+        ".pkl",
+        ".sft",
+        ".gguf",
+    }
+)
+
 
 def _is_excluded_dir(name: str) -> bool:
     """Return True when a directory entry must be skipped during model walks.
@@ -33,6 +56,30 @@ def _is_excluded_dir(name: str) -> bool:
     appear in the library as ghost model entries.
     """
     return name == PENDING_DELETE_DIR_NAME
+
+
+def _is_hidden_relative_path(rel_path: str) -> bool:
+    """Return True when any segment of a relative path is a hidden directory."""
+    return any(part.startswith(".") for part in rel_path.replace(os.sep, "/").split("/"))
+
+
+def _file_name_stem(file_path: str) -> str:
+    """Return the extension-free file name of a normalized model path.
+
+    ``file_name`` cache/sidecar fields are defined as the on-disk stem, so this
+    is the authoritative value to compare stored names against (issue #1112).
+    """
+    return os.path.splitext(os.path.basename(file_path))[0]
+
+
+# Maps a scanner model type to the manager page type used in progress
+# broadcasts (e.g. 'lora' -> 'loras').
+PAGE_TYPE_MAP = {
+    'lora': 'loras',
+    'checkpoint': 'checkpoints',
+    'embedding': 'embeddings',
+    'other': 'other',
+}
 
 
 def _is_pending_delete_path(path: str) -> bool:
@@ -49,6 +96,10 @@ class CacheBuildResult:
     hash_index: ModelHashIndex
     tags_count: Dict[str, int]
     excluded_models: List[str]
+    # Every directory under the model roots (including empty ones) discovered
+    # during the scan, or None when the source has no folder information
+    # (e.g. a persisted snapshot predating folder recording).
+    all_folders: Optional[List[str]] = None
 
 class ModelScanner:
     """Base service for scanning and managing model files"""
@@ -104,6 +155,9 @@ class ModelScanner:
         self._name_display_mode = self._resolve_name_display_mode()
         self._cancel_requested = False  # Flag for cancellation
         self._autov3_backfill_scheduled = False  # One-time AutoV3 backfill trigger per process
+        # Guard against concurrent all-folders backfill walks (cold fallback
+        # for persisted snapshots that predate folder recording).
+        self._all_folders_backfill_running = False
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -114,6 +168,38 @@ class ModelScanner:
 
         # Register this service
         asyncio.create_task(self._register_service())
+
+    @property
+    def page_type(self) -> str:
+        """Manager page type used in progress broadcasts (e.g. 'loras')."""
+        return PAGE_TYPE_MAP.get(self.model_type, self.model_type)
+
+    async def _broadcast_scan_progress(
+        self,
+        status: str,
+        stage: str,
+        progress: int,
+        full_rebuild: bool,
+        **extra: Any,
+    ) -> None:
+        """Broadcast manual-refresh scan progress on the generic WS channel.
+
+        Best-effort only: broadcast failures must never affect the scan itself.
+        """
+        payload: Dict[str, Any] = {
+            'type': 'scan_progress',
+            'status': status,
+            'model_type': self.model_type,
+            'pageType': self.page_type,
+            'stage': stage,
+            'full_rebuild': full_rebuild,
+            'progress': progress,
+        }
+        payload.update(extra)
+        try:
+            await ws_manager.broadcast(payload)
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.error(f"Error broadcasting scan progress for {self.model_type}: {exc}")
 
     @property
     def cache_version(self) -> int:
@@ -134,8 +220,14 @@ class ModelScanner:
         """
         self._cache_version += 1
 
-    def on_library_changed(self) -> None:
-        """Reset caches when the active library changes."""
+    def on_library_changed(self, reconcile: bool = False) -> None:
+        """Reset caches when the active library changes.
+
+        When ``reconcile`` is True an incremental reconcile runs right after
+        the cache is re-hydrated, so newly configured roots are scanned and
+        entries for removed roots are purged. Used when scanner-affecting
+        settings (e.g. the Other Models toggles) change.
+        """
         self._persistent_cache = get_persistent_cache()
         self._cache = None
         self._hash_index = ModelHashIndex()
@@ -153,7 +245,7 @@ class ModelScanner:
         if loop and not loop.is_closed():
             self._loop = loop
             self.loop = loop
-            loop.create_task(self.initialize_in_background())
+            loop.create_task(self.initialize_in_background(reconcile=reconcile))
 
     def _resolve_name_display_mode(self) -> str:
         """Return the configured display mode for name sorting."""
@@ -305,8 +397,14 @@ class ModelScanner:
             'civitai': civitai_slim,
             'civitai_deleted': bool(get_value('civitai_deleted', False)),
             'skip_metadata_refresh': bool(get_value('skip_metadata_refresh', False)),
+            # External model source (Hugging Face / ModelScope / TensorArt).
+            # `source_url` + `source_platform` are canonical; `hf_url` stays in
+            # sync as a legacy alias (normalised below).
+            'source_platform': get_value('source_platform', '') or '',
+            'source_url': get_value('source_url', '') or '',
             'hf_url': get_value('hf_url', '') or '',
         }
+        normalize_metadata_source(entry)
 
         license_source: Dict[str, Any] = {}
         if isinstance(civitai_full, Mapping):
@@ -384,8 +482,14 @@ class ModelScanner:
         _, license_flags = resolve_license_info(license_source)
         entry['license_flags'] = license_flags
 
-    async def initialize_in_background(self) -> None:
-        """Initialize cache in background using thread pool"""
+    async def initialize_in_background(self, reconcile: bool = False) -> None:
+        """Initialize cache in background using thread pool
+
+        Args:
+            reconcile: When True and a persisted snapshot is hydrated, run an
+                incremental reconcile afterwards so the cache matches the
+                current root configuration.
+        """
         try:
             # Set initial empty cache to avoid None reference errors
             if self._cache is None:
@@ -399,12 +503,7 @@ class ModelScanner:
             self._is_initializing = True
             
             # Determine the page type based on model type
-            page_type_map = {
-                'lora': 'loras',
-                'checkpoint': 'checkpoints',
-                'embedding': 'embeddings'
-            }
-            page_type = page_type_map.get(self.model_type, self.model_type)
+            page_type = self.page_type
             
             # First, try to load from cache
             await ws_manager.broadcast_init_progress({
@@ -430,6 +529,11 @@ class ModelScanner:
                 logger.info(
                     f"{self.model_type.capitalize()} cache hydrated from persisted snapshot with {len(self._cache.raw_data)} models"
                 )
+                if reconcile:
+                    # Root configuration changed (e.g. Other Models toggles):
+                    # pick up newly enabled folders and drop rows for folders
+                    # that are no longer managed.
+                    await self.get_cached_data(force_refresh=True)
                 return
 
             # Persistent load failed; fall back to a full scan
@@ -500,16 +604,21 @@ class ModelScanner:
             self._is_initializing = False
     
     async def _load_persisted_cache(self, page_type: str) -> bool:
-        """Attempt to hydrate the in-memory cache from the SQLite snapshot."""
+        """Attempt to hydrate the in-memory cache from the SQLite snapshot.
+
+        The SQLite read and the per-model rebuild (entry adjustment, tag
+        counting, validation/repair, hash index reconstruction) run in the
+        default executor so the event loop stays responsive; only applying
+        the result to shared cache state happens on the loop.
+        """
         if not getattr(self, '_persistent_cache', None):
             return False
 
         loop = asyncio.get_event_loop()
         try:
-            persisted = await loop.run_in_executor(
+            rebuilt = await loop.run_in_executor(
                 None,
-                self._persistent_cache.load_cache,
-                self.model_type
+                self._rebuild_persisted_cache
             )
         except FileNotFoundError:
             return False
@@ -517,47 +626,14 @@ class ModelScanner:
             logger.debug("%s Scanner: Could not load persisted cache: %s", self.model_type.capitalize(), exc)
             return False
 
-        if not persisted or not persisted.raw_data:
+        if rebuilt is None:
             return False
 
-        hash_index = ModelHashIndex()
-        for sha_value, path in persisted.hash_rows:
-            if sha_value and path:
-                hash_index.add_entry(sha_value.lower(), path)
-
-        # Rebuild the AutoV3 index from the persisted autov3_index rows. These
-        # cover every known autov3 -> path mapping regardless of whether a
-        # sha256 row also exists for the same file.
-        for autov3_value, path in persisted.autov3_hash_rows:
-            if autov3_value and path:
-                hash_index.add_autov3(autov3_value.lower(), path)
-
-        tags_count: Dict[str, int] = {}
-        adjusted_raw_data: List[Dict[str, Any]] = []
-        for item in persisted.raw_data:
-            adjusted_item = self.adjust_cached_entry(dict(item))
-            adjusted_raw_data.append(adjusted_item)
-
-            for tag in adjusted_item.get('tags') or []:
-                tags_count[tag] = tags_count.get(tag, 0) + 1
-
-        # Validate cache entries and check health.
-        # Always use the validated/repaired entries — even when there are no
-        # invalid entries, auto_repair may have filled in missing optional
-        # fields (model_name, file_name, folder) with safe defaults on a copied
-        # working_entry.  Without this unconditional replacement the repaired
-        # copies are discarded and None values propagate to format_response.
-        # See issue #730.
-        valid_entries, invalid_entries = CacheEntryValidator.validate_batch(
-            adjusted_raw_data, auto_repair=True
-        )
-
-        # Always use the validated entries (repaired copies)
-        adjusted_raw_data = valid_entries
+        scan_result, invalid_entries = rebuilt
 
         if invalid_entries:
             monitor = CacheHealthMonitor()
-            report = monitor.check_health(adjusted_raw_data, auto_repair=True)
+            report = monitor.check_health(scan_result.raw_data, auto_repair=True)
 
             if report.status != CacheHealthStatus.HEALTHY:
                 # Broadcast health warning to frontend
@@ -567,31 +643,22 @@ class ModelScanner:
                     f"{report.invalid_entries} invalid entries, {report.repaired_entries} repaired"
                 )
 
-            # Use only valid entries
-            adjusted_raw_data = valid_entries
-
             # Rebuild tags count from valid entries only
             tags_count = {}
-            for item in adjusted_raw_data:
+            for item in scan_result.raw_data:
                 for tag in item.get('tags') or []:
                     tags_count[tag] = tags_count.get(tag, 0) + 1
+            scan_result.tags_count = tags_count
 
             # Remove invalid entries from hash index
             for invalid_entry in invalid_entries:
                 file_path = CacheEntryValidator.get_file_path_safe(invalid_entry)
                 sha256 = CacheEntryValidator.get_sha256_safe(invalid_entry)
                 if file_path:
-                    hash_index.remove_by_path(file_path, sha256)
-
-        scan_result = CacheBuildResult(
-            raw_data=adjusted_raw_data,
-            hash_index=hash_index,
-            tags_count=tags_count,
-            excluded_models=list(persisted.excluded_models)
-        )
+                    scan_result.hash_index.remove_by_path(file_path, sha256)
 
         await self._apply_scan_result(scan_result)
-        await self._sync_download_history(adjusted_raw_data, source='scan')
+        await self._sync_download_history(scan_result.raw_data, source='scan')
 
         await ws_manager.broadcast_init_progress({
             'stage': 'loading_cache',
@@ -615,6 +682,76 @@ class ModelScanner:
                 loop.create_task(self._run_autov3_backfill())
 
         return True
+
+    def _rebuild_persisted_cache(self) -> Optional[Tuple[CacheBuildResult, List[Dict[str, Any]]]]:
+        """Load the SQLite snapshot and rebuild a ready-to-apply scan result.
+
+        Runs entirely in a worker thread: it must not touch ``self._cache``,
+        the websocket manager, or any asyncio primitives. Returns ``None``
+        when no usable snapshot exists, otherwise a tuple of the scan result
+        (built from validated/repaired entries) and the invalid entries.
+        """
+        persisted = self._persistent_cache.load_cache(self.model_type)
+
+        if not persisted or not persisted.raw_data:
+            return None
+
+        # Drop entries the scanner no longer manages (e.g. an other-model
+        # sub_type the user just disabled) before rebuilding the indexes, so
+        # hash/autov3 lookups cannot resolve to unmanaged files either.
+        kept_items = [
+            item
+            for item in persisted.raw_data
+            if self._should_keep_cached_entry(item)
+        ]
+        kept_paths = {
+            item.get("file_path") for item in kept_items if item.get("file_path")
+        }
+
+        hash_index = ModelHashIndex()
+        for sha_value, path in persisted.hash_rows:
+            if sha_value and path and path in kept_paths:
+                hash_index.add_entry(sha_value.lower(), path)
+
+        # Rebuild the AutoV3 index from the persisted autov3_index rows. These
+        # cover every known autov3 -> path mapping regardless of whether a
+        # sha256 row also exists for the same file.
+        for autov3_value, path in persisted.autov3_hash_rows:
+            if autov3_value and path and path in kept_paths:
+                hash_index.add_autov3(autov3_value.lower(), path)
+
+        tags_count: Dict[str, int] = {}
+        adjusted_raw_data: List[Dict[str, Any]] = []
+        for item in kept_items:
+            # load_cache builds a fresh dict per row, and validate_batch below
+            # works on its own per-entry copy when auto_repair=True, so no
+            # additional dict copy is needed here.
+            adjusted_item = self.adjust_cached_entry(item)
+            adjusted_raw_data.append(adjusted_item)
+
+            for tag in adjusted_item.get('tags') or []:
+                tags_count[tag] = tags_count.get(tag, 0) + 1
+
+        # Validate cache entries and check health.
+        # Always use the validated/repaired entries — even when there are no
+        # invalid entries, auto_repair may have filled in missing optional
+        # fields (model_name, file_name, folder) with safe defaults on a copied
+        # working_entry.  Without this unconditional replacement the repaired
+        # copies are discarded and None values propagate to format_response.
+        # See issue #730.
+        valid_entries, invalid_entries = CacheEntryValidator.validate_batch(
+            adjusted_raw_data, auto_repair=True
+        )
+
+        # Always use the validated entries (repaired copies)
+        scan_result = CacheBuildResult(
+            raw_data=valid_entries,
+            hash_index=hash_index,
+            tags_count=tags_count,
+            excluded_models=list(persisted.excluded_models),
+            all_folders=list(persisted.all_folders) if persisted.all_folders is not None else None,
+        )
+        return scan_result, invalid_entries
 
     async def _run_autov3_backfill(self) -> None:
         """Backfill autov3 for entries loaded from the persisted cache that lack it."""
@@ -647,6 +784,7 @@ class ModelScanner:
                 hash_snapshot,
                 list(scan_result.excluded_models),
                 autov3_snapshot,
+                scan_result.all_folders,
             )
         except Exception as exc:
             logger.warning("%s Scanner: Failed to persist cache: %s", self.model_type.capitalize(), exc)
@@ -694,7 +832,12 @@ class ModelScanner:
             raw_data=list(self._cache.raw_data),
             hash_index=self._hash_index,
             tags_count=dict(self._tags_count),
-            excluded_models=list(self._excluded_models)
+            excluded_models=list(self._excluded_models),
+            all_folders=(
+                list(self._cache.all_folders)
+                if self._cache.all_folders is not None
+                else None
+            ),
         )
         await self._save_persistent_cache(snapshot)
         await self._sync_download_history(snapshot.raw_data, source='scan')
@@ -749,7 +892,7 @@ class ModelScanner:
             last_progress_time = time.time()
             last_progress_percent = 0
 
-            async def progress_callback(processed_files: int, expected_total: int) -> None:
+            async def progress_callback(processed_files: int, expected_total: int, current_name: str = '') -> None:
                 nonlocal last_progress_time, last_progress_percent
 
                 if expected_total <= 0:
@@ -816,32 +959,84 @@ class ModelScanner:
     async def _initialize_cache(self) -> None:
         """Initialize or refresh the cache"""
         self._is_initializing = True  # Set flag
+        last_progress_percent = 0
         try:
             start_time = time.time()
-            
+
+            await self._broadcast_scan_progress('started', 'scan_folders', 0, True)
+
             # Manually trigger a symlink rescan during a full rebuild.
             # This ensures that any new symlink mappings are correctly picked up.
             config.rebuild_symlink_cache()
 
-            # Determine the page type based on model type
+            # Count files in a thread so the event loop stays responsive
+            loop = asyncio.get_running_loop()
+            total_files = await loop.run_in_executor(None, self._count_model_files)
+            await self._broadcast_scan_progress(
+                'processing', 'count_models', 1, True,
+                processed=0, total=total_files,
+            )
+
+            last_progress_time = time.time()
+
+            async def progress_callback(processed_files: int, expected_total: int, current_name: str = '') -> None:
+                nonlocal last_progress_time, last_progress_percent
+
+                if expected_total <= 0:
+                    return
+
+                current_time = time.time()
+                progress_percent = min(99, int(1 + (processed_files / expected_total) * 98))
+
+                if progress_percent <= last_progress_percent:
+                    return
+
+                if current_time - last_progress_time <= 0.5 and processed_files != expected_total:
+                    return
+
+                last_progress_percent = progress_percent
+                last_progress_time = current_time
+
+                await self._broadcast_scan_progress(
+                    'processing', 'process_models', progress_percent, True,
+                    processed=processed_files, total=expected_total,
+                    current_name=current_name,
+                )
+
             # Scan for new data
-            scan_result = await self._gather_model_data()
+            scan_result = await self._gather_model_data(
+                total_files=total_files,
+                progress_callback=progress_callback,
+            )
             if not self.is_cancelled():
+                await self._broadcast_scan_progress('finalizing', 'finalizing', 99, True)
                 await self._apply_scan_result(scan_result)
                 await self._save_persistent_cache(scan_result)
                 await self._sync_download_history(scan_result.raw_data, source='scan')
+                await self._broadcast_scan_progress(
+                    'completed', 'finalizing', 100, True,
+                    elapsed_seconds=time.time() - start_time,
+                )
 
                 logger.info(
                     f"{self.model_type.capitalize()} Scanner: Cache initialization completed in {time.time() - start_time:.2f} seconds, "
                     f"found {len(scan_result.raw_data)} models"
                 )
             else:
+                await self._broadcast_scan_progress(
+                    'cancelled', 'process_models', last_progress_percent, True,
+                    elapsed_seconds=time.time() - start_time,
+                )
                 logger.info(
                     f"{self.model_type.capitalize()} Scanner: Cache initialization cancelled "
                     f"after {time.time() - start_time:.2f} seconds"
                 )
         except Exception as e:
             logger.error(f"{self.model_type.capitalize()} Scanner: Error initializing cache: {e}")
+            await self._broadcast_scan_progress(
+                'error', 'process_models', last_progress_percent, True,
+                error=str(e),
+            )
             # Ensure cache is at least an empty structure on error
             if self._cache is None:
                 self._cache = ModelCache(
@@ -859,28 +1054,66 @@ class ModelScanner:
         try:
             start_time = time.time()
             logger.info(f"{self.model_type.capitalize()} Scanner: Starting fast cache reconciliation...")
+
+            await self._broadcast_scan_progress('started', 'reconcile_scan', 0, False)
             
             # Get current cached file paths
+            cached_size_before = len(self._cache.raw_data)
             cached_paths = {item['file_path'] for item in self._cache.raw_data}
             path_to_item = {item['file_path']: item for item in self._cache.raw_data}
-            cached_real_paths = {}
-            for cached_path in cached_paths:
-                try:
-                    cached_real_paths.setdefault(os.path.realpath(cached_path), cached_path)
-                except Exception:
-                    continue
+
+            # physical path -> cached business path, for the alias case where the
+            # same file is reachable under a different path than the cached one
+            # (overlapping roots / symlink layout changes): keep the existing
+            # entry instead of delete + re-add (which would re-read metadata and
+            # re-hash every file). Built lazily on the first miss, because a
+            # realpath per cached entry is ~half the cost of a no-change
+            # reconcile and the map is only ever consulted for misses.
+            cached_real_paths: Optional[Dict[str, str]] = None
+
+            def lookup_cached_real_path(real_path: str) -> Optional[str]:
+                nonlocal cached_real_paths
+                if cached_real_paths is None:
+                    cached_real_paths = {}
+                    for cached_path in cached_paths:
+                        try:
+                            cached_real_paths.setdefault(os.path.realpath(cached_path), cached_path)
+                        except Exception:
+                            continue
+                return cached_real_paths.get(real_path)
             
             # Track found files and new files
             found_paths = set()
             new_files = []
+            # Cached entries whose stored file_name no longer matches the file
+            # on disk (e.g. dotted stems truncated by the legacy .civitai.info
+            # migration, issue #1112). Repaired in place after the walk; the
+            # list stays empty on a clean library, so a no-change reconcile
+            # only pays one string compare per cached file.
+            stale_paths: List[str] = []
+            stale_seen: Set[str] = set()
+
+            def mark_stale_if_needed(cached_path: str) -> None:
+                """Queue a cached path for file_name repair when it drifted."""
+                if cached_path in stale_seen:
+                    return
+                item = path_to_item.get(cached_path)
+                if item is None:
+                    return
+                if item.get("file_name") == _file_name_stem(cached_path):
+                    return
+                stale_seen.add(cached_path)
+                stale_paths.append(cached_path)
+
             visited_real_paths = set()
             discovered_real_files = set()
-            
+            discovered_folders: Set[str] = set()
+
             # Scan all model roots
             for root_path in self.get_model_roots():
                 if not os.path.exists(root_path):
                     continue
-                
+
                 # Recursively scan directory
                 for root, dirnames, files in os.walk(root_path, followlinks=True):
                     dirnames[:] = [d for d in dirnames if not _is_excluded_dir(d)]
@@ -888,22 +1121,36 @@ class ModelScanner:
                     if real_root in visited_real_paths:
                         continue
                     visited_real_paths.add(real_root)
-                    
+
+                    # Record every visited directory (including empty ones) so
+                    # the folder tree stays accurate without a live walk.
+                    rel_dir = os.path.relpath(
+                        os.path.abspath(root), os.path.abspath(root_path)
+                    ).replace(os.path.sep, "/")
+                    if rel_dir != "." and not _is_hidden_relative_path(rel_dir):
+                        discovered_folders.add(rel_dir)
+
                     for file in files:
                         ext = os.path.splitext(file)[1].lower()
                         if ext in self.file_extensions:
                             # Construct paths exactly as they would be in cache
                             file_path = os.path.join(root, file).replace(os.sep, '/')
-                            real_file_path = os.path.realpath(os.path.join(root, file))
-                            
+
                             # Check if this file is already in cache
                             if file_path in cached_paths:
                                 found_paths.add(file_path)
+                                mark_stale_if_needed(file_path)
                                 continue
 
-                            cached_real_match = cached_real_paths.get(real_file_path)
+                            # Only a cache miss needs the physical path, so the
+                            # realpath syscalls are paid per changed file rather
+                            # than per file in the library.
+                            real_file_path = os.path.realpath(os.path.join(root, file))
+
+                            cached_real_match = lookup_cached_real_path(real_file_path)
                             if cached_real_match:
                                 found_paths.add(cached_real_match)
+                                mark_stale_if_needed(cached_real_match)
                                 continue
 
                             if file_path in self._excluded_models:
@@ -916,6 +1163,7 @@ class ModelScanner:
                                 for cached_path in cached_paths:
                                     if cached_path.lower() == lower_path:
                                         found_paths.add(cached_path)
+                                        mark_stale_if_needed(cached_path)
                                         matched = True
                                         break
                                 if matched:
@@ -932,26 +1180,35 @@ class ModelScanner:
                     await asyncio.sleep(0)
                     if self.is_cancelled():
                         logger.info(f"{self.model_type.capitalize()} Scanner: Reconcile scan cancelled")
+                        await self._broadcast_scan_progress(
+                            'cancelled', 'reconcile_scan', 0, False,
+                            elapsed_seconds=time.time() - start_time,
+                        )
                         return
-            
+
             # Process new files in batches
             total_added = 0
             if new_files:
                 logger.info(f"{self.model_type.capitalize()} Scanner: Found {len(new_files)} new files to process")
                 batch_size = 50
-                for i in range(0, len(new_files), batch_size):
+                total_new = len(new_files)
+                processed_new = 0
+                last_progress_time = time.time()
+                # Snapshot the roots once: this matches the walk above (which
+                # also snapshots them) and avoids a config read per new file.
+                model_roots = self.get_model_roots()
+                for i in range(0, total_new, batch_size):
                     batch = new_files[i:i+batch_size]
                     for path in batch:
                         logger.info(f"{self.model_type.capitalize()} Scanner: Processing {path}")
+                        processed_new += 1
                         try:
                             # Find the appropriate root path for this file
                             root_path = None
-                            model_roots = self.get_model_roots()
+                            normalized_path = os.path.normpath(path)
                             for potential_root in model_roots:
                                 # Normalize both paths for comparison
-                                normalized_path = os.path.normpath(path)
-                                normalized_root = os.path.normpath(potential_root)
-                                if normalized_path.startswith(normalized_root):
+                                if normalized_path.startswith(os.path.normpath(potential_root)):
                                     root_path = potential_root
                                     break
                             
@@ -998,11 +1255,76 @@ class ModelScanner:
                                 logger.error(f"Could not determine root path for {path}")
                         except Exception as e:
                             logger.error(f"Error adding {path} to cache: {e}")
-                        
+
+                        current_time = time.time()
+                        if current_time - last_progress_time > 0.5 or processed_new == total_new:
+                            last_progress_time = current_time
+                            await self._broadcast_scan_progress(
+                                'processing', 'process_new',
+                                min(99, int(1 + (processed_new / total_new) * 98)), False,
+                                processed=processed_new, total=total_new,
+                                current_name=os.path.basename(path),
+                            )
+
                         if self.is_cancelled():
                             logger.info(f"{self.model_type.capitalize()} Scanner: Reconcile processing cancelled")
+                            await self._broadcast_scan_progress(
+                                'cancelled', 'process_new',
+                                min(99, int(1 + (processed_new / total_new) * 98)), False,
+                                elapsed_seconds=time.time() - start_time,
+                            )
                             return
-            
+
+            # Repair rows whose file_name drifted from the file on disk. Only
+            # mismatching entries are re-read here, so a clean library never
+            # touches metadata during a refresh. Each repair goes through the
+            # single-row update path: load_metadata() normalizes the sidecar
+            # (MetadataManager._normalize_metadata_paths) and
+            # _sync_cache_from_metadata_impl() rewrites one targeted SQL delta
+            # instead of a full cache save, and the mismatch is gone
+            # afterwards, so the work never repeats (issue #1112).
+            total_repaired = 0
+            if stale_paths:
+                logger.info(
+                    "%s Scanner: Repairing %d cached entries whose file_name no longer matches the file on disk",
+                    self.model_type.capitalize(),
+                    len(stale_paths),
+                )
+                for path in stale_paths:
+                    if self.is_cancelled():
+                        logger.info(f"{self.model_type.capitalize()} Scanner: Reconcile repair cancelled")
+                        break
+                    try:
+                        metadata, _should_skip = await MetadataManager.load_metadata(
+                            path, self.model_class
+                        )
+                        if metadata is None:
+                            # Missing or corrupt sidecar: keep the existing row
+                            # so a full rebuild can recreate the metadata from
+                            # .civitai.info (or defaults) without losing cached
+                            # fields such as tags or civitai data.
+                            logger.debug(
+                                "%s Scanner: Leaving %s unchanged (no usable metadata to repair from)",
+                                self.model_type.capitalize(),
+                                path,
+                            )
+                            continue
+
+                        payload = metadata.to_dict()
+                        unknown_fields = getattr(metadata, "_unknown_fields", None)
+                        if isinstance(unknown_fields, dict):
+                            payload.update(unknown_fields)
+
+                        if await self._sync_cache_from_metadata_impl(path, payload):
+                            total_repaired += 1
+                    except Exception as exc:
+                        logger.warning(
+                            "%s Scanner: Failed to repair file_name for %s: %s",
+                            self.model_type.capitalize(),
+                            path,
+                            exc,
+                        )
+
             # Find missing files (in cache but not in filesystem)
             missing_files = cached_paths - found_paths
             total_removed = 0
@@ -1033,25 +1355,41 @@ class ModelScanner:
                 # Update cache data
                 self._cache.raw_data = [item for item in self._cache.raw_data if item['file_path'] not in missing_files]
             
-            dedup_removed = 0
-            seen_paths: set[str] = set()
-            deduped: list[Dict[str, Any]] = []
-            for item in reversed(self._cache.raw_data):
-                path = item.get('file_path', '')
-                if path not in seen_paths:
-                    seen_paths.add(path)
-                    deduped.append(item)
-                else:
-                    for tag in item.get('tags', []):
-                        if tag in self._tags_count:
-                            self._tags_count[tag] = max(0, self._tags_count[tag] - 1)
-                            if self._tags_count[tag] == 0:
-                                del self._tags_count[tag]
-                    dedup_removed += 1
-            if dedup_removed > 0:
-                self._cache.raw_data = list(reversed(deduped))
-                total_removed += dedup_removed
+            # Defensive integrity pass: drop entries sharing a business path.
+            # Duplicates can only be introduced by external code rewriting
+            # raw_data directly or by this pass's own appends, so an unchanged
+            # filesystem walk over a clean cache has nothing to clean. The size
+            # mismatch is an O(1) tell that the snapshot already contained
+            # duplicates; skipping the O(N) pass when it is provably clean is
+            # what keeps a no-change Refresh cheap.
+            if cached_size_before != len(cached_paths) or total_added > 0:
+                dedup_removed = 0
+                seen_paths: set[str] = set()
+                deduped: list[Dict[str, Any]] = []
+                for item in reversed(self._cache.raw_data):
+                    path = item.get('file_path', '')
+                    if path not in seen_paths:
+                        seen_paths.add(path)
+                        deduped.append(item)
+                    else:
+                        for tag in item.get('tags', []):
+                            if tag in self._tags_count:
+                                self._tags_count[tag] = max(0, self._tags_count[tag] - 1)
+                                if self._tags_count[tag] == 0:
+                                    del self._tags_count[tag]
+                        dedup_removed += 1
+                if dedup_removed > 0:
+                    self._cache.raw_data = list(reversed(deduped))
+                    total_removed += dedup_removed
             
+            # The walk above visited every directory, so refresh the recorded
+            # folder list (including empty folders) even when no model files
+            # changed — e.g. an empty folder was created or removed externally.
+            sorted_discovered = sorted(discovered_folders, key=lambda x: x.lower())
+            folders_changed = self._cache.all_folders != sorted_discovered
+            if folders_changed:
+                self._cache.all_folders = sorted_discovered
+
             # Resort cache if changes were made
             if total_added > 0 or total_removed > 0:
                 # Update folders list
@@ -1064,10 +1402,25 @@ class ModelScanner:
                 await self._cache.resort()
 
                 await self._persist_current_cache()
+            elif folders_changed:
+                await self._persist_current_cache()
                 
-            logger.info(f"{self.model_type.capitalize()} Scanner: Cache reconciliation completed in {time.time() - start_time:.2f} seconds. Added {total_added}, removed {total_removed} models.")
+            logger.info(
+                f"{self.model_type.capitalize()} Scanner: Cache reconciliation completed in "
+                f"{time.time() - start_time:.2f} seconds. Added {total_added}, "
+                f"removed {total_removed}, repaired {total_repaired} models."
+            )
+            await self._broadcast_scan_progress(
+                'completed', 'process_new', 100, False,
+                added=total_added, removed=total_removed,
+                elapsed_seconds=time.time() - start_time,
+            )
         except Exception as e:
             logger.error(f"{self.model_type.capitalize()} Scanner: Error reconciling cache: {e}", exc_info=True)
+            await self._broadcast_scan_progress(
+                'error', 'reconcile_scan', 0, False,
+                error=str(e),
+            )
         finally:
             self._is_initializing = False # Unset flag
             self.bump_cache_version()
@@ -1092,6 +1445,335 @@ class ModelScanner:
     def get_model_roots(self) -> List[str]:
         """Get model root directories"""
         raise NotImplementedError("Subclasses must implement get_model_roots")
+
+    async def get_all_folders(self) -> List[str]:
+        """Return every known directory under the model roots.
+
+        The directory list (including empty ones) is recorded during cache
+        scans and hydrated from the persisted snapshot, so this is a pure
+        in-memory read — no filesystem walk ever runs on the event loop
+        (walking network roots synchronously used to freeze the whole
+        server, see issue #1110). The result is unioned with the
+        model-derived folders so it is always a superset of
+        ``cache.folders``.
+
+        Cold fallback: when the cache was hydrated from a persisted snapshot
+        that predates folder recording (``all_folders is None``), a one-shot
+        background walk is scheduled off the event loop to backfill and
+        persist the list; until it lands, the models-only folders are
+        returned.
+        """
+        folders: Set[str] = set()
+        cache = self._cache
+        if cache is not None:
+            folders |= {item.get('folder', '') for item in cache.raw_data}
+            recorded = getattr(cache, 'all_folders', None)
+            if recorded is None:
+                self._schedule_all_folders_backfill()
+            else:
+                folders |= set(recorded)
+        else:
+            self._schedule_all_folders_backfill()
+
+        return sorted(folders, key=lambda x: x.lower())
+
+    async def add_known_folder(self, folder: str) -> None:
+        """Record a folder (and its parents) in the known folder list.
+
+        Called when a directory is created between scans (e.g. via the
+        create-folder API) so folder trees reflect it immediately without
+        waiting for the next reconciliation. When ``all_folders`` has not
+        been recorded yet (legacy snapshot), this is a no-op — the scheduled
+        backfill walk discovers the directory from disk instead.
+        """
+        normalized = folder.replace("\\", "/").strip("/")
+        parts = [part for part in normalized.split("/") if part]
+        if not parts:
+            return
+        cache = self._cache
+        if cache is None:
+            return
+        recorded = getattr(cache, "all_folders", None)
+        if recorded is None:
+            return
+        known = set(recorded)
+        for i in range(1, len(parts) + 1):
+            known.add("/".join(parts[:i]))
+        updated = sorted(known, key=lambda x: x.lower())
+        if updated != list(recorded):
+            cache.all_folders = updated
+            await self._persist_current_cache()
+            self.bump_cache_version()
+
+    async def remove_known_folder(self, folder: str) -> None:
+        """Forget a folder (and its subtree) that no longer exists on disk.
+
+        Counterpart of :meth:`add_known_folder`, called after a directory is
+        removed between scans (e.g. via the delete-folder API) so folder trees
+        and the move/download destination pickers stop offering it without a
+        full rescan. Ancestors are kept on purpose: every recorded ancestor
+        exists on disk in its own right, so only the removed subtree is dropped.
+
+        Cache entries that referenced the now-missing directory are purged as
+        well, which keeps a stale (phantom) model card from surviving the
+        deletion. When ``all_folders`` has not been recorded yet (legacy
+        snapshot) only the cache purge runs — the scheduled backfill walk
+        rebuilds the folder list from disk.
+        """
+        normalized = folder.replace("\\", "/").strip("/")
+        if not normalized:
+            return
+        cache = self._cache
+        if cache is None:
+            return
+
+        prefix = f"{normalized}/"
+
+        folders_changed = False
+        recorded = getattr(cache, "all_folders", None)
+        if recorded is not None:
+            updated = [
+                entry
+                for entry in recorded
+                if entry != normalized and not entry.startswith(prefix)
+            ]
+            if updated != list(recorded):
+                cache.all_folders = updated
+                folders_changed = True
+
+        stale_paths = [
+            item.get("file_path")
+            for item in (cache.raw_data or [])
+            if self._folder_within(item.get("folder", ""), normalized)
+        ]
+        if stale_paths:
+            # The purge persists the cache — including the already updated
+            # all_folders list — and bumps the version itself.
+            await self._batch_update_cache_for_deleted_models(stale_paths)
+            folders = set(item.get("folder", "") for item in cache.raw_data)
+            cache.folders = sorted(folders, key=lambda x: x.lower())
+        elif folders_changed:
+            await self._persist_current_cache()
+
+        self.bump_cache_version()
+
+    @staticmethod
+    def _folder_within(candidate: str, target: str) -> bool:
+        """Return True when *candidate* is *target* or lives below it."""
+        return candidate == target or candidate.startswith(f"{target}/")
+
+    @staticmethod
+    def _rekey_path(value: str, old_prefix: str, new_prefix: str) -> str:
+        """Move a stored path (or URL) from *old_prefix* onto *new_prefix*."""
+        if not value:
+            return value
+        normalized = value.replace("\\", "/")
+        if normalized.startswith(old_prefix):
+            return new_prefix + normalized[len(old_prefix):]
+        return value
+
+    async def rename_known_folder(
+        self,
+        previous_folder: str,
+        new_folder: str,
+        *,
+        previous_path: str,
+        new_path: str,
+    ) -> bool:
+        """Re-key folder, cache and metadata records after a directory rename.
+
+        Counterpart of :meth:`add_known_folder` / :meth:`remove_known_folder`.
+        A rename keeps every file, so nothing may be dropped: the recorded
+        folder list, the affected cache entries (``file_path``/``folder``/
+        ``preview_url``), the hash index and the on-disk metadata sidecars are
+        all rewritten onto the new prefix. That is what lets a folder full of
+        models be renamed without a rescan and without breaking per-model
+        bookkeeping.
+
+        Args:
+            previous_folder: Library-relative folder name before the rename
+            new_folder: Library-relative folder name after the rename
+            previous_path: Absolute directory path before the rename
+            new_path: Absolute directory path after the rename
+
+        Returns:
+            True when any recorded data was rewritten.
+        """
+        previous = previous_folder.replace("\\", "/").strip("/")
+        current = new_folder.replace("\\", "/").strip("/")
+        if not previous or not current or previous == current:
+            return False
+
+        old_rel_prefix = f"{previous}/"
+        new_rel_prefix = f"{current}/"
+        old_abs_prefix = f"{str(previous_path).replace(chr(92), '/').rstrip('/')}/"
+        new_abs_prefix = f"{str(new_path).replace(chr(92), '/').rstrip('/')}/"
+
+        cache = self._cache
+        if cache is None:
+            return False
+
+        changed = False
+
+        recorded = getattr(cache, "all_folders", None)
+        if recorded is not None:
+            rekeyed = sorted(
+                (
+                    self._rekey_folder_name(entry, previous, old_rel_prefix, new_rel_prefix)
+                    for entry in recorded
+                ),
+                key=lambda entry: entry.lower(),
+            )
+            if rekeyed != list(recorded):
+                cache.all_folders = rekeyed
+                changed = True
+
+        excluded = getattr(self, "_excluded_models", None)
+        if excluded:
+            rekeyed_excluded = [
+                self._rekey_path(entry, old_abs_prefix, new_abs_prefix)
+                for entry in excluded
+            ]
+            if rekeyed_excluded != list(excluded):
+                self._excluded_models = rekeyed_excluded
+                changed = True
+
+        touched: List[Dict[str, Any]] = []
+        for item in cache.raw_data or []:
+            folder_value = item.get("folder", "") or self._calculate_folder(
+                item.get("file_path", "")
+            )
+            if not self._folder_within(folder_value, previous):
+                continue
+
+            old_file_path = item.get("file_path", "")
+            if old_file_path:
+                cache.remove_from_version_index(item)
+                item["file_path"] = self._rekey_path(
+                    old_file_path, old_abs_prefix, new_abs_prefix
+                )
+                hash_value = (item.get("sha256") or "").lower()
+                if hash_value:
+                    self._hash_index.remove_by_path(old_file_path, hash_value)
+                    self._hash_index.add_entry(
+                        hash_value, item["file_path"], item.get("autov3") or None
+                    )
+
+            item["folder"] = self._rekey_folder_name(
+                folder_value, previous, old_rel_prefix, new_rel_prefix
+            )
+            if item.get("preview_url"):
+                item["preview_url"] = self._rekey_path(
+                    item["preview_url"], old_abs_prefix, new_abs_prefix
+                )
+            touched.append(item)
+
+        if touched:
+            changed = True
+            await self._rewrite_sidecar_paths(touched)
+            folders = set(item.get("folder", "") for item in cache.raw_data)
+            cache.folders = sorted(folders, key=lambda x: x.lower())
+            cache.rebuild_version_index()
+            await cache.resort()
+
+        if changed:
+            await self._persist_current_cache()
+
+        self.bump_cache_version()
+        return changed
+
+    @staticmethod
+    def _rekey_folder_name(
+        entry: str, previous: str, old_rel_prefix: str, new_rel_prefix: str
+    ) -> str:
+        """Move a library-relative folder name (and its subtree) under a new name."""
+        if entry == previous:
+            return new_rel_prefix.rstrip("/")
+        if entry.startswith(old_rel_prefix):
+            return new_rel_prefix + entry[len(old_rel_prefix):]
+        return entry
+
+    async def _rewrite_sidecar_paths(self, entries: List[Dict[str, Any]]) -> None:
+        """Point each model's metadata sidecar at its new location.
+
+        Sidecars travel with the renamed directory, so only the recorded
+        ``file_path``/``preview_url`` inside them need rewriting. Failures are
+        logged and skipped — a stale sidecar is repaired by the next metadata
+        refresh, and must not abort the rename.
+        """
+        for item in entries:
+            file_path = item.get("file_path")
+            if not file_path:
+                continue
+            metadata_path = f"{os.path.splitext(file_path)[0]}.metadata.json"
+            if not os.path.exists(metadata_path):
+                continue
+            try:
+                await self._update_metadata_paths(metadata_path, file_path)
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning(
+                    "Failed to rewrite metadata sidecar %s: %s", metadata_path, exc
+                )
+
+    def _schedule_all_folders_backfill(self) -> None:
+        """Kick off a one-shot background folder walk if none is running."""
+        if self._all_folders_backfill_running:
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        self._all_folders_backfill_running = True
+        loop.create_task(self._run_all_folders_backfill())
+
+    async def _run_all_folders_backfill(self) -> None:
+        """Walk the roots in a worker thread, then record and persist the result."""
+        try:
+            loop = asyncio.get_running_loop()
+            folders = await loop.run_in_executor(None, self._walk_all_folders_sync)
+            cache = self._cache
+            # A scan may have recorded the list while the walk was in flight;
+            # prefer the fresher scan data in that case.
+            if cache is not None and cache.all_folders is None:
+                cache.all_folders = folders
+                await self._persist_current_cache()
+        except Exception as exc:
+            logger.warning(
+                "%s Scanner: all-folders backfill failed: %s",
+                self.model_type.capitalize(),
+                exc,
+            )
+        finally:
+            self._all_folders_backfill_running = False
+
+    def _walk_all_folders_sync(self) -> List[str]:
+        """Enumerate every directory under the model roots, live from disk.
+
+        Runs in a worker thread. Hidden directories (any segment starting
+        with '.') and the pending-delete staging dir are excluded.
+        """
+        discovered: Set[str] = set()
+        visited_real_paths: Set[str] = set()
+
+        for root_path in self.get_model_roots():
+            if not os.path.exists(root_path):
+                continue
+
+            for root, dirnames, _files in os.walk(root_path, followlinks=True):
+                dirnames[:] = [d for d in dirnames if not _is_excluded_dir(d)]
+                # realpath is used only for symlink dedup, never for the
+                # recorded path (business paths stay unresolved).
+                real_root = os.path.realpath(root)
+                if real_root in visited_real_paths:
+                    continue
+                visited_real_paths.add(real_root)
+
+                rel_dir = os.path.relpath(os.path.abspath(root), os.path.abspath(root_path))
+                rel_dir = rel_dir.replace(os.path.sep, "/")
+                if rel_dir != "." and not _is_hidden_relative_path(rel_dir):
+                    discovered.add(rel_dir)
+
+        return sorted(discovered, key=lambda x: x.lower())
     
     async def _create_default_metadata(self, file_path: str) -> Optional[BaseModelMetadata]:
         """Get model file info and metadata (extensible for different model types)"""
@@ -1112,6 +1794,23 @@ class ModelScanner:
     def adjust_cached_entry(self, entry: Dict[str, Any]) -> Dict[str, Any]:
         """Hook for subclasses: adjust entries loaded from the persisted cache."""
         return entry
+
+    def _should_keep_cached_entry(self, entry: Dict[str, Any]) -> bool:
+        """Hook for subclasses: decide whether a persisted entry is still managed.
+
+        Entries rejected here are dropped (with their hash/autov3 index rows)
+        while hydrating the persisted cache, so a scanner whose configured
+        roots shrank does not surface stale models before the next reconcile.
+        """
+        return True
+
+    def resolve_sub_type_for_path(self, file_path: Optional[str]) -> Optional[str]:
+        """Hook for subclasses: resolve the location-derived sub_type for a file.
+
+        Returns ``None`` when the model type has no location-derived sub-types
+        (the default), in which case any stored value is left untouched.
+        """
+        return None
 
     @staticmethod
     def _normalize_path_value(path: Optional[str]) -> str:
@@ -1177,11 +1876,16 @@ class ModelScanner:
                     
                     file_info = next((f for f in version_info.get('files', []) if f.get('primary')), None)
                     if file_info:
-                        file_name = os.path.splitext(os.path.basename(file_path))[0]
-                        file_info['name'] = file_name
-                    
+                        local_stem = os.path.splitext(os.path.basename(file_path))[0]
+                        # from_civitai_info expects an API-shaped file entry and
+                        # strips one extension itself, so hand it the real
+                        # basename: passing the already extension-free stem made
+                        # it cut dotted names at their last dot ("lora-sd1.5-..."
+                        # became "lora-sd1", issue #1112).
+                        file_info['name'] = os.path.basename(file_path)
+
                         metadata = cast(Any, self.model_class).from_civitai_info(version_info, file_info, file_path)
-                        metadata.preview_url = find_preview_file(file_name, os.path.dirname(file_path))
+                        metadata.preview_url = find_preview_file(local_stem, os.path.dirname(file_path))
                         await MetadataManager.save_metadata(file_path, metadata)
                         logger.info(f"Created metadata from .civitai.info for {file_path} (Reason: .civitai.info was found but .metadata.json was missing)")
                 except Exception as e:
@@ -1307,8 +2011,11 @@ class ModelScanner:
         else:
             self._cache.raw_data = list(scan_result.raw_data)
 
-        self._cache.rebuild_version_index()
+        if scan_result.all_folders is not None:
+            self._cache.all_folders = list(scan_result.all_folders)
 
+        # resort() rebuilds folders and the version index on every path, so a
+        # separate rebuild_version_index() call here would be redundant.
         await self._cache.resort()
 
         self._log_duplicate_filename_summary()
@@ -1393,7 +2100,7 @@ class ModelScanner:
         self,
         *,
         total_files: int = 0,
-        progress_callback: Optional[Callable[[int, int], Awaitable[None]]] = None
+        progress_callback: Optional[Callable[[int, int, str], Awaitable[None]]] = None
     ) -> CacheBuildResult:
         """Collect metadata for all model files."""
 
@@ -1404,12 +2111,13 @@ class ModelScanner:
         processed_files = 0
         processed_real_files: Set[str] = set()
         visited_real_dirs: Set[str] = set()
+        discovered_folders: Set[str] = set()
 
-        async def handle_progress() -> None:
+        async def handle_progress(current_name: str = '') -> None:
             if progress_callback is None:
                 return
             try:
-                await progress_callback(processed_files, total_files)
+                await progress_callback(processed_files, total_files, current_name)
             except Exception as exc:  # pragma: no cover - defensive logging
                 logger.error(f"Error reporting progress for {self.model_type}: {exc}")
 
@@ -1475,13 +2183,20 @@ class ModelScanner:
                                 for tag in result.get('tags') or []:
                                     tags_count[tag] = tags_count.get(tag, 0) + 1
 
-                            await handle_progress()
+                            await handle_progress(entry.name)
                             await asyncio.sleep(0)
                             if self.is_cancelled():
                                 return
                         elif entry.is_dir(follow_symlinks=True):
                             if _is_excluded_dir(entry.name):
                                 continue
+                            # Record every directory (including empty ones) so
+                            # the folder tree can be served without a live walk.
+                            rel_dir = os.path.relpath(
+                                os.path.abspath(entry.path), os.path.abspath(root_path)
+                            ).replace(os.path.sep, "/")
+                            if not _is_hidden_relative_path(rel_dir):
+                                discovered_folders.add(rel_dir)
                             await scan_recursive(entry.path, root_path, visited_paths)
                     except Exception as entry_error:
                         logger.error(f"Error processing entry {entry.path}: {entry_error}")
@@ -1501,7 +2216,8 @@ class ModelScanner:
             raw_data=raw_data,
             hash_index=hash_index,
             tags_count=tags_count,
-            excluded_models=excluded_models
+            excluded_models=excluded_models,
+            all_folders=sorted(discovered_folders, key=lambda x: x.lower()),
         )
 
     async def add_model_to_cache(self, metadata_dict: Dict[str, Any], folder: str = '') -> bool:
@@ -1643,6 +2359,20 @@ class ModelScanner:
                 except Exception as e:
                     logger.error(f"Error moving metadata file: {e}")
             
+            if metadata is not None:
+                # sub_type is derived from the model's location (e.g. a file
+                # moved from a checkpoints root into a unet root becomes a
+                # diffusion_model). Persist the recalculated value into the
+                # moved metadata file so later metadata-driven cache syncs
+                # do not revert the cache entry to the stale sub_type.
+                new_sub_type = self.resolve_sub_type_for_path(target_file)
+                if new_sub_type and metadata.get('sub_type') != new_sub_type:
+                    metadata['sub_type'] = new_sub_type
+                    try:
+                        await MetadataManager.save_metadata(moved_metadata_path, metadata)
+                    except Exception as e:
+                        logger.error(f"Error persisting sub_type for moved model: {e}")
+
             update_result = await self.update_single_model_cache(source_path, target_file, metadata, recalculate_type=True)
             
             return {
@@ -1744,6 +2474,16 @@ class ModelScanner:
             all_folders = set(item['folder'] for item in cache.raw_data)
             cache.folders = sorted(list(all_folders), key=lambda x: x.lower())
 
+            # The move target may live in directories the last scan never saw;
+            # record the destination folder (and its parents) in the known
+            # folder list so the folder tree reflects it without a rescan.
+            if cache.all_folders is not None and folder_value:
+                parts = folder_value.split("/")
+                known = set(cache.all_folders)
+                for i in range(1, len(parts) + 1):
+                    known.add("/".join(parts[:i]))
+                cache.all_folders = sorted(known, key=lambda x: x.lower())
+
             for tag in cache_entry.get('tags', []):
                 self._tags_count[tag] = self._tags_count.get(tag, 0) + 1
 
@@ -1833,6 +2573,11 @@ class ModelScanner:
             folder=folder_value,
             file_path_override=file_path,
         )
+
+        # Location-derived fields (e.g. the checkpoint sub_type) must be
+        # re-resolved from the file path rather than trusting the on-disk
+        # metadata snapshot, which may predate a cross-root move.
+        desired_entry = self.adjust_cached_entry(desired_entry)
 
         # Ensure sha256 is populated (defensive — metadata should have it)
         if (
@@ -2140,8 +2885,98 @@ class ModelScanner:
             return sorted_models
         return sorted_models[:limit]
         
-    async def get_model_info_by_name(self, name):
-        """Get model information by name"""
+    @staticmethod
+    def find_matching_models(
+        raw_data: List[Dict[str, Any]],
+        name: str,
+        *,
+        base_model: Optional[str] = None,
+        extensions: Optional[Set[str]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Return all cached models matching ``name`` (case-insensitive).
+
+        A name containing a path separator must equal the model's
+        folder-relative path; a bare name matches on basename. When
+        ``base_model`` is given, confident mismatches are rejected while
+        unknowns on either side stay eligible (lenient guard).
+        ``extensions`` should be the scanner's own ``file_extensions`` so
+        suffix stripping only covers formats the scanner actually indexes;
+        when omitted, the shared :data:`WEIGHT_FILE_EXTENSIONS` set is used.
+        """
+        # Longest first so overlapping suffixes strip correctly.
+        exts = sorted(extensions or WEIGHT_FILE_EXTENSIONS, key=len, reverse=True)
+
+        normalized_name = str(name).replace("\\", "/").casefold()
+        for ext in exts:
+            if normalized_name.endswith(ext):
+                normalized_name = normalized_name[: -len(ext)]
+                break
+        has_path = "/" in normalized_name
+        basename = normalized_name.rsplit("/", 1)[-1]
+
+        matches = []
+        for model in raw_data:
+            file_name = str(model.get("file_name") or "").replace("\\", "/")
+            folder = str(model.get("folder") or "").replace("\\", "/").strip("/")
+            model_path = f"{folder}/{file_name}" if folder else file_name
+            for ext in exts:
+                if model_path.casefold().endswith(ext):
+                    model_path = model_path[: -len(ext)]
+                    break
+            if (has_path and model_path.casefold() == normalized_name) or (
+                not has_path and model_path.rsplit("/", 1)[-1].casefold() == basename
+            ):
+                matches.append(model)
+
+        expected_base = str(base_model or "").strip().casefold()
+        if expected_base and expected_base != "unknown":
+            matches = [
+                model
+                for model in matches
+                if str(model.get("base_model") or "").strip().casefold()
+                in ("", "unknown", expected_base)
+            ]
+        return matches
+
+    async def find_models_by_name(
+        self, name: str, *, base_model: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Return every cached model matching ``name`` (see ``find_matching_models``)."""
+        try:
+            cache = await self.get_cached_data()
+            return self.find_matching_models(
+                cache.raw_data,
+                name,
+                base_model=base_model,
+                extensions=self.file_extensions,
+            )
+        except Exception as e:
+            logger.error(f"Error finding models by name: {e}", exc_info=True)
+            return []
+
+    async def get_model_info_by_name(
+        self,
+        name: str,
+        *,
+        require_unique: bool = False,
+        base_model: Optional[str] = None,
+    ):
+        """Get model information by name.
+
+        Default mode keeps the legacy first-match/fallback semantics. With
+        ``require_unique`` an ambiguous name is a miss, and ``base_model``
+        rejects confident base-model mismatches (unknowns stay eligible).
+        """
+        if require_unique or base_model:
+            try:
+                matches = await self.find_models_by_name(name, base_model=base_model)
+                if require_unique and len(matches) != 1:
+                    return None
+                return matches[0] if matches else None
+            except Exception as e:
+                logger.error(f"Error getting model info by name: {e}", exc_info=True)
+                return None
+
         try:
             cache = await self.get_cached_data()
 
@@ -2302,8 +3137,8 @@ class ModelScanner:
                     })
             
             # Merge every staged per-file batch into ONE undoable batch. On a
-            # merge failure (cross-volume EXDEV etc.) the response falls back
-            # to the constituent batch_ids array so the frontend can undo them
+            # merge failure (defensive) the response falls back to the
+            # constituent batch_ids array so the frontend can undo them
             # sequentially.
             batch_field: Dict[str, Any] = {}
             if batch_ids:
@@ -2445,6 +3280,39 @@ class ModelScanner:
         except Exception as e:
             logger.error(f"Error checking model version existence: {e}")
             return False
+
+    async def get_files_for_version(self, model_version_id: int) -> List[Dict[str, Any]]:
+        """Get all local file entries for a specific model version (#1058).
+
+        A Civitai model version can have several weight files downloaded;
+        unlike the single-valued version_index this returns every entry.
+
+        Args:
+            model_version_id: Civitai model version ID
+
+        Returns:
+            List[Dict]: Cache entries (may be empty)
+        """
+        try:
+            normalized_id = int(model_version_id)
+        except (TypeError, ValueError):
+            return []
+
+        try:
+            cache = await self.get_cached_data()
+            if not cache:
+                return []
+
+            getter = getattr(cache, "get_files_by_version_id", None)
+            if getter is not None:
+                return getter(normalized_id)
+
+            # Fallback for cache implementations without the multi-file index
+            entry = cache.version_index.get(normalized_id)
+            return [entry] if entry is not None else []
+        except Exception as e:
+            logger.error(f"Error getting files for model version: {e}")
+            return []
 
     async def get_model_versions_by_id(self, model_id: int) -> List[Dict[str, Any]]:
         """Get all versions of a model by its ID

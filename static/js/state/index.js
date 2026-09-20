@@ -24,6 +24,9 @@ const DEFAULT_SETTINGS_BASE = Object.freeze({
     default_lora_root: '',
     default_checkpoint_root: '',
     default_embedding_root: '',
+    default_other_roots: {},
+    enable_other_models: false,
+    enabled_other_sub_types: ['vae', 'upscaler', 'text_encoder'],
     recipes_path: '',
     base_model_path_mappings: {},
     download_path_templates: {},
@@ -49,6 +52,7 @@ const DEFAULT_SETTINGS_BASE = Object.freeze({
     priority_tags: { ...DEFAULT_PRIORITY_TAG_CONFIG },
     version_grouping: 'same_base',
     hide_early_access_updates: false,
+    hide_paid_updates: false,
     auto_organize_exclusions: [],
     metadata_refresh_skip_paths: [],
     skip_previously_downloaded_model_versions: false,
@@ -58,6 +62,7 @@ const DEFAULT_SETTINGS_BASE = Object.freeze({
     strip_lora_on_copy: false,
     use_new_license_icons: true,
     group_by_model: false,
+    sticky_controls: false,
     llm_provider: 'openai',
     llm_api_key: '',
     llm_api_base: '',
@@ -70,6 +75,8 @@ export function createDefaultSettings() {
         base_model_path_mappings: {},
         download_path_templates: { ...DEFAULT_PATH_TEMPLATES },
         priority_tags: { ...DEFAULT_PRIORITY_TAG_CONFIG },
+        default_other_roots: {},
+        enabled_other_sub_types: ['vae', 'upscaler', 'text_encoder'],
     };
 }
 
@@ -77,6 +84,7 @@ export function createDefaultSettings() {
 const loraPreviewVersions = getMapFromStorage('loras_preview_versions');
 const checkpointPreviewVersions = getMapFromStorage('checkpoints_preview_versions');
 const embeddingPreviewVersions = getMapFromStorage('embeddings_preview_versions');
+const otherPreviewVersions = getMapFromStorage('other_preview_versions');
 
 export const state = {
     // Global state
@@ -102,6 +110,7 @@ export const state = {
                 modelname: true,
                 tags: false,
                 creator: false,
+                hash: false,
                 recursive: getStorageItem(`${MODEL_TYPES.LORA}_recursiveSearch`, true),
             },
             filters: {
@@ -146,6 +155,7 @@ export const state = {
                 tags: {},
                 license: {},
                 modelTypes: [],
+                loraAvailability: [],
                 search: ''
             },
             pageSize: 20,
@@ -167,6 +177,7 @@ export const state = {
                 filename: true,
                 modelname: true,
                 creator: false,
+                hash: false,
                 recursive: getStorageItem(`${MODEL_TYPES.CHECKPOINT}_recursiveSearch`, true),
             },
             filters: {
@@ -206,7 +217,46 @@ export const state = {
                 modelname: true,
                 tags: false,
                 creator: false,
+                hash: false,
                 recursive: getStorageItem(`${MODEL_TYPES.EMBEDDING}_recursiveSearch`, true),
+            },
+            filters: {
+                baseModel: [],
+                tags: {},
+                license: {},
+                modelTypes: [],
+                search: '',
+                tagLogic: 'any',
+            },
+            bulkMode: false,
+            selectedModels: new Set(),
+            metadataCache: new Map(),
+            showFavoritesOnly: false,
+            showUpdateAvailableOnly: false,
+            duplicatesMode: false,
+            viewMode: 'active',
+            excludedViewState: {
+                sortBy: 'name:asc',
+                search: '',
+            },
+            activeViewSnapshot: null,
+        },
+
+        [MODEL_TYPES.OTHER]: {
+            currentPage: 1,
+            isLoading: false,
+            hasMore: true,
+            sortBy: 'name',
+            activeFolder: getStorageItem(`${MODEL_TYPES.OTHER}_activeFolder`),
+            previewVersions: otherPreviewVersions,
+            searchManager: null,
+            searchOptions: {
+                filename: true,
+                modelname: true,
+                tags: false,
+                creator: false,
+                hash: false,
+                recursive: getStorageItem(`${MODEL_TYPES.OTHER}_recursiveSearch`, true),
             },
             filters: {
                 baseModel: [],

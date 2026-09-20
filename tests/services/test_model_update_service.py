@@ -59,7 +59,17 @@ class NotFoundProvider:
         return {}
 
 
-def make_version(version_id, *, in_library, base_model=None, should_ignore=False):
+def make_version(
+    version_id,
+    *,
+    in_library,
+    base_model=None,
+    should_ignore=False,
+    early_access_ends_at=None,
+    is_early_access=False,
+    is_paid=False,
+    paid_access=None,
+):
     return ModelVersionRecord(
         version_id=version_id,
         name=None,
@@ -69,6 +79,10 @@ def make_version(version_id, *, in_library, base_model=None, should_ignore=False
         preview_url=None,
         is_in_library=in_library,
         should_ignore=should_ignore,
+        early_access_ends_at=early_access_ends_at,
+        is_early_access=is_early_access,
+        is_paid=is_paid,
+        paid_access=paid_access,
     )
 
 
@@ -171,6 +185,144 @@ def test_has_update_for_base_rejects_other_base_models():
     )
 
     assert record.has_update_for_base(10, "Flux") is False
+
+
+def test_has_update_for_local_bases_detects_same_base_newer_version():
+    record = make_record(
+        make_version(5, in_library=True, base_model="Pony"),
+        make_version(6, in_library=False, base_model="pony"),
+    )
+
+    assert record.has_update_for_local_bases() is True
+
+
+def test_has_update_for_local_bases_rejects_cross_base_only_update():
+    """Issue #1083: a newer remote version targeting another base model must
+    not count when the report is scoped like the Updates filter."""
+    record = make_record(
+        make_version(5, in_library=True, base_model="Pony"),
+        make_version(6, in_library=False, base_model="Flux.1"),
+    )
+
+    assert record.has_update_for_local_bases() is False
+    assert record.has_update() is True
+
+
+def test_has_update_for_local_bases_hits_when_any_scope_qualifies():
+    record = make_record(
+        make_version(5, in_library=True, base_model="Pony"),
+        make_version(6, in_library=False, base_model="Flux.1"),
+        make_version(7, in_library=False, base_model="Pony"),
+    )
+
+    assert record.has_update_for_local_bases() is True
+
+
+def test_has_update_for_local_bases_respects_ignore_and_hides():
+    ignored = make_record(
+        make_version(5, in_library=True, base_model="Pony"),
+        make_version(6, in_library=False, base_model="Pony", should_ignore=True),
+    )
+    assert ignored.has_update_for_local_bases() is False
+
+    paid = make_record(
+        make_version(5, in_library=True, base_model="Pony"),
+        make_version(
+            6,
+            in_library=False,
+            base_model="Pony",
+            is_paid=True,
+            paid_access='{"permanent": true, "endsAt": null}',
+        ),
+    )
+    assert paid.has_update_for_local_bases() is True
+    assert paid.has_update_for_local_bases(hide_paid=True) is False
+
+    timed_early_access = make_record(
+        make_version(5, in_library=True, base_model="Pony"),
+        make_version(
+            6,
+            in_library=False,
+            base_model="Pony",
+            early_access_ends_at="2099-01-01T00:00:00Z",
+            is_early_access=True,
+        ),
+    )
+    assert timed_early_access.has_update_for_local_bases() is True
+    assert timed_early_access.has_update_for_local_bases(hide_early_access=True) is False
+
+
+def test_has_update_for_local_bases_falls_back_when_no_local_scopes_known():
+    """Without any known in-library base (e.g. a local version delisted from
+    Civitai before its first refresh), the aggregate falls back to the
+    unscoped predicate so the summary cannot silently drop models the
+    item-level Updates filter may still flag from file metadata."""
+    delisted_local = make_record(
+        make_version(5, in_library=True, base_model=None),
+        make_version(6, in_library=False, base_model="Pony"),
+    )
+    assert delisted_local.has_update_for_local_bases() is True
+
+    remote_only = make_record(make_version(6, in_library=False, base_model="Pony"))
+    assert remote_only.has_update_for_local_bases() is True
+
+
+def test_build_record_from_remote_synthesizes_base_from_local_map(tmp_path):
+    """Versions missing from the remote listing are synthesized with the base
+    model collected from cache items, so same-base scoping survives a version
+    being delisted upstream."""
+    db_path = tmp_path / "updates.sqlite"
+    service = ModelUpdateService(str(db_path))
+    remote = [make_version(6, in_library=False, base_model="Pony")]
+
+    record = service._build_record_from_remote(
+        model_type="lora",
+        model_id=1,
+        local_versions=[5],
+        remote_versions=remote,
+        existing=None,
+        timestamp=1.0,
+        local_base_models={5: "Pony"},
+    )
+    v5 = next(v for v in record.versions if v.version_id == 5)
+    assert v5.base_model == "Pony"
+
+    record_without_map = service._build_record_from_remote(
+        model_type="lora",
+        model_id=1,
+        local_versions=[5],
+        remote_versions=remote,
+        existing=None,
+        timestamp=1.0,
+    )
+    v5_plain = next(v for v in record_without_map.versions if v.version_id == 5)
+    assert v5_plain.base_model is None
+
+
+@pytest.mark.asyncio
+async def test_refresh_synthesizes_base_model_from_cache_items(tmp_path):
+    """End-to-end: a locally-held version absent from the remote listing keeps
+    its cache-item base model, keeping it countable under same-base scoping."""
+    db_path = tmp_path / "updates.sqlite"
+    service = ModelUpdateService(str(db_path), ttl_seconds=0)
+    raw_data = [{"civitai": {"modelId": 1, "id": 11}, "base_model": "Pony"}]
+    scanner = DummyScanner(raw_data)
+    provider = DummyProvider(
+        {
+            "modelVersions": [
+                {"id": 12, "baseModel": "Pony", "files": [], "images": []},
+            ]
+        }
+    )
+
+    await service.refresh_for_model_type("lora", scanner, provider)
+    record = await service.get_record("lora", 1)
+
+    assert record is not None
+    v11 = next(v for v in record.versions if v.version_id == 11)
+    assert v11.base_model == "Pony"
+    assert record.has_update() is True
+    assert record.has_update_for_local_bases() is True
 
 
 @pytest.mark.asyncio
@@ -622,3 +774,288 @@ async def test_refresh_folder_filter_considers_cross_folder_versions(tmp_path):
     # has_update must be True (version 20 > max_in_library=15)
     assert record.has_update() is True
 
+
+def test_extract_single_version_paid_access_timed(tmp_path):
+    """A timed paidAccess gate (permanent=False + future endsAt) is detected
+    as early access while availability stays 'Public'."""
+    db_path = tmp_path / "updates.sqlite"
+    service = ModelUpdateService(str(db_path))
+
+    entry = {
+        "id": 42,
+        "name": "v1 paid",
+        "availability": "Public",
+        "paidAccess": {
+            "permanent": False,
+            "endsAt": "2026-08-22T18:30:00.000Z",
+        },
+        "files": [],
+        "images": [],
+    }
+
+    version = service._extract_single_version(entry, index=0)
+
+    assert version is not None
+    assert version.is_early_access is True
+    assert version.early_access_ends_at == "2026-08-22T18:30:00.000Z"
+    assert version.is_paid is False
+    assert version.paid_access is not None
+
+
+def test_extract_single_version_paid_access_permanent(tmp_path):
+    """A permanent paidAccess gate (permanent=True, no endsAt) is detected and
+    flagged as paid but is NOT early access and carries no end date."""
+    db_path = tmp_path / "updates.sqlite"
+    service = ModelUpdateService(str(db_path))
+
+    entry = {
+        "id": 42,
+        "name": "v1 paid",
+        "availability": "Public",
+        "paidAccess": {"permanent": True, "endsAt": None},
+        "files": [],
+        "images": [],
+    }
+
+    version = service._extract_single_version(entry, index=0)
+
+    assert version is not None
+    assert version.is_early_access is False
+    assert version.is_paid is True
+    assert version.early_access_ends_at is None
+    assert version.paid_access is not None
+
+
+def test_normalize_paid_access_accepts_json_string():
+    """The by-hash enrichment path may hand paidAccess to _normalize_paid_access
+    as a JSON string; both the permanent and timed shapes must normalize."""
+    service = ModelUpdateService.__new__(ModelUpdateService)
+
+    permanent = ModelUpdateService._normalize_paid_access(
+        '{"permanent": true, "endsAt": null}'
+    )
+    assert permanent == {"permanent": True, "endsAt": None}
+
+    timed = ModelUpdateService._normalize_paid_access(
+        '{"permanent": false, "endsAt": "2026-08-22T18:30:00.000Z"}'
+    )
+    assert timed == {"permanent": False, "endsAt": "2026-08-22T18:30:00.000Z"}
+
+    empty = ModelUpdateService._normalize_paid_access(
+        '{"permanent": false, "endsAt": null}'
+    )
+    assert empty is None
+
+    malformed = ModelUpdateService._normalize_paid_access("{not json")
+    assert malformed is None
+
+
+def test_has_update_for_base_hide_paid():
+    """hide_paid also suppresses permanent paid versions in the same-base
+    update path (has_update_for_base)."""
+    record = make_record(
+        make_version(5, in_library=True, base_model="illustrious"),
+        make_version(
+            7,
+            in_library=False,
+            base_model="illustrious",
+            is_paid=True,
+            paid_access='{"permanent": true, "endsAt": null}',
+        ),
+    )
+
+    assert record.has_update_for_base(5, "illustrious") is True
+    assert record.has_update_for_base(5, "illustrious", hide_paid=True) is False
+
+
+def test_has_update_hide_paid():
+    """hide_paid suppresses update flags raised by a permanent paid version."""
+    record = make_record(
+        make_version(5, in_library=True),
+        make_version(
+            7,
+            in_library=False,
+            is_paid=True,
+            paid_access='{"permanent": true, "endsAt": null}',
+        ),
+    )
+
+    assert record.has_update() is True
+    assert record.has_update(hide_paid=True) is False
+
+
+def test_has_update_hide_early_access_paid_timed():
+    """hide_early_access suppresses a newer timed paidAccess version."""
+    record = make_record(
+        make_version(5, in_library=True),
+        make_version(
+            7,
+            in_library=False,
+            is_early_access=True,
+            early_access_ends_at="2099-01-01T00:00:00Z",
+        ),
+    )
+
+    assert record.has_update() is True
+    assert record.has_update(hide_early_access=True) is False
+
+
+
+def test_build_record_from_remote_preserves_paid_fields(tmp_path):
+    """_build_record_from_remote must carry paid_access/is_paid from the
+    parsed remote versions into the rebuilt record, or the refresh path
+    silently drops paid data before persistence."""
+    db_path = tmp_path / "updates.sqlite"
+    service = ModelUpdateService(str(db_path))
+
+    remote_version = ModelVersionRecord(
+        version_id=7,
+        name="v7",
+        base_model=None,
+        released_at=None,
+        size_bytes=None,
+        preview_url=None,
+        is_in_library=False,
+        should_ignore=False,
+        early_access_ends_at=None,
+        is_early_access=True,
+        usage_control="Download",
+        paid_access='{"permanent": true, "endsAt": null}',
+        is_paid=True,
+    )
+
+    record = service._build_record_from_remote(
+        model_type="lora",
+        model_id=123,
+        local_versions=[],
+        remote_versions=[remote_version],
+        existing=None,
+        timestamp=1.0,
+    )
+
+    rebuilt = record.versions[0]
+    assert rebuilt.paid_access == '{"permanent": true, "endsAt": null}'
+    assert rebuilt.is_paid is True
+
+
+def test_extract_file_count_counts_weight_files(tmp_path):
+    """file_count counts only weight-type files; a missing files array stays
+    None (unknown) so the UI can distinguish it from "no weight files"."""
+    db_path = tmp_path / "updates.sqlite"
+    service = ModelUpdateService(str(db_path))
+
+    response = {
+        "modelVersions": [
+            {
+                "id": 42,
+                "files": [
+                    {"sizeKB": 100, "type": "Model", "primary": True},
+                    {"sizeKB": 10, "type": "Training Data"},
+                    {"sizeKB": 50, "type": "Pruned Model"},
+                ],
+                "images": [],
+            },
+            {"id": 43, "images": []},
+            {"id": 44, "files": [], "images": []},
+        ]
+    }
+
+    versions = service._extract_versions(response)
+    assert versions is not None
+    assert versions[0].file_count == 2
+    assert versions[1].file_count is None
+    assert versions[2].file_count == 0
+
+
+@pytest.mark.asyncio
+async def test_refresh_persists_file_count(tmp_path):
+    db_path = tmp_path / "updates.sqlite"
+    service = ModelUpdateService(str(db_path), ttl_seconds=3600)
+    raw_data = [{"civitai": {"modelId": 1, "id": 11}}]
+    scanner = DummyScanner(raw_data)
+    provider = DummyProvider(
+        {
+            "modelVersions": [
+                {
+                    "id": 11,
+                    "name": "v1",
+                    "baseModel": "SD15",
+                    "files": [
+                        {"sizeKB": 1024, "type": "Model", "primary": True},
+                        {"sizeKB": 2048, "type": "Model"},
+                        {"sizeKB": 128, "type": "Training Data"},
+                    ],
+                    "images": [],
+                }
+            ]
+        }
+    )
+
+    await service.refresh_for_model_type("lora", scanner, provider)
+    record = await service.get_record("lora", 1)
+
+    assert record is not None
+    assert record.versions[0].file_count == 2
+
+
+def test_build_record_from_remote_preserves_file_count(tmp_path):
+    """A remote payload without files data must not clobber the previously
+    persisted file_count; a populated payload wins."""
+    db_path = tmp_path / "updates.sqlite"
+    service = ModelUpdateService(str(db_path))
+
+    existing = make_record(
+        ModelVersionRecord(
+            version_id=7,
+            name="v7",
+            base_model=None,
+            released_at=None,
+            size_bytes=None,
+            preview_url=None,
+            is_in_library=True,
+            should_ignore=False,
+            file_count=3,
+        )
+    )
+    remote_without_count = ModelVersionRecord(
+        version_id=7,
+        name="v7",
+        base_model=None,
+        released_at=None,
+        size_bytes=None,
+        preview_url=None,
+        is_in_library=False,
+        should_ignore=False,
+        file_count=None,
+    )
+
+    record = service._build_record_from_remote(
+        model_type="lora",
+        model_id=999,
+        local_versions=[7],
+        remote_versions=[remote_without_count],
+        existing=existing,
+        timestamp=1.0,
+    )
+    assert record.versions[0].file_count == 3
+
+    remote_with_count = ModelVersionRecord(
+        version_id=7,
+        name="v7",
+        base_model=None,
+        released_at=None,
+        size_bytes=None,
+        preview_url=None,
+        is_in_library=False,
+        should_ignore=False,
+        file_count=1,
+    )
+    record = service._build_record_from_remote(
+        model_type="lora",
+        model_id=999,
+        local_versions=[7],
+        remote_versions=[remote_with_count],
+        existing=existing,
+        timestamp=2.0,
+    )
+    assert record.versions[0].file_count == 1

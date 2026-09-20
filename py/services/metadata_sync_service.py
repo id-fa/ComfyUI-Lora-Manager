@@ -14,8 +14,31 @@ from ..utils.model_utils import determine_base_model
 from ..utils.models import autov3_from_civitai_files
 from .connectivity_guard import OFFLINE_FRIENDLY_MESSAGE, is_expected_offline_error
 from .errors import RateLimitError
+from .model_sources import has_external_source
 
 logger = logging.getLogger(__name__)
+
+
+def _merge_ordered_unique(existing: Iterable[str], new: Iterable[str]) -> list[str]:
+    """Concatenate two word lists, dropping duplicates without reordering.
+
+    Trigger word order is meaningful: the sequence stored in
+    ``civitai.trainedWords`` is the order used when building prompts, and users
+    can reorder it in the UI. A plain ``set`` union used to shuffle that order on
+    every metadata refresh, so existing words are kept first (in their saved
+    order) and newly discovered ones are appended.
+    """
+
+    merged: list[str] = []
+    seen: set[str] = set()
+
+    for word in list(existing) + list(new):
+        if word in seen:
+            continue
+        seen.add(word)
+        merged.append(word)
+
+    return merged
 
 
 class MetadataProviderProtocol(Protocol):
@@ -114,9 +137,10 @@ class MetadataSyncService:
                 )
 
             if "trainedWords" in existing_civitai:
-                existing_trained = existing_civitai.get("trainedWords", [])
-                new_trained = civitai_metadata.get("trainedWords", [])
-                merged_trained = list(set(existing_trained + new_trained))
+                existing_trained = existing_civitai.get("trainedWords", []) or []
+                new_trained = civitai_metadata.get("trainedWords", []) or []
+                # Order preserving merge: the saved order drives prompt order.
+                merged_trained = _merge_ordered_unique(existing_trained, new_trained)
                 merged_civitai["trainedWords"] = merged_trained
 
             local_metadata["civitai"] = merged_civitai
@@ -222,9 +246,10 @@ class MetadataSyncService:
                         error_msg = "CivitAI model is deleted and no archive provider is available"
                     return False, error_msg
             else:
-                is_hf_source = bool(model_data.get("hf_url"))
+                is_hf_source = has_external_source(model_data)
                 if is_hf_source:
-                    # HF-sourced model: only check CivitAI API directly.
+                    # External-source model (Hugging Face / ModelScope /
+                    # TensorArt): only check CivitAI API directly.
                     # CivArchive is almost guaranteed to have no record, and
                     # hitting it wastes rate-limit budget.
                     # Use a distinct provider name ("civitai_api" not None) so
@@ -245,16 +270,23 @@ class MetadataSyncService:
             civitai_api_not_found = False
             any_rate_limited = False
 
+            skip_network_providers = False
             for provider_name, provider in provider_attempts:
+                if skip_network_providers and provider_name != "sqlite":
+                    # A network provider was already rate-limited; failing
+                    # over to another network provider just spreads the flood
+                    # (#1085). The local sqlite archive stays as last resort.
+                    continue
                 try:
                     civitai_metadata_candidate, error = await provider.get_model_by_hash(sha256)
                 except RateLimitError as exc:
                     logger.warning(
-                        "Provider %s is rate-limited (retry_after=%.0fs); skipping to next provider",
+                        "Provider %s is rate-limited (retry_after=%.0fs); not failing over to other network providers",
                         provider_name or provider.__class__.__name__,
                         exc.retry_after or 0,
                     )
                     any_rate_limited = True
+                    skip_network_providers = True
                     continue
                 except Exception as exc:  # pragma: no cover - defensive logging
                     logger.error("Provider %s failed for hash %s: %s", provider_name, sha256, exc)
@@ -419,14 +451,37 @@ class MetadataSyncService:
         metadata: Dict[str, Any],
         model_id: int,
         model_version_id: Optional[int],
+        provider_name: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Relink a local metadata record to a specific CivitAI model version."""
+        """Relink a local metadata record to a specific CivitAI model version.
 
-        provider = await self._get_default_provider()
+        When ``provider_name`` is given, the named provider is resolved via the
+        metadata provider selector instead of the default fallback chain. A
+        missing/disabled provider surfaces a user-friendly error instead of the
+        raw selector exception.
+        """
+
+        if provider_name:
+            try:
+                provider = await self._get_provider(provider_name)
+            except ValueError as exc:
+                logger.warning(
+                    "Unable to resolve metadata provider %s: %s", provider_name, exc
+                )
+                raise ValueError(
+                    "CivitArchive is not available or not enabled. "
+                    "Enable the CivitArchive API in settings to relink via CivArchive."
+                ) from exc
+        else:
+            provider = await self._get_default_provider()
+
         civitai_metadata = await provider.get_model_version(model_id, model_version_id)
         if not civitai_metadata:
+            provider_label = (
+                "CivitArchive" if provider_name == "civarchive_api" else "CivitAI"
+            )
             raise ValueError(
-                f"Model version not found on CivitAI for ID: {model_id}"
+                f"Model version not found on {provider_label} for ID: {model_id}"
                 + (f" with version: {model_version_id}" if model_version_id else "")
             )
 

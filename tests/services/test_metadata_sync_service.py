@@ -6,7 +6,7 @@ import pytest
 
 from py.services.connectivity_guard import OFFLINE_COOLDOWN_ERROR, OFFLINE_FRIENDLY_MESSAGE
 from py.services.errors import RateLimitError
-from py.services.metadata_sync_service import MetadataSyncService
+from py.services.metadata_sync_service import MetadataSyncService, _merge_ordered_unique
 
 
 class DummySettings:
@@ -110,6 +110,49 @@ async def test_update_model_metadata_merges_and_persists():
         "path/to/model.metadata.json",
         result,
     )
+
+
+def test_merge_ordered_unique_keeps_first_seen_order():
+    assert _merge_ordered_unique(["b", "a"], ["a", "c", "b", "d"]) == [
+        "b",
+        "a",
+        "c",
+        "d",
+    ]
+    assert _merge_ordered_unique([], ["x"]) == ["x"]
+    assert _merge_ordered_unique(["x"], []) == ["x"]
+
+
+@pytest.mark.asyncio
+async def test_update_model_metadata_preserves_trained_word_order():
+    """Trigger word order (prompt order) must survive a metadata refresh."""
+
+    helpers = build_service()
+
+    local = {
+        "civitai": {"trainedWords": ["zeta style", "alpha", "beta"]},
+        "model_name": "Local",
+    }
+    remote = {
+        "source": "api",
+        "trainedWords": ["beta", "gamma", "alpha"],
+        "model": {"name": "Remote Model"},
+    }
+
+    result = await helpers.service.update_model_metadata(
+        "path/to/model.metadata.json",
+        local,
+        remote,
+        helpers.default_provider,
+    )
+
+    # Saved order first, newly discovered words appended, duplicates dropped
+    assert result["civitai"]["trainedWords"] == [
+        "zeta style",
+        "alpha",
+        "beta",
+        "gamma",
+    ]
 
 
 @pytest.mark.asyncio
@@ -560,6 +603,131 @@ async def test_relink_metadata_raises_when_version_missing():
             model_version_id=None,
         )
 
+
+@pytest.mark.asyncio
+async def test_relink_metadata_uses_named_civarchive_provider(tmp_path):
+    default_provider = SimpleNamespace(
+        get_model_by_hash=AsyncMock(),
+        get_model_version=AsyncMock(),
+    )
+    civarchive_provider = SimpleNamespace(
+        get_model_by_hash=AsyncMock(),
+        get_model_version=AsyncMock(
+            return_value={
+                "files": [
+                    {
+                        "primary": True,
+                        "type": "Model",
+                        "hashes": {"SHA256": "ABCDEF"},
+                    }
+                ],
+                "model": {"name": "Archived"},
+                "images": [],
+            }
+        ),
+    )
+
+    async def select_provider(name: str):
+        return civarchive_provider if name == "civarchive_api" else default_provider
+
+    provider_selector = AsyncMock(side_effect=select_provider)
+    helpers = build_service(
+        default_provider=default_provider,
+        provider_selector=provider_selector,
+    )
+
+    metadata = {"model_name": "Local", "sha256": "original"}
+    result = await helpers.service.relink_metadata(
+        file_path=str(tmp_path / "model.safetensors"),
+        metadata=metadata,
+        model_id=1,
+        model_version_id=2,
+        provider_name="civarchive_api",
+    )
+
+    assert result["model_name"] == "Archived"
+    assert result["sha256"] == "original"
+    provider_selector.assert_awaited_with("civarchive_api")
+    civarchive_provider.get_model_version.assert_awaited_once_with(1, 2)
+    helpers.default_provider_factory.assert_not_awaited()
+    helpers.metadata_manager.save_metadata.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_relink_metadata_raises_when_version_missing_with_civarchive():
+    default_provider = SimpleNamespace(
+        get_model_by_hash=AsyncMock(),
+        get_model_version=AsyncMock(),
+    )
+    civarchive_provider = SimpleNamespace(
+        get_model_by_hash=AsyncMock(),
+        get_model_version=AsyncMock(return_value=None),
+    )
+
+    async def select_provider(name: str):
+        return civarchive_provider if name == "civarchive_api" else default_provider
+
+    provider_selector = AsyncMock(side_effect=select_provider)
+    helpers = build_service(
+        default_provider=default_provider,
+        provider_selector=provider_selector,
+    )
+
+    with pytest.raises(ValueError, match="CivitArchive"):
+        await helpers.service.relink_metadata(
+            file_path="/tmp/model.safetensors",
+            metadata={},
+            model_id=9,
+            model_version_id=None,
+            provider_name="civarchive_api",
+        )
+
+
+@pytest.mark.asyncio
+async def test_relink_metadata_raises_friendly_error_when_provider_unavailable():
+    provider_selector = AsyncMock(
+        side_effect=ValueError("Provider 'civarchive_api' is not registered")
+    )
+    helpers = build_service(provider_selector=provider_selector)
+
+    with pytest.raises(ValueError, match="CivitArchive is not available or not enabled"):
+        await helpers.service.relink_metadata(
+            file_path="/tmp/model.safetensors",
+            metadata={},
+            model_id=9,
+            model_version_id=None,
+            provider_name="civarchive_api",
+        )
+
+
+@pytest.mark.asyncio
+async def test_relink_metadata_default_call_uses_default_provider_factory(tmp_path):
+    helpers = build_service()
+    helpers.default_provider.get_model_version.return_value = {
+        "files": [
+            {
+                "primary": True,
+                "type": "Model",
+                "hashes": {"SHA256": "ABCDEF"},
+            }
+        ],
+        "model": {"name": "Remote"},
+        "images": [],
+    }
+
+    result = await helpers.service.relink_metadata(
+        file_path=str(tmp_path / "model.safetensors"),
+        metadata={"model_name": "Local", "sha256": "original"},
+        model_id=1,
+        model_version_id=None,
+    )
+
+    assert result["model_name"] == "Remote"
+    assert result["sha256"] == "original"
+    helpers.default_provider_factory.assert_awaited_once()
+    helpers.provider_selector.assert_not_awaited()
+    helpers.metadata_manager.save_metadata.assert_awaited_once()
+
 @pytest.mark.asyncio
 async def test_fetch_and_update_model_persists_db_checked_when_sqlite_fails(tmp_path):
     """
@@ -687,3 +855,56 @@ async def test_fetch_and_update_model_does_not_overwrite_api_metadata_with_archi
     
     helpers.metadata_manager.save_metadata.assert_awaited()
     update_cache.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_fetch_and_update_model_keeps_sqlite_last_resort_after_civarchive_rate_limit(tmp_path):
+    """A CivArchive 429 must not block the local sqlite last resort (#1085)."""
+    civarchive_provider = SimpleNamespace(
+        get_model_by_hash=AsyncMock(
+            side_effect=RateLimitError("limited", retry_after=30)
+        ),
+        get_model_version=AsyncMock(),
+    )
+    sqlite_payload = {
+        "source": "archive_db",
+        "model": {"name": "Recovered", "description": "", "tags": []},
+        "images": [],
+        "baseModel": "sdxl",
+    }
+    sqlite_provider = SimpleNamespace(
+        get_model_by_hash=AsyncMock(return_value=(sqlite_payload, None)),
+        get_model_version=AsyncMock(),
+    )
+
+    async def select_provider(name: str):
+        if name == "civarchive_api":
+            return civarchive_provider
+        if name == "sqlite":
+            return sqlite_provider
+        raise AssertionError(f"unexpected provider request: {name}")
+
+    helpers = build_service(
+        settings_values={"enable_metadata_archive_db": True},
+        provider_selector=AsyncMock(side_effect=select_provider),
+    )
+
+    model_path = tmp_path / "model.safetensors"
+    model_data = {
+        "civitai_deleted": True,
+        "db_checked": False,
+        "file_path": str(model_path),
+    }
+    update_cache = AsyncMock()
+
+    ok, error = await helpers.service.fetch_and_update_model(
+        sha256="cafe",
+        file_path=str(model_path),
+        model_data=model_data,
+        update_cache_func=update_cache,
+    )
+
+    assert ok and error is None
+    civarchive_provider.get_model_by_hash.assert_awaited_once()
+    sqlite_provider.get_model_by_hash.assert_awaited_once()
+    assert model_data["metadata_source"] == "archive_db"

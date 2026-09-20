@@ -789,3 +789,73 @@ async def test_get_creator_model_count_never_raises(downloader):
 
     client = await CivitaiClient.get_instance()
     assert await client.get_creator_model_count("pixel") is None
+
+
+@pytest.mark.parametrize(
+    "placeholder_hash",
+    [
+        "e3b0c44298",  # AutoV2 (10 chars)
+        "e3b0c44298fc",  # AutoV3 (12 chars)
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",  # full SHA256
+    ],
+)
+async def test_get_model_by_hash_rejects_empty_placeholder_without_request(downloader, placeholder_hash):
+    """The empty-hash placeholder must never be resolved via the by-hash API:
+    CivitAI's index can contain polluted entries for it (e.g. a broken SD 1.5
+    LoRA whose AutoV3 equals the placeholder)."""
+    requested = []
+
+    async def fake_make_request(method, url, use_auth=True, **kwargs):
+        requested.append(url)
+        return True, {}
+
+    downloader.make_request = fake_make_request
+
+    client = await CivitaiClient.get_instance()
+
+    result, error = await client.get_model_by_hash(placeholder_hash)
+
+    assert result is None
+    assert error == "Model not found"
+    assert requested == []
+
+
+async def test_get_version_file_mini_returns_payload(downloader):
+    """The mini endpoint returns the raw stored filename (#1100)."""
+    client = await CivitaiClient.get_instance()
+
+    async def fake_make_request(method, url, use_auth=True, **kwargs):
+        assert method == "GET"
+        assert url.endswith("/model-versions/mini/3284136")
+        assert kwargs.get("params") == {"modelFileId": 3168412}
+        assert use_auth is True
+        return True, {"fileName": "CyberRealistic_zit_v8.0_bf16.safetensors"}
+
+    downloader.make_request = fake_make_request
+
+    result = await client.get_version_file_mini(3284136, 3168412)
+
+    assert result == {"fileName": "CyberRealistic_zit_v8.0_bf16.safetensors"}
+
+
+async def test_get_version_file_mini_returns_none_on_failure(downloader):
+    client = await CivitaiClient.get_instance()
+
+    async def fake_make_request(method, url, use_auth=True, **kwargs):
+        return False, "Model file 2 not found in version 1"
+
+    downloader.make_request = fake_make_request
+
+    assert await client.get_version_file_mini(1, 2) is None
+
+
+async def test_get_version_file_mini_propagates_rate_limit(downloader):
+    client = await CivitaiClient.get_instance()
+
+    async def fake_make_request(method, url, use_auth=True, **kwargs):
+        return False, RateLimitError("limited", retry_after=1.0)
+
+    downloader.make_request = fake_make_request
+
+    with pytest.raises(RateLimitError):
+        await client.get_version_file_mini(1, 2)

@@ -1,3 +1,5 @@
+from typing import Any, Dict, List
+
 NSFW_LEVELS = {
     "PG": 1,
     "PG13": 2,
@@ -81,6 +83,103 @@ VALID_LORA_SUB_TYPES = ["lora", "locon", "dora"]
 VALID_CHECKPOINT_SUB_TYPES = ["checkpoint", "diffusion_model"]
 VALID_EMBEDDING_SUB_TYPES = ["embedding"]
 
+# folder_paths key -> sub_type; single source of truth for extensibility.
+# Adding support for a new ComfyUI folder category is a one-line change here.
+OTHER_MODEL_FOLDER_SUBTYPES = {
+    "vae": "vae",
+    "upscale_models": "upscaler",
+    "text_encoders": "text_encoder",
+    "clip": "text_encoder",  # legacy ComfyUI key
+    "clip_vision": "clip_vision",
+    "controlnet": "controlnet",
+}
+VALID_OTHER_SUB_TYPES = ["vae", "upscaler", "text_encoder", "clip_vision", "controlnet"]
+# Sub-types managed when the (opt-in) Other Models feature is switched on.
+# The feature itself defaults to off (``enable_other_models`` = False), so
+# nothing here is scanned until the user enables it.
+#
+# The default set is deliberately limited to the dependency-style assets every
+# pipeline needs and where "which one am I actually using" is the real problem:
+# VAE, upscalers and text encoders. ``clip_vision`` and ``controlnet`` are
+# workflow-driven instead (IPAdapter/SVD, per-workflow ControlNet variants) and
+# ControlNet libraries routinely run to dozens of files, so both stay opt-in
+# and are treated symmetrically.
+DEFAULT_ENABLED_OTHER_SUB_TYPES: List[str] = [
+    "vae",
+    "upscaler",
+    "text_encoder",
+]
+
+
+def other_sub_type_folder_keys() -> Dict[str, List[str]]:
+    """Invert OTHER_MODEL_FOLDER_SUBTYPES into sub_type -> folder_paths keys.
+
+    ``text_encoder`` maps to two folder keys (``text_encoders`` and the legacy
+    ``clip``), so every consumer that resolves a sub_type back to folders must
+    merge both.
+    """
+    mapping: Dict[str, List[str]] = {}
+    for folder_key, sub_type in OTHER_MODEL_FOLDER_SUBTYPES.items():
+        mapping.setdefault(sub_type, []).append(folder_key)
+    return mapping
+
+
+# Precomputed inverse of OTHER_MODEL_FOLDER_SUBTYPES, keeping the table order.
+OTHER_SUB_TYPE_FOLDER_KEYS: Dict[str, List[str]] = other_sub_type_folder_keys()
+
+
+def normalize_other_sub_types(value: Any) -> List[str]:
+    """Normalize a stored/requested enabled-sub_type list.
+
+    Unknown values and duplicates are dropped; the result follows the
+    canonical VALID_OTHER_SUB_TYPES order so the stored setting and the UI
+    stay stable. Non-list input falls back to the defaults.
+    """
+    if isinstance(value, str):
+        candidates: Any = [value]
+    elif isinstance(value, (list, tuple, set)):
+        candidates = value
+    else:
+        return list(DEFAULT_ENABLED_OTHER_SUB_TYPES)
+
+    allowed = {item for item in candidates if isinstance(item, str)}
+    return [sub_type for sub_type in VALID_OTHER_SUB_TYPES if sub_type in allowed]
+# CivitAI model.type values accepted by the "other" page's fetch-metadata
+# validation (lowercased). CLIP/CLIPVision are retired upstream but still
+# appear on grandfathered models.
+VALID_OTHER_CIVITAI_TYPES = {
+    "vae",
+    "upscaler",
+    "textencoder",
+    "clip",
+    "clipvision",
+    "controlnet",
+    "other",
+}
+# CivitAI model.type -> internal sub_type for the "other" model page.
+CIVITAI_TYPE_TO_OTHER_SUB_TYPE = {
+    "vae": "vae",
+    "upscaler": "upscaler",
+    "textencoder": "text_encoder",
+    "clip": "text_encoder",
+    "clipvision": "clip_vision",
+    "controlnet": "controlnet",
+}
+
+# CivitAI ModelFile.type values -> internal sub_type for the "other" model
+# page. Used for download routing only, and strictly as an explicit user file
+# pick or a fallback when model.type maps to nothing — checkpoint models
+# routinely bundle VAE/Text Encoder component files, so file types must never
+# override a mapped model.type.
+CIVITAI_FILE_TYPE_TO_OTHER_SUB_TYPE = {
+    "VAE": "vae",
+    "Upscaler": "upscaler",
+    "Text Encoder": "text_encoder",
+    "Vision Encoder": "clip_vision",
+    "CLIPVision": "clip_vision",
+    "ControlNet": "controlnet",
+}
+
 # Backward compatibility alias
 VALID_LORA_TYPES = VALID_LORA_SUB_TYPES
 
@@ -89,6 +188,7 @@ CIVITAI_USER_MODEL_TYPES = [
     *VALID_LORA_TYPES,
     "textualinversion",
     "checkpoint",
+    *sorted(VALID_OTHER_CIVITAI_TYPES),
 ]
 
 # Default chunk size in megabytes used for hashing large files.
@@ -99,11 +199,30 @@ DEFAULT_HASH_CHUNK_SIZE_MB = 4
 # absurd 64-bit header length from forcing a multi-GB allocation during scan.
 MAX_SAFETENSORS_HEADER_BYTES = 64 * 1024 * 1024
 
-# First 12 chars of the SHA256 of an empty byte string. Some (re-packaging)
-# training tools write this placeholder into safetensors metadata instead of a
-# real hash; it must never be treated as a valid AutoV3 — several broken
-# models sharing it would collide in the hash index and falsely match recipes.
-INVALID_AUTOV3_EMPTY_HASH = "e3b0c44298fc"
+# SHA256 of an empty byte string. Some (re-packaging) training tools write a
+# truncated form of this placeholder into safetensors metadata (as
+# ``modelspec.hash_sha256`` / ``sshs_model_hash``), and hashing an empty or
+# unreadable file produces it directly. It must never be treated as a valid
+# hash: several broken models share it, CivitAI's by-hash index can contain
+# such polluted entries, and matching it falsely attributes recipes.
+EMPTY_HASH_SHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+INVALID_AUTOV3_EMPTY_HASH = EMPTY_HASH_SHA256[:12]
+INVALID_AUTOV2_EMPTY_HASH = EMPTY_HASH_SHA256[:10]
+
+
+def is_empty_placeholder_hash(value: Any) -> bool:
+    """True for a 10/12/64-hex-char spelling of the empty-hash placeholder.
+
+    These are the AutoV2, AutoV3 and full-SHA256 forms of the placeholder;
+    such values identify no real model and must never be resolved against
+    local files or CivitAI.
+    """
+    if not isinstance(value, str):
+        return False
+    v = value.strip().lower()
+    if len(v) not in (10, 12, 64):
+        return False
+    return v == EMPTY_HASH_SHA256[: len(v)]
 
 # Auto-organize settings
 AUTO_ORGANIZE_BATCH_SIZE = (
@@ -136,6 +255,19 @@ DEFAULT_PRIORITY_TAG_CONFIG = {
     "lora": ", ".join(CIVITAI_MODEL_TAGS),
     "checkpoint": ", ".join(CIVITAI_MODEL_TAGS),
     "embedding": ", ".join(CIVITAI_MODEL_TAGS),
+}
+
+# Default download path template for each model type. "other" defaults to a
+# flat layout (empty template) on purpose: other-model downloads are already
+# separated by sub_type roots (default_other_roots), and priority_tags has no
+# "other" entry, so {first_tag} would resolve to an arbitrary CivitAI tag and
+# scatter files into unstable folders. Users can still opt in to a template by
+# writing "other" into download_path_templates in settings.json.
+DEFAULT_DOWNLOAD_PATH_TEMPLATES: Dict[str, str] = {
+    "lora": "{base_model}/{first_tag}",
+    "checkpoint": "{base_model}/{first_tag}",
+    "embedding": "{base_model}/{first_tag}",
+    "other": "",
 }
 
 # baseModel values from CivitAI that should be treated as diffusion models (unet)

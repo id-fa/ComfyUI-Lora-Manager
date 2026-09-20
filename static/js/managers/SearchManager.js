@@ -298,19 +298,20 @@ export class SearchManager {
             pageState.searchOptions.loraName = options.loraName || false;
             pageState.searchOptions.loraModel = options.loraModel || false;
             pageState.searchOptions.prompt = options.prompt || false;
-        } else if (this.currentPage === 'loras' || this.currentPage === 'checkpoints' || this.currentPage === 'embeddings') {
+        } else if (this.currentPage === 'loras' || this.currentPage === 'checkpoints' || this.currentPage === 'embeddings' || this.currentPage === 'other') {
             // Update only the relevant fields in searchOptions instead of replacing the whole object
             pageState.searchOptions.filename = options.filename || false;
             pageState.searchOptions.modelname = options.modelname || false;
             pageState.searchOptions.tags = options.tags || false;
             pageState.searchOptions.creator = options.creator || false;
+            pageState.searchOptions.hash = options.hash || false;
         }
       }
       
       // Call the appropriate manager's load method based on page type
       if (this.currentPage === 'recipes' && window.recipeManager) {
         window.recipeManager.loadRecipes(true);
-      } else if (this.currentPage === 'loras' || this.currentPage === 'embeddings' || this.currentPage === 'checkpoints') {
+      } else if (this.currentPage === 'loras' || this.currentPage === 'embeddings' || this.currentPage === 'checkpoints' || this.currentPage === 'other') {
         // For models page, reset the page and reload
         getModelApiClient().loadMoreWithVirtualScroll(true, false);
       }
