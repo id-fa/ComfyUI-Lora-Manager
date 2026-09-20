@@ -9,6 +9,7 @@ try:  # pragma: no cover - import fallback for pytest collection
     from .py.nodes.lora_stacker import LoraStackerLM
     from .py.nodes.lora_stack_combiner import LoraStackCombinerLM
     from .py.nodes.save_image import SaveImageLM
+    from .py.nodes.save_video import SaveVideoLM
     from .py.nodes.debug_metadata import DebugMetadataLM
     from .py.nodes.wanvideo_lora_select import WanVideoLoraSelectLM
     from .py.nodes.wanvideo_lora_select_from_text import WanVideoLoraTextSelectLM
@@ -48,6 +49,7 @@ except (
         "py.nodes.lora_stack_combiner"
     ).LoraStackCombinerLM
     SaveImageLM = importlib.import_module("py.nodes.save_image").SaveImageLM
+    SaveVideoLM = importlib.import_module("py.nodes.save_video").SaveVideoLM
     DebugMetadataLM = importlib.import_module("py.nodes.debug_metadata").DebugMetadataLM
     WanVideoLoraSelectLM = importlib.import_module(
         "py.nodes.wanvideo_lora_select"
@@ -83,6 +85,7 @@ NODE_CLASS_MAPPINGS = {
     LoraStackerLM.NAME: LoraStackerLM,
     LoraStackCombinerLM.NAME: LoraStackCombinerLM,
     SaveImageLM.NAME: SaveImageLM,
+    SaveVideoLM.NAME: SaveVideoLM,
     DebugMetadataLM.NAME: DebugMetadataLM,
     WanVideoLoraSelectLM.NAME: WanVideoLoraSelectLM,
     WanVideoLoraTextSelectLM.NAME: WanVideoLoraTextSelectLM,

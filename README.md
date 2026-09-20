@@ -256,6 +256,15 @@ Including a path separator (`/` on all platforms) in the filename prefix creates
 
 > **Note**: The subdirectory is created relative to your ComfyUI output directory (configurable via `--output-directory`). Characters invalid for folder names are automatically replaced with underscores.
 
+### Save Video (LoraManager) Node
+
+ComfyUI's built-in **Save Video** node writes the full workflow and prompt JSON into the video container metadata, which can make saving fail on large workflows. **Save Video (LoraManager)** takes the same `VIDEO` input but keeps the metadata small:
+
+- `save_with_metadata` (default on) writes only a compact A1111-style `parameters` tag (prompt, negative prompt, seed, model, LoRAs, ...).
+- `embed_workflow` (default off) optionally stores the workflow so the file can be dragged back into ComfyUI. The raw prompt graph and other extra data are never written.
+- `format` (`auto` / `mp4` / `mkv` / `webm`) and `codec` (`auto` / `h264` / `av1`) behave like the built-in node.
+- `filename_prefix` supports the same [filename format patterns](#filename-format-patterns-for-save-image-node) as the Save Image node, e.g. `video/%model:10%_%seed%`.
+
 ### Standalone Mode
 
 You can now run LoRA Manager independently from ComfyUI:
