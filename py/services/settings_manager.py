@@ -19,6 +19,7 @@ from typing import (
     Mapping,
     Optional,
     Sequence,
+    Set,
     Tuple,
 )
 
@@ -97,6 +98,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "recipes_path": "",
     "base_model_path_mappings": {},
     "download_path_templates": {},
+    "download_filename_templates": {},
     "folder_paths": {},
     "extra_folder_paths": {},
     "example_images_path": "",
@@ -307,6 +309,29 @@ class SettingsManager:
             return False
 
         return payload == template
+
+    def get_template_folder_path_placeholders(self) -> Set[str]:
+        """Placeholder folder_paths values shipped in settings.json.example.
+
+        A fresh standalone install is seeded from the template, so its
+        documentation-only placeholder paths end up in the live settings
+        file. The Model Paths settings UI hides them; the first real save
+        overwrites them via ``set("folder_paths")``.
+        """
+
+        template = self._read_template_payload()
+        if not template:
+            return set()
+
+        folder_paths = template.get("folder_paths")
+        if not isinstance(folder_paths, Mapping):
+            return set()
+
+        placeholders: Set[str] = set()
+        for value in folder_paths.values():
+            paths = value if isinstance(value, list) else [value]
+            placeholders.update(p for p in paths if isinstance(p, str) and p)
+        return placeholders
 
     def _merge_template_with_defaults(
         self, defaults: Dict[str, Any], template: Mapping[str, Any]
@@ -1219,19 +1244,27 @@ class SettingsManager:
             if self._bootstrap_reason == "missing":
                 message = (
                     "LoRA Manager created a default settings.json because no configuration was found. "
-                    "Edit settings.json to add your model directories so library scanning can run."
+                    "Open Settings → Model Paths to add your model directories so library scanning can run."
                 )
             else:
                 message = (
                     "LoRA Manager could not locate any configured model directories. "
-                    "Edit settings.json to add your model folders so library scanning can run."
+                    "Open Settings → Model Paths to add your model folders so library scanning can run."
                 )
             self._add_startup_message(
                 code="missing-model-paths",
                 title="Model folders need setup",
                 message=message,
                 severity="warning",
-                actions=self._default_settings_actions(),
+                actions=[
+                    {
+                        "action": "open-model-paths-settings",
+                        "label": "Configure model folders",
+                        "type": "primary",
+                        "icon": "fas fa-cog",
+                    },
+                    *self._default_settings_actions(),
+                ],
                 dismissible=False,
             )
 
@@ -1244,6 +1277,7 @@ class SettingsManager:
         defaults = copy.deepcopy(DEFAULT_SETTINGS)
         defaults["base_model_path_mappings"] = {}
         defaults["download_path_templates"] = {}
+        defaults["download_filename_templates"] = {}
         defaults["priority_tags"] = DEFAULT_PRIORITY_TAG_CONFIG.copy()
         defaults.setdefault("folder_paths", {})
         defaults.setdefault("extra_folder_paths", {})
@@ -2391,6 +2425,49 @@ class SettingsManager:
         return templates.get(
             model_type, DEFAULT_DOWNLOAD_PATH_TEMPLATES.get(model_type, "")
         )
+
+    def get_download_filename_template(self, model_type: str) -> str:
+        """Get the download filename template for a specific model type.
+
+        Args:
+            model_type: The type of model ('lora', 'checkpoint', 'embedding',
+                'other')
+
+        Returns:
+            Template string for the model type. Empty string (the default for
+            every model type) means downloaded files keep their original
+            filename.
+        """
+        templates = self.settings.get("download_filename_templates", {})
+
+        # Handle edge case where templates might be stored as JSON string
+        if isinstance(templates, str):
+            try:
+                parsed_templates = json.loads(templates)
+                if isinstance(parsed_templates, dict):
+                    self.settings["download_filename_templates"] = parsed_templates
+                    self._save_settings()
+                    templates = parsed_templates
+                    logger.info(
+                        "Successfully parsed download_filename_templates from JSON string"
+                    )
+                else:
+                    raise ValueError("Parsed JSON is not a dictionary")
+            except (json.JSONDecodeError, ValueError) as e:
+                logger.warning(
+                    f"Failed to parse download_filename_templates JSON string: {e}. Resetting to empty templates."
+                )
+                templates = {}
+                self.settings["download_filename_templates"] = templates
+                self._save_settings()
+
+        if not isinstance(templates, dict):
+            templates = {}
+            self.settings["download_filename_templates"] = templates
+            self._save_settings()
+
+        template = templates.get(model_type, "")
+        return template if isinstance(template, str) else ""
 
 
 _SETTINGS_MANAGER: Optional["SettingsManager"] = None
