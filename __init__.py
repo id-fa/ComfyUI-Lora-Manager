@@ -19,6 +19,7 @@ try:  # pragma: no cover - import fallback for pytest collection
     from .py.nodes.lora_info import LoraInfoLM
     from .py.nodes.lora_syntax_to_path import LoraSyntaxToPath
     from .py.nodes.create_hook_lora import CreateHookLoraLM
+    from .py.nodes.load_image_metadata import LoadImageMetadataLM
     from .py.nodes.metadata_overwrite import MetadataOverwriteLM
     from .py.metadata_collector import init as init_metadata_collector
 except (
@@ -72,6 +73,7 @@ except (
     MetadataOverwriteLM = importlib.import_module(
         "py.nodes.metadata_overwrite"
     ).MetadataOverwriteLM
+    LoadImageMetadataLM = importlib.import_module("py.nodes.load_image_metadata").LoadImageMetadataLM
     init_metadata_collector = importlib.import_module("py.metadata_collector").init
 
 NODE_CLASS_MAPPINGS = {
@@ -96,6 +98,7 @@ NODE_CLASS_MAPPINGS = {
     LoraSyntaxToPath.NAME: LoraSyntaxToPath,
     CreateHookLoraLM.NAME: CreateHookLoraLM,
     MetadataOverwriteLM.NAME: MetadataOverwriteLM,
+    LoadImageMetadataLM.NAME: LoadImageMetadataLM,
 }
 
 WEB_DIRECTORY = "./web/comfyui"
