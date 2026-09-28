@@ -23,6 +23,7 @@ from py.routes.handlers.misc_handlers import (
     NodeRegistryHandler,
     ServiceRegistryAdapter,
     SettingsHandler,
+    SidecarMigrationHandler,
     _collect_comfyui_session_logs,
     _is_wsl,
     _wsl_to_windows_path,
@@ -522,6 +523,7 @@ async def test_open_backup_location_uses_settings_directory(tmp_path, monkeypatc
     monkeypatch.setattr(subprocess, "Popen", fake_popen)
     monkeypatch.setattr("py.routes.handlers.misc_handlers._is_docker", lambda: False)
     monkeypatch.setattr("py.routes.handlers.misc_handlers._is_wsl", lambda: False)
+    monkeypatch.setenv("DISPLAY", ":0")
 
     response = await handler.open_backup_location(FakeRequest())  # pyright: ignore[reportArgumentType]
     payload = _json_payload(response)
@@ -530,6 +532,88 @@ async def test_open_backup_location_uses_settings_directory(tmp_path, monkeypatc
     assert payload["success"] is True
     assert payload["path"] == str(backup_dir)
     assert calls == [["xdg-open", str(backup_dir)]]
+
+
+@pytest.mark.asyncio
+async def test_open_sidecar_location_opens_configured_root(tmp_path, monkeypatch):
+    from py.services.settings_manager import get_settings_manager
+
+    root = tmp_path / "sidecars"
+    get_settings_manager().set("sidecar_storage_path", str(root))
+
+    handler = FileSystemHandler(settings_service=SimpleNamespace())
+
+    calls = []
+
+    def fake_popen(args):
+        calls.append(args)
+        return MagicMock()
+
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+    monkeypatch.setattr("py.routes.handlers.misc_handlers._is_docker", lambda: False)
+    monkeypatch.setattr("py.routes.handlers.misc_handlers._is_wsl", lambda: False)
+    monkeypatch.setenv("DISPLAY", ":0")
+
+    response = await handler.open_sidecar_location(FakeRequest())  # pyright: ignore[reportArgumentType]
+    payload = _json_payload(response)
+
+    assert response.status == 200
+    assert payload["success"] is True
+    assert payload["path"] == str(root)
+    # Created on demand so the button works before any migration ran.
+    assert root.is_dir()
+    assert calls == [["xdg-open", str(root)]]
+
+
+@pytest.mark.asyncio
+async def test_open_sidecar_location_headless_returns_clipboard_mode(tmp_path, monkeypatch):
+    """Without a GUI session xdg-open cannot work; the handler must hand the
+    path to the browser instead of reporting a success that never happened."""
+    from py.services.settings_manager import get_settings_manager
+
+    root = tmp_path / "sidecars"
+    get_settings_manager().set("sidecar_storage_path", str(root))
+
+    handler = FileSystemHandler(settings_service=SimpleNamespace())
+
+    monkeypatch.delenv("DISPLAY", raising=False)
+    monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+    monkeypatch.setattr("py.routes.handlers.misc_handlers._is_docker", lambda: False)
+    monkeypatch.setattr("py.routes.handlers.misc_handlers._is_wsl", lambda: False)
+
+    popen_calls = []
+    monkeypatch.setattr(subprocess, "Popen", lambda *args, **kwargs: popen_calls.append(args))
+
+    response = await handler.open_sidecar_location(FakeRequest())  # pyright: ignore[reportArgumentType]
+    payload = _json_payload(response)
+
+    assert response.status == 200
+    assert payload["success"] is True
+    assert payload["mode"] == "clipboard"
+    assert payload["path"] == str(root)
+    assert popen_calls == []
+
+
+@pytest.mark.asyncio
+async def test_get_settings_includes_resolved_sidecar_root(tmp_path):
+    from py.services.settings_manager import get_settings_manager
+
+    root = tmp_path / "sidecars-custom"
+    get_settings_manager().set("sidecar_storage_path", str(root))
+
+    handler = SettingsHandler(
+        settings_service=DummySettings(),
+        metadata_provider_updater=noop_async,
+        downloader_factory=dummy_downloader_factory,
+    )
+
+    response = await handler.get_settings(FakeRequest())  # pyright: ignore[reportArgumentType]
+    payload = _json_payload(response)
+
+    assert payload["success"] is True
+    assert payload["settings"]["sidecar_storage_root"] == str(root)
+    assert payload["settings"]["sidecar_storage_root_is_default"] is False
+    assert payload["settings"]["sidecar_storage_root_in_repo"] is False
 
 
 @pytest.mark.asyncio
@@ -603,6 +687,7 @@ async def test_open_wildcards_location_creates_and_opens_directory(tmp_path, mon
     monkeypatch.setattr(subprocess, "Popen", fake_popen)
     monkeypatch.setattr("py.routes.handlers.misc_handlers._is_docker", lambda: False)
     monkeypatch.setattr("py.routes.handlers.misc_handlers._is_wsl", lambda: False)
+    monkeypatch.setenv("DISPLAY", ":0")
     monkeypatch.setattr(
         "py.services.wildcard_service.get_wildcards_dir",
         lambda create=False: str(wildcards_dir.mkdir(parents=True, exist_ok=True) or wildcards_dir)
@@ -2557,3 +2642,123 @@ async def test_get_model_versions_status_supported_type_stays_interactive():
             "hasBeenDownloaded": False,
         }
     ]
+
+
+class DummySidecarMigrationUseCase:
+    def __init__(self, result):
+        self.result = result
+        self.calls = []
+
+    async def execute_with_error_handling(self, *, direction, progress_cb=None, force=False, old_root=None):
+        self.calls.append({"direction": direction, "force": force, "old_root": old_root})
+        return self.result
+
+
+def _sidecar_migration_handler(result):
+    use_case = DummySidecarMigrationUseCase(result)
+    handler = SidecarMigrationHandler(
+        use_case_factory=lambda: use_case,
+        progress_callback_factory=lambda: None,
+    )
+    return handler, use_case
+
+
+@pytest.mark.asyncio
+async def test_sidecar_migration_handler_runs_to_centralized():
+    result = {"success": True, "direction": "to_centralized", "moved": 3}
+    handler, use_case = _sidecar_migration_handler(result)
+
+    response = await handler.migrate_sidecars(
+        FakeRequest(json_data={"direction": "to_centralized", "force": True})  # pyright: ignore[reportArgumentType]
+    )
+    payload = _json_payload(response)
+
+    assert response.status == 200
+    assert payload["success"] is True
+    assert payload["moved"] == 3
+    assert use_case.calls == [{"direction": "to_centralized", "force": True, "old_root": ""}]
+
+
+@pytest.mark.asyncio
+async def test_sidecar_migration_handler_rejects_bad_direction():
+    handler, use_case = _sidecar_migration_handler({"success": True})
+
+    response = await handler.migrate_sidecars(
+        FakeRequest(json_data={"direction": "sideways"})  # pyright: ignore[reportArgumentType]
+    )
+    payload = _json_payload(response)
+
+    assert response.status == 400
+    assert payload["success"] is False
+    assert use_case.calls == []
+
+
+@pytest.mark.asyncio
+async def test_sidecar_migration_handler_accepts_get_query_params():
+    result = {"success": True, "direction": "to_alongside", "moved": 0}
+    handler, use_case = _sidecar_migration_handler(result)
+
+    response = await handler.migrate_sidecars(
+        FakeRequest(  # pyright: ignore[reportArgumentType]
+            query={"direction": "to_alongside", "force": "true"},
+            method="GET",
+        )
+    )
+    payload = _json_payload(response)
+
+    assert response.status == 200
+    assert payload["success"] is True
+    assert use_case.calls == [{"direction": "to_alongside", "force": True, "old_root": ""}]
+
+
+@pytest.mark.asyncio
+async def test_sidecar_migration_handler_guard_refusal_is_400():
+    result = {"success": False, "error": "sidecar storage is already centralized"}
+    handler, use_case = _sidecar_migration_handler(result)
+
+    response = await handler.migrate_sidecars(
+        FakeRequest(json_data={"direction": "to_centralized"})  # pyright: ignore[reportArgumentType]
+    )
+    payload = _json_payload(response)
+
+    assert response.status == 400
+    assert payload["success"] is False
+    assert "already centralized" in payload["error"]
+    assert use_case.calls == [{"direction": "to_centralized", "force": False, "old_root": ""}]
+
+
+@pytest.mark.asyncio
+async def test_sidecar_migration_handler_relocate_root_passes_old_root():
+    result = {"success": True, "direction": "relocate_root", "moved": 5}
+    handler, use_case = _sidecar_migration_handler(result)
+
+    response = await handler.migrate_sidecars(
+        FakeRequest(  # pyright: ignore[reportArgumentType]
+            json_data={
+                "direction": "relocate_root",
+                "old_root": "/old/sidecars",
+                "force": True,
+            }
+        )
+    )
+    payload = _json_payload(response)
+
+    assert response.status == 200
+    assert payload["success"] is True
+    assert use_case.calls == [
+        {"direction": "relocate_root", "force": True, "old_root": "/old/sidecars"}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_sidecar_migration_handler_relocate_root_requires_old_root():
+    handler, use_case = _sidecar_migration_handler({"success": True})
+
+    response = await handler.migrate_sidecars(
+        FakeRequest(json_data={"direction": "relocate_root"})  # pyright: ignore[reportArgumentType]
+    )
+    payload = _json_payload(response)
+
+    assert response.status == 400
+    assert "old_root" in payload["error"]
+    assert use_case.calls == []
