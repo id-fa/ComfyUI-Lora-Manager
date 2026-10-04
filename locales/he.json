@@ -251,7 +251,6 @@
                 "modelname": "שם מודל",
                 "tags": "תגיות",
                 "creator": "יוצר",
-                "hash": "hash",
                 "title": "כותרת מתכון",
                 "loraName": "שם קובץ LoRA",
                 "loraModel": "שם מודל LoRA",
@@ -353,6 +352,14 @@
             "placeholder": "השאר ריק כדי להשתמש ב-aria2c מתוך ה-PATH"
         },
         "aria2HelpLink": "למד כיצד להגדיר את מנוע ההורדה aria2",
+        "unknownBaseModelRouting": {
+            "label": "ניתוב מודל בסיס לא מוכר",
+            "help": "קובע לאן מועברות הורדות של Checkpoint כאשר CivitAI מדווח על מודל בסיס שהוא לא Checkpoint מוכר (SD 1.x/2.x/3.x, SDXL, Pony, Illustrious, NoobAI) ולא מודל דיפוזיה מוכר. ארכיטקטורות דיפוזיה חדשות מופיעות לעיתים קרובות, ולכן ניתוב שלהן למודלי דיפוזיה הוא בדרך כלל הנכון.",
+            "options": {
+                "diffusionModel": "מודלי דיפוזיה",
+                "checkpoint": "Checkpoints"
+            }
+        },
         "civitaiHostBanner": {
             "title": "העדפת מארח CivitAI זמינה",
             "content": "CivitAI משתמש כעת ב-civitai.com עבור תוכן SFW וב-civitai.red עבור תוכן ללא הגבלות. ניתן לשנות בהגדרות איזה אתר ייפתח כברירת מחדל.",
@@ -785,6 +792,8 @@
             "downloadComplete": "ההורדה הושלמה בהצלחה",
             "enableCivarchiveApi": "הפעל את CivArchive API כספק מטא-נתונים",
             "enableCivarchiveApiHelp": "כאשר מופעל, CivArchive API משמש כמקור גיבוי למטא-נתונים של מודלים (למשל עבור מודלים שנמחקו מ-CivitAI). כבה כדי להימנע לחלוטין ממגבלות הקצב של CivArchive.",
+            "enableOpenmodeldbApi": "הפעל את OpenModelDB כספק מטא-נתונים",
+            "enableOpenmodeldbApiHelp": "כאשר מופעל, מטא-נתונים של Upscaler מחופשים גם בקטלוג OpenModelDB (openmodeldb.info) כאשר ל-CivitAI אין רשומה. הקטלוג נשמר במטמון מקומי ומתרענן מדי יום.",
             "providerOrder": "סדר ספקי מטא-נתונים לגיבוי",
             "providerOrderHelp": "CivitAI API תמיד מנוסה ראשון. בחר את סדר הספקים הנותרים בעת חיפוש מטא-נתונים.",
             "providerOrderCivitaiArchiveSqlite": "CivitAI → CivArchive → Archive DB",
@@ -1555,6 +1564,10 @@
             "selectRootDirectory": "בחר ספריית שורש",
             "selectModelRoot": "בחר שורש מודל:",
             "selectTypeRoot": "בחר שורש {type}:",
+            "routingOverride": {
+                "label": "סוג יעד:",
+                "tooltip": "זוהה אוטומטית ממטא-נתוני המודל. החלף אם הזיהוי שגוי; החלפה מכבה את «השתמש בנתיב ברירת מחדל» עבור הורדה זו."
+            },
             "targetFolderPath": "נתיב תיקיית יעד:",
             "browseFolders": "דפדף בתיקיות:",
             "createNewFolder": "צור תיקייה חדשה",
@@ -1825,6 +1838,8 @@
                 "sendToWorkflow": "שלח ל-ComfyUI",
                 "sendToWorkflowText": "שלח ל-ComfyUI",
                 "copyHash": "העתק hash",
+                "copyCivitaiId": "העתק מזהה Civitai",
+                "civitaiIdCopied": "מזהה Civitai הועתק ללוח העריכה",
                 "deleteModelWithShortcut": "מחק מודל (Del)"
             },
             "openFileLocation": {
@@ -1843,6 +1858,8 @@
                 "baseModel": "מודל בסיס",
                 "size": "גודל",
                 "hashes": "hashes",
+                "civitaiModelId": "מזהה מודל",
+                "civitaiVersionId": "מזהה גרסה",
                 "unknown": "לא ידוע",
                 "usageTips": "טיפים לשימוש",
                 "additionalNotes": "הערות נוספות",
@@ -2768,6 +2785,9 @@
             },
             "filename_conflicts": {
                 "title": "התנגשויות שמות קבצים כפולים"
+            },
+            "sidecar_mirror_orphans": {
+                "title": "קבצי לוואי מרוכזים"
             },
             "ui_version": {
                 "title": "גרסת הממשק"

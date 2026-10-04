@@ -16,6 +16,7 @@ const DEFAULT_SETTINGS_BASE = Object.freeze({
     show_only_sfw: false,
     enable_metadata_archive_db: false,
     enable_civarchive_api: true,
+    enable_openmodeldb_api: true,
     metadata_provider_order: 'civitai_archive_sqlite',
     proxy_enabled: false,
     proxy_type: 'http',
@@ -60,6 +61,7 @@ const DEFAULT_SETTINGS_BASE = Object.freeze({
     metadata_refresh_skip_paths: [],
     skip_previously_downloaded_model_versions: false,
     download_skip_base_models: [],
+    unknown_base_model_routing: 'diffusion_model',
     backup_auto_enabled: true,
     backup_retention_count: 5,
     sidecar_storage_mode: 'alongside',
@@ -122,7 +124,6 @@ export const state = {
                 modelname: true,
                 tags: false,
                 creator: false,
-                hash: false,
                 recursive: getStorageItem(`${MODEL_TYPES.LORA}_recursiveSearch`, true),
             },
             filters: {
@@ -189,7 +190,6 @@ export const state = {
                 filename: true,
                 modelname: true,
                 creator: false,
-                hash: false,
                 recursive: getStorageItem(`${MODEL_TYPES.CHECKPOINT}_recursiveSearch`, true),
             },
             filters: {
@@ -229,7 +229,6 @@ export const state = {
                 modelname: true,
                 tags: false,
                 creator: false,
-                hash: false,
                 recursive: getStorageItem(`${MODEL_TYPES.EMBEDDING}_recursiveSearch`, true),
             },
             filters: {
@@ -267,7 +266,6 @@ export const state = {
                 modelname: true,
                 tags: false,
                 creator: false,
-                hash: false,
                 recursive: getStorageItem(`${MODEL_TYPES.OTHER}_recursiveSearch`, true),
             },
             filters: {

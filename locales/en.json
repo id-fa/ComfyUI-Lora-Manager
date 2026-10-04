@@ -251,7 +251,6 @@
         "modelname": "Model Name",
         "tags": "Tags",
         "creator": "Creator",
-        "hash": "Hash",
         "title": "Recipe Title",
         "loraName": "LoRA Filename",
         "loraModel": "LoRA Model Name",
@@ -353,6 +352,14 @@
       "placeholder": "Leave empty to use aria2c from PATH"
     },
     "aria2HelpLink": "Learn how to set up the aria2 download backend",
+    "unknownBaseModelRouting": {
+      "label": "Unknown base model routing",
+      "help": "Decides where checkpoint downloads go when CivitAI reports a base model that is neither a known checkpoint (SD 1.x/2.x/3.x, SDXL, Pony, Illustrious, NoobAI) nor a known diffusion model. New diffusion architectures appear frequently, so routing them to diffusion models is usually correct.",
+      "options": {
+        "diffusionModel": "Diffusion models",
+        "checkpoint": "Checkpoints"
+      }
+    },
     "civitaiHostBanner": {
       "title": "CivitAI host preference available",
       "content": "CivitAI now uses civitai.com for SFW content and civitai.red for unrestricted content. You can change which site opens by default in Settings.",
@@ -785,6 +792,8 @@
       "downloadComplete": "Download completed successfully",
       "enableCivarchiveApi": "Enable CivArchive API as metadata provider",
       "enableCivarchiveApiHelp": "When on, CivArchive API is used as a fallback source for model metadata (e.g. for models deleted from CivitAI). Turn off to avoid CivArchive rate limits entirely.",
+      "enableOpenmodeldbApi": "Enable OpenModelDB as metadata provider",
+      "enableOpenmodeldbApiHelp": "When on, upscaler metadata is also looked up in the OpenModelDB catalogue (openmodeldb.info) when CivitAI has no record. The catalogue is cached locally and refreshed daily.",
       "providerOrder": "Metadata provider fallback order",
       "providerOrderHelp": "CivitAI API is always tried first. Choose the order of the remaining providers when looking up metadata.",
       "providerOrderCivitaiArchiveSqlite": "CivitAI → CivArchive → Archive DB",
@@ -1555,6 +1564,10 @@
       "selectRootDirectory": "Select a root directory",
       "selectModelRoot": "Select Model Root:",
       "selectTypeRoot": "Select {type} Root:",
+      "routingOverride": {
+        "label": "Destination type:",
+        "tooltip": "Auto-detected from the model metadata. Switch if it was misdetected; switching turns off \"Use Default Path\" for this download."
+      },
       "targetFolderPath": "Target Folder Path:",
       "browseFolders": "Browse Folders:",
       "createNewFolder": "Create new folder",
@@ -1825,6 +1838,8 @@
         "sendToWorkflow": "Send to ComfyUI",
         "sendToWorkflowText": "Send to ComfyUI",
         "copyHash": "Copy hash",
+        "copyCivitaiId": "Copy Civitai ID",
+        "civitaiIdCopied": "Civitai ID copied to clipboard",
         "deleteModelWithShortcut": "Delete model (Del)"
       },
       "openFileLocation": {
@@ -1843,6 +1858,8 @@
         "baseModel": "Base Model",
         "size": "Size",
         "hashes": "Hashes",
+        "civitaiModelId": "Model ID",
+        "civitaiVersionId": "Version ID",
         "unknown": "Unknown",
         "usageTips": "Usage Tips",
         "additionalNotes": "Additional Notes",
@@ -2768,6 +2785,9 @@
       },
       "filename_conflicts": {
         "title": "Duplicate Filename Conflicts"
+      },
+      "sidecar_mirror_orphans": {
+        "title": "Centralized Sidecars"
       },
       "ui_version": {
         "title": "UI Version"

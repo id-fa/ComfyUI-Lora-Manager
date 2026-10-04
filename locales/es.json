@@ -251,7 +251,6 @@
                 "modelname": "Nombre del modelo",
                 "tags": "Etiquetas",
                 "creator": "Creador",
-                "hash": "Hash",
                 "title": "Título de la receta",
                 "loraName": "Nombre de archivo LoRA",
                 "loraModel": "Nombre del modelo LoRA",
@@ -353,6 +352,14 @@
             "placeholder": "Déjalo vacío para usar aria2c desde el PATH"
         },
         "aria2HelpLink": "Aprende a configurar el backend de descarga aria2",
+        "unknownBaseModelRouting": {
+            "label": "Enrutamiento de modelos base desconocidos",
+            "help": "Decide a dónde van las descargas de Checkpoint cuando CivitAI informa de un modelo base que no es ni un Checkpoint conocido (SD 1.x/2.x/3.x, SDXL, Pony, Illustrious, NoobAI) ni un modelo de difusión conocido. Las nuevas arquitecturas de difusión aparecen con frecuencia, por lo que enrutarlas a modelos de difusión suele ser correcto.",
+            "options": {
+                "diffusionModel": "Modelos de difusión",
+                "checkpoint": "Checkpoints"
+            }
+        },
         "civitaiHostBanner": {
             "title": "Preferencia de host de CivitAI disponible",
             "content": "CivitAI ahora usa civitai.com para contenido SFW y civitai.red para contenido sin restricciones. Puedes cambiar en Ajustes qué sitio se abre por defecto.",
@@ -785,6 +792,8 @@
             "downloadComplete": "Descarga completada exitosamente",
             "enableCivarchiveApi": "Habilitar CivArchive API como proveedor de metadatos",
             "enableCivarchiveApiHelp": "Al activarlo, la API de CivArchive se usa como fuente alternativa de metadatos de modelos (p. ej. para modelos eliminados de CivitAI). Desactívelo para evitar por completo los límites de velocidad de CivArchive.",
+            "enableOpenmodeldbApi": "Habilitar OpenModelDB como proveedor de metadatos",
+            "enableOpenmodeldbApiHelp": "Al activarlo, los metadatos de Upscaler también se consultan en el catálogo de OpenModelDB (openmodeldb.info) cuando CivitAI no tiene ningún registro. El catálogo se almacena en caché localmente y se actualiza a diario.",
             "providerOrder": "Orden de proveedores de metadatos de respaldo",
             "providerOrderHelp": "La API de CivitAI siempre se intenta primero. Elija el orden de los demás proveedores al buscar metadatos.",
             "providerOrderCivitaiArchiveSqlite": "CivitAI → CivArchive → Archive DB",
@@ -1555,6 +1564,10 @@
             "selectRootDirectory": "Selecciona un directorio raíz",
             "selectModelRoot": "Seleccionar raíz del modelo:",
             "selectTypeRoot": "Seleccionar raíz de {type}:",
+            "routingOverride": {
+                "label": "Tipo de destino:",
+                "tooltip": "Detectado automáticamente a partir de los metadatos del modelo. Cámbialo si la detección fue incorrecta; cambiar desactiva «Usar ruta predeterminada» para esta descarga."
+            },
             "targetFolderPath": "Ruta de carpeta de destino:",
             "browseFolders": "Explorar carpetas:",
             "createNewFolder": "Crear nueva carpeta",
@@ -1825,6 +1838,8 @@
                 "sendToWorkflow": "Enviar a ComfyUI",
                 "sendToWorkflowText": "Enviar a ComfyUI",
                 "copyHash": "Copiar hash",
+                "copyCivitaiId": "Copiar ID de Civitai",
+                "civitaiIdCopied": "ID de Civitai copiado al portapapeles",
                 "deleteModelWithShortcut": "Eliminar modelo (Del)"
             },
             "openFileLocation": {
@@ -1843,6 +1858,8 @@
                 "baseModel": "Modelo base",
                 "size": "Tamaño",
                 "hashes": "Hashes",
+                "civitaiModelId": "ID del modelo",
+                "civitaiVersionId": "ID de versión",
                 "unknown": "Desconocido",
                 "usageTips": "Consejos de uso",
                 "additionalNotes": "Notas adicionales",
@@ -2768,6 +2785,9 @@
             },
             "filename_conflicts": {
                 "title": "Conflictos de nombres de archivo duplicados"
+            },
+            "sidecar_mirror_orphans": {
+                "title": "Archivos sidecar centralizados"
             },
             "ui_version": {
                 "title": "Versión de la interfaz"

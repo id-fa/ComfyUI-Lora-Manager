@@ -251,7 +251,6 @@
                 "modelname": "モデル名",
                 "tags": "タグ",
                 "creator": "作成者",
-                "hash": "ハッシュ",
                 "title": "レシピタイトル",
                 "loraName": "LoRAファイル名",
                 "loraModel": "LoRAモデル名",
@@ -353,6 +352,14 @@
             "placeholder": "空欄のままにすると PATH 上の aria2c を使用します"
         },
         "aria2HelpLink": "aria2 ダウンロードバックエンドの設定方法",
+        "unknownBaseModelRouting": {
+            "label": "不明なベースモデルの振り分け",
+            "help": "CivitAIが報告するベースモデルが既知のCheckpoint（SD 1.x/2.x/3.x、SDXL、Pony、Illustrious、NoobAI）でも既知のDiffusion Modelでもない場合に、Checkpointのダウンロードの保存先を決定します。新しい拡散アーキテクチャは頻繁に登場するため、通常はDiffusion Modelへの振り分けが正しい選択です。",
+            "options": {
+                "diffusionModel": "Diffusion Model",
+                "checkpoint": "Checkpoint"
+            }
+        },
         "civitaiHostBanner": {
             "title": "CivitAI ホスト設定を利用できます",
             "content": "CivitAI は現在、SFW コンテンツには civitai.com、制限なしコンテンツには civitai.red を使用しています。設定で既定で開くサイトを変更できます。",
@@ -785,6 +792,8 @@
             "downloadComplete": "ダウンロードが正常に完了しました",
             "enableCivarchiveApi": "CivArchive API をメタデータプロバイダーとして有効化",
             "enableCivarchiveApiHelp": "有効にすると、CivArchive API がモデルメタデータの代替ソースとして使用されます（例：CivitAI から削除されたモデルの場合）。オフにすると、CivArchive のレート制限を完全に回避できます。",
+            "enableOpenmodeldbApi": "OpenModelDB をメタデータプロバイダーとして有効化",
+            "enableOpenmodeldbApiHelp": "有効にすると、CivitAI に記録がない場合に、OpenModelDB カタログ（openmodeldb.info）でも Upscaler のメタデータを検索します。カタログはローカルにキャッシュされ、毎日更新されます。",
             "providerOrder": "メタデータプロバイダーのフォールバック順序",
             "providerOrderHelp": "CivitAI API が常に最初に試行されます。メタデータ検索時の残りのプロバイダーの順序を選択してください。",
             "providerOrderCivitaiArchiveSqlite": "CivitAI → CivArchive → Archive DB",
@@ -1555,6 +1564,10 @@
             "selectRootDirectory": "ルートディレクトリを選択",
             "selectModelRoot": "モデルルートを選択：",
             "selectTypeRoot": "{type}ルートを選択：",
+            "routingOverride": {
+                "label": "保存先タイプ：",
+                "tooltip": "モデルのメタデータから自動検出されます。誤検出の場合は切り替えてください。切り替えると、このダウンロードでは「デフォルトパスを使用」がオフになります。"
+            },
             "targetFolderPath": "ターゲットフォルダパス：",
             "browseFolders": "フォルダを参照：",
             "createNewFolder": "新しいフォルダを作成",
@@ -1825,6 +1838,8 @@
                 "sendToWorkflow": "ComfyUI に送信",
                 "sendToWorkflowText": "ComfyUI に送信",
                 "copyHash": "ハッシュをコピー",
+                "copyCivitaiId": "Civitai IDをコピー",
+                "civitaiIdCopied": "Civitai IDをクリップボードにコピーしました",
                 "deleteModelWithShortcut": "モデルを削除（Del）"
             },
             "openFileLocation": {
@@ -1843,6 +1858,8 @@
                 "baseModel": "ベースモデル",
                 "size": "サイズ",
                 "hashes": "ハッシュ",
+                "civitaiModelId": "モデル ID",
+                "civitaiVersionId": "バージョン ID",
                 "unknown": "不明",
                 "usageTips": "使用のヒント",
                 "additionalNotes": "追加メモ",
@@ -2768,6 +2785,9 @@
             },
             "filename_conflicts": {
                 "title": "ファイル名重複競合"
+            },
+            "sidecar_mirror_orphans": {
+                "title": "集中保存のサイドカーファイル"
             },
             "ui_version": {
                 "title": "UI バージョン"

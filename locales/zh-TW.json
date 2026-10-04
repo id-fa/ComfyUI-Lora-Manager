@@ -251,7 +251,6 @@
                 "modelname": "模型名稱",
                 "tags": "標籤",
                 "creator": "創作者",
-                "hash": "雜湊",
                 "title": "配方標題",
                 "loraName": "LoRA 檔案名稱",
                 "loraModel": "LoRA 模型名稱",
@@ -353,6 +352,14 @@
             "placeholder": "留空則使用 PATH 中的 aria2c"
         },
         "aria2HelpLink": "了解如何設定 aria2 下載後端",
+        "unknownBaseModelRouting": {
+            "label": "未知基礎模型路由",
+            "help": "當 CivitAI 回報的基礎模型既不是已知的 Checkpoint（SD 1.x/2.x/3.x、SDXL、Pony、Illustrious、NoobAI），也不是已知的擴散模型時，決定 Checkpoint 下載的儲存位置。新的擴散架構頻繁出現，因此將其路由到擴散模型通常是正確的。",
+            "options": {
+                "diffusionModel": "擴散模型",
+                "checkpoint": "Checkpoint"
+            }
+        },
         "civitaiHostBanner": {
             "title": "已提供 CivitAI 站點偏好設定",
             "content": "CivitAI 現在使用 civitai.com 提供 SFW 內容，使用 civitai.red 提供無限制內容。您可以在設定中變更預設開啟的站點。",
@@ -785,6 +792,8 @@
             "downloadComplete": "下載成功完成",
             "enableCivarchiveApi": "啟用 CivArchive API 作為中繼資料提供者",
             "enableCivarchiveApiHelp": "開啟後，CivArchive API 將作為模型中繼資料的備用來源（例如用於已從 CivitAI 刪除的模型）。關閉可完全避免 CivArchive 的速率限制。",
+            "enableOpenmodeldbApi": "啟用 OpenModelDB 作為中繼資料提供者",
+            "enableOpenmodeldbApiHelp": "開啟後，當 CivitAI 沒有記錄時，也會在 OpenModelDB 目錄（openmodeldb.info）中查詢 Upscaler 中繼資料。目錄會快取在本機並每日更新。",
             "providerOrder": "中繼資料提供者回退順序",
             "providerOrderHelp": "CivitAI API 始終優先嘗試。選擇查詢中繼資料時其餘提供者的順序。",
             "providerOrderCivitaiArchiveSqlite": "CivitAI → CivArchive → Archive DB",
@@ -1555,6 +1564,10 @@
             "selectRootDirectory": "選擇根目錄",
             "selectModelRoot": "選擇模型根目錄：",
             "selectTypeRoot": "選擇 {type} 根目錄：",
+            "routingOverride": {
+                "label": "目標類型：",
+                "tooltip": "根據模型中繼資料自動偵測。如果偵測結果有誤，請切換；切換會為本次下載關閉「使用預設路徑」。"
+            },
             "targetFolderPath": "目標資料夾路徑：",
             "browseFolders": "瀏覽資料夾：",
             "createNewFolder": "建立新資料夾",
@@ -1825,6 +1838,8 @@
                 "sendToWorkflow": "傳送到 ComfyUI",
                 "sendToWorkflowText": "傳送到 ComfyUI",
                 "copyHash": "複製雜湊值",
+                "copyCivitaiId": "複製 Civitai ID",
+                "civitaiIdCopied": "Civitai ID 已複製到剪貼簿",
                 "deleteModelWithShortcut": "刪除模型（Del）"
             },
             "openFileLocation": {
@@ -1843,6 +1858,8 @@
                 "baseModel": "基礎模型",
                 "size": "大小",
                 "hashes": "雜湊值",
+                "civitaiModelId": "模型 ID",
+                "civitaiVersionId": "版本 ID",
                 "unknown": "未知",
                 "usageTips": "使用提示",
                 "additionalNotes": "附加備註",
@@ -2768,6 +2785,9 @@
             },
             "filename_conflicts": {
                 "title": "檔案名稱重複衝突"
+            },
+            "sidecar_mirror_orphans": {
+                "title": "集中儲存的附屬檔案"
             },
             "ui_version": {
                 "title": "UI 版本"

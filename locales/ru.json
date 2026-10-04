@@ -251,7 +251,6 @@
                 "modelname": "Название модели",
                 "tags": "Теги",
                 "creator": "Автор",
-                "hash": "Хэш",
                 "title": "Название рецепта",
                 "loraName": "Имя файла LoRA",
                 "loraModel": "Название модели LoRA",
@@ -353,6 +352,14 @@
             "placeholder": "Оставьте пустым, чтобы использовать aria2c из PATH"
         },
         "aria2HelpLink": "Узнайте, как настроить сервер загрузки aria2",
+        "unknownBaseModelRouting": {
+            "label": "Маршрутизация неизвестных базовых моделей",
+            "help": "Определяет, куда отправляются загрузки Checkpoint, когда CivitAI сообщает базовую модель, которая не является ни известным Checkpoint (SD 1.x/2.x/3.x, SDXL, Pony, Illustrious, NoobAI), ни известной диффузионной моделью. Новые диффузионные архитектуры появляются часто, поэтому маршрутизация их в диффузионные модели обычно правильная.",
+            "options": {
+                "diffusionModel": "Диффузионные модели",
+                "checkpoint": "Checkpoints"
+            }
+        },
         "civitaiHostBanner": {
             "title": "Доступна настройка хоста CivitAI",
             "content": "Теперь CivitAI использует civitai.com для контента SFW и civitai.red для контента без ограничений. В настройках можно изменить, какой сайт открывать по умолчанию.",
@@ -785,6 +792,8 @@
             "downloadComplete": "Загрузка успешно завершена",
             "enableCivarchiveApi": "Включить CivArchive API как источник метаданных",
             "enableCivarchiveApiHelp": "При включении CivArchive API используется как резервный источник метаданных моделей (например, для моделей, удалённых с CivitAI). Отключите, чтобы полностью избежать ограничений скорости CivArchive.",
+            "enableOpenmodeldbApi": "Включить OpenModelDB как источник метаданных",
+            "enableOpenmodeldbApiHelp": "При включении метаданные Upscaler также ищутся в каталоге OpenModelDB (openmodeldb.info), если у CivitAI нет записи. Каталог кэшируется локально и обновляется ежедневно.",
             "providerOrder": "Порядок резервных источников метаданных",
             "providerOrderHelp": "CivitAI API всегда проверяется первым. Выберите порядок остальных источников при поиске метаданных.",
             "providerOrderCivitaiArchiveSqlite": "CivitAI → CivArchive → Archive DB",
@@ -1555,6 +1564,10 @@
             "selectRootDirectory": "Выберите корневую папку",
             "selectModelRoot": "Выберите корень моделей:",
             "selectTypeRoot": "Выберите корень {type}:",
+            "routingOverride": {
+                "label": "Тип назначения:",
+                "tooltip": "Определяется автоматически из метаданных модели. Переключите, если определение неверно; переключение отключает «Использовать путь по умолчанию» для этой загрузки."
+            },
             "targetFolderPath": "Путь к целевой папке:",
             "browseFolders": "Обзор папок:",
             "createNewFolder": "Создать новую папку",
@@ -1825,6 +1838,8 @@
                 "sendToWorkflow": "Отправить в ComfyUI",
                 "sendToWorkflowText": "Отправить в ComfyUI",
                 "copyHash": "Копировать хеш",
+                "copyCivitaiId": "Копировать ID Civitai",
+                "civitaiIdCopied": "ID Civitai скопирован в буфер обмена",
                 "deleteModelWithShortcut": "Удалить модель (Del)"
             },
             "openFileLocation": {
@@ -1843,6 +1858,8 @@
                 "baseModel": "Базовая модель",
                 "size": "Размер",
                 "hashes": "Хэши",
+                "civitaiModelId": "ID модели",
+                "civitaiVersionId": "ID версии",
                 "unknown": "Неизвестно",
                 "usageTips": "Советы по использованию",
                 "additionalNotes": "Дополнительные заметки",
@@ -2768,6 +2785,9 @@
             },
             "filename_conflicts": {
                 "title": "Конфликты дублирующихся имён файлов"
+            },
+            "sidecar_mirror_orphans": {
+                "title": "Централизованные sidecar-файлы"
             },
             "ui_version": {
                 "title": "Версия интерфейса"
