@@ -73,7 +73,8 @@
                 "lessThanMinute": "剩餘時間不到一分鐘",
                 "minutes": "剩餘約 {minutes} 分鐘",
                 "hours": "剩餘約 {hours} 小時 {minutes} 分鐘"
-            }
+            },
+            "walkFiles": "{count} 個檔案"
         }
     },
     "onboarding": {
@@ -201,7 +202,11 @@
             "loading": "正在檢查 {type} 更新...",
             "success": "找到 {count} 個 {type} 更新",
             "none": "所有 {type} 都是最新版本",
-            "error": "檢查 {type} 更新失敗：{message}"
+            "error": "檢查 {type} 更新失敗：{message}",
+            "gateEvents": {
+                "becameFree": "{count} 個您未擁有的版本已免費",
+                "newGate": "{count} 個版本已變為付費"
+            }
         },
         "cleanupExampleImages": {
             "label": "清理範例圖片資料夾",
@@ -259,6 +264,7 @@
         },
         "filter": {
             "title": "篩選模型",
+            "countTitle": "{name} —— {count} 個模型",
             "presets": "預設",
             "savePreset": "將目前啟用的篩選器儲存為新預設。",
             "savePresetDisabledActive": "無法儲存：已有預設處於啟用狀態。修改篩選器後可儲存新預設",
@@ -292,7 +298,9 @@
             "loraAvailability": "LoRA 可用性",
             "availabilityReady": "可直接使用",
             "availabilityMissing": "包含缺少的 LoRA",
-            "availabilityDeleted": "包含已刪除的 LoRA"
+            "availabilityDeleted": "包含已刪除的 LoRA",
+            "workflow": "工作流",
+            "hasWorkflow": "包含工作流"
         },
         "theme": {
             "toggle": "切換主題",
@@ -387,11 +395,13 @@
             "downloadPathTemplates": "下載路徑範本",
             "priorityTags": "優先標籤",
             "versionScope": "版本範圍",
+            "priceTracking": "Buzz 下載價格",
             "exampleImages": "範例圖片",
             "autoOrganize": "自動整理",
             "metadata": "中繼資料",
             "sidecarStorage": "附屬檔案儲存",
-            "proxySettings": "代理設定"
+            "proxySettings": "代理設定",
+            "sendToWorkflow": "傳送到工作流"
         },
         "nav": {
             "general": "通用",
@@ -445,6 +455,18 @@
                 "saveFailed": "無法儲存跳過路徑：{message}"
             }
         },
+        "sendToWorkflowExclusions": {
+            "nodeClasses": {
+                "label": "排除的節點類型",
+                "placeholder": "範例: CheckpointLoaderSimple, MyCustomNode",
+                "help": "這些 ComfyUI 節點類名永遠不會作為傳送到工作流的目標出現。多個項目請用逗號或分號分隔。在 ComfyUI 中明確標記的節點（右鍵 → Mark as）不受此限制。"
+            },
+            "titlePatterns": {
+                "label": "排除的節點標題模式",
+                "placeholder": "範例: negative, preview",
+                "help": "標題包含這些文字片段（不分大小寫）的節點不會出現在傳送到工作流的目標中。多個項目請用逗號或分號分隔。在 ComfyUI 中明確標記的節點（右鍵 → Mark as）不受此限制。"
+            }
+        },
         "backup": {
             "autoEnabled": "自動備份",
             "autoEnabledHelp": "每天建立一次本地快照，並依保留政策保留最新快照。",
@@ -489,6 +511,42 @@
                 "saveFailed": "無法儲存已排除的基礎模型：{message}"
             }
         },
+        "downloadRootRules": {
+            "title": "下載根目錄規則",
+            "help": "根據模型的基礎模型或標籤，將下載路由到其他根目錄。",
+            "description": "規則依序檢查，首個命中的規則生效；未匹配的下載使用預設根目錄。",
+            "defaultHint": "預設：{root} — 未匹配的下載將儲存到這裡",
+            "defaultSuffix": "預設",
+            "addBaseModelRule": "基礎模型規則",
+            "addTagRule": "標籤規則",
+            "removeRule": "移除規則",
+            "moveUp": "上移",
+            "moveDown": "下移",
+            "noRoots": "此模型類型尚未設定根目錄。",
+            "matchTypes": {
+                "baseModel": "基礎模型",
+                "tag": "標籤"
+            },
+            "matchTypeChips": {
+                "baseModel": "BM",
+                "tag": "標籤"
+            },
+            "tagPlaceholder": "character, style, realistic",
+            "summary": {
+                "selectBaseModels": "選擇基礎模型...",
+                "enterTags": "輸入標籤...",
+                "more": "還有 {count} 項"
+            },
+            "types": {
+                "loras": "LoRA",
+                "checkpoints": "Checkpoint",
+                "unet": "Diffusion Model",
+                "embeddings": "Embedding"
+            },
+            "validation": {
+                "saveFailed": "無法儲存下載根目錄規則：{message}"
+            }
+        },
         "skipPreviouslyDownloadedModelVersions": {
             "label": "跳過已下載的模型版本",
             "help": "啟用後，如果下載歷史服務記錄顯示該版本已下載，LoRA Manager 將跳過下載該模型版本。適用於所有下載流程。"
@@ -525,8 +583,16 @@
                 "hover": "滑鼠懸停顯示"
             },
             "cardInfoDisplayHelp": "選擇何時顯示模型資訊與操作按鈕",
+            "showcaseLayout": "範例圖片版面",
+            "showcaseLayoutHelp": "選擇範例圖片在模型彈窗中的顯示方式：一次一張的圖庫，或傳統的垂直清單。",
+            "showcaseLayoutOptions": {
+                "gallery": "圖庫",
+                "vertical": "垂直清單"
+            },
             "showVersionOnCard": "在卡片上顯示版本",
             "showVersionOnCardHelp": "在模型卡片上顯示或隱藏版本名稱",
+            "showQuantizationOnCard": "在卡片上顯示量化",
+            "showQuantizationOnCardHelp": "在模型卡片上的版本名稱旁顯示量化級別（如 Q4_K_M, FP8）",
             "modelCardFooterAction": "模型卡片按鈕操作",
             "modelCardFooterActionOptions": {
                 "exampleImages": "開啟範例圖片",
@@ -753,6 +819,13 @@
             "label": "隱藏付費更新",
             "help": "啟用後，只有付費更新的模型將不會顯示「有可用更新」徽章"
         },
+        "priceTracking": {
+            "help": "CivitAI 的公開 API 不提供下載價格，因此價格從模型頁面讀取 —— 每個付費模型多一次請求，並依下方間隔重新整理。價格只顯示在您尚未擁有的版本上。",
+            "enabled": "顯示付費版本的下載價格",
+            "enabledHelp": "從模型頁面讀取下載價格，讓付費與搶先體驗版本顯示所需費用，以及搶先體驗的結束時間",
+            "refreshHours": "價格重新整理間隔（小時）",
+            "refreshHoursHelp": "已儲存的價格在重新讀取前保持有效的時長"
+        },
         "licenseIcons": {
             "useNewStyle": "使用新版許可協議圖標",
             "useNewStyleHelp": "以彩色指示器顯示許可權限（新樣式），或僅顯示限制圖標（經典樣式）。與當前 CivitAI 設計保持一致。"
@@ -818,6 +891,8 @@
             "migrationDeferred": "現有附屬檔案未遷移。您稍後可以在「設定 > 模型庫 > 附屬檔案儲存」中遷移它們。",
             "confirmToCentralized": "儲存模式已變更，但現有的 .metadata.json 附屬檔案與預覽圖片不會自動遷移。要現在將它們移入集中儲存目錄嗎？您也可以稍後使用「立即遷移附屬檔案」按鈕完成。",
             "confirmToAlongside": "儲存模式已變更，但現有的 .metadata.json 附屬檔案與預覽圖片不會自動遷移。要現在將它們移回各自的模型檔案旁邊嗎？您也可以稍後使用「立即遷移附屬檔案」按鈕完成。",
+            "confirmToCentralizedManual": "要現在將現有的 .metadata.json 附屬檔案與預覽圖片移入集中儲存目錄嗎？",
+            "confirmToAlongsideManual": "要現在將現有的 .metadata.json 附屬檔案與預覽圖片移回各自的模型檔案旁邊嗎？",
             "confirmRelocateRoot": "集中儲存目錄已變更，但現有的附屬檔案與預覽圖片仍在原目錄中。要現在將它們移到新目錄嗎？",
             "effectivePathLabel": "實際儲存位置：",
             "openFolderButton": "開啟資料夾",
@@ -896,10 +971,18 @@
                 "random": "隨機",
                 "randomAction": "隨機排序（洗牌）"
             },
+            "modelType": {
+                "title": "依模型類型篩選",
+                "all": "全部類型",
+                "multiple": "{count} 種類型"
+            },
             "refresh": {
                 "title": "重新整理模型列表",
                 "full": "重建快取",
-                "fullTooltip": "從中繼資料檔重新載入所有模型資訊；適用於清單過時或手動編輯後。"
+                "fullTooltip": "從中繼資料檔重新載入所有模型資訊；適用於清單過時或手動編輯後。",
+                "scopeSection": "只掃描一個資料夾",
+                "rootOffline": "離線",
+                "rootModels": "{count} 個模型"
             },
             "fetch": {
                 "title": "從 CivitAI 取得 metadata",
@@ -1015,6 +1098,9 @@
     },
     "recipes": {
         "title": "LoRA 配方",
+        "filter": {
+            "countTitle": "{name} —— {count} 個配方"
+        },
         "actions": {
             "sendCheckpoint": "傳送到 ComfyUI",
             "sendRecipe": "傳送到 ComfyUI",
@@ -1047,7 +1133,8 @@
             "sendWorkflow": "傳送工作流到 ComfyUI",
             "sent": "工作流已傳送到 ComfyUI",
             "sendFailed": "傳送工作流到 ComfyUI 失敗",
-            "noWorkflow": "此配方中未找到內嵌工作流"
+            "noWorkflow": "此配方中未找到內嵌工作流",
+            "hasWorkflow": "包含 ComfyUI 工作流"
         },
         "status": {
             "ready": "可直接使用",
@@ -1390,9 +1477,19 @@
             "notEmptyMessage": "該資料夾中仍有模型，請先刪除或移出這些模型 —— 刪除資料夾不會串聯刪除模型檔案。",
             "notEmptyMessageCount": "該資料夾中仍有 {count} 個模型檔案，請先刪除或移出這些模型 —— 刪除資料夾不會串聯刪除模型檔案。",
             "notEmptyMessageExcluded": "該資料夾中仍有 {count} 個模型檔案，其中 {excluded} 個已從模型庫中排除。請先在「管理已排除的模型」中取消排除並刪除它們 —— 刪除資料夾不會串聯刪除模型檔案。",
+            "missingTitle": "未找到資料夾",
+            "missingMessage": "該資料夾在磁碟上已不存在，您可以將其從清單中移除。",
+            "removeFromList": "從清單中移除",
+            "symlinkTitle": "資料夾是符號連結",
+            "symlinkMessage": "該資料夾的每一份副本都是符號連結；請在 LoRA Manager 之外刪除該連結或其指向的目標。",
+            "protectedTitle": "資料夾受保護",
+            "protectedMessage": "此資料夾存放著配方庫，無法在 LoRA Manager 中刪除。",
             "busyTitle": "仍有刪除操作待處理",
             "checking": "正在檢查資料夾內容...",
-            "confirm": "刪除資料夾"
+            "confirm": "刪除資料夾",
+            "confirmMulti": "刪除 {count} 個資料夾",
+            "deleting": "正在刪除...",
+            "keptNote": "未勾選的副本會讓該資料夾繼續顯示在側邊欄中。"
         },
         "deleteFolderResult": {
             "success": "已刪除資料夾 \"{name}\"",
@@ -1403,7 +1500,12 @@
             "notEmptyWithCount": "該資料夾中仍有 {count} 個模型檔案。請重新整理側邊欄後再試。",
             "busy": "該資料夾內仍有待處理的刪除操作，請等待復原時間結束。",
             "unsupported": "此頁面不支援刪除資料夾",
-            "noRoot": "未設定模型根目錄"
+            "missing": "該資料夾在磁碟上已不存在，請重新整理側邊欄後再試。",
+            "forgotten": "已將資料夾 \"{name}\" 從清單中移除",
+            "exists": "該資料夾已重新出現在磁碟上，請改為刪除它。",
+            "symlink": "該資料夾是符號連結，無法從側邊欄中刪除。",
+            "successMulti": "已從 {count} 個模型根目錄中刪除資料夾 \"{name}\"",
+            "partial": "已刪除 {total} 份副本中的 {count} 份 —— {failed} 份無法刪除。請重新整理側邊欄後再試。"
         },
         "renameFolder": "重新命名資料夾",
         "renameFolderResult": {
@@ -1412,7 +1514,26 @@
             "targetExists": "此處已存在同名資料夾",
             "busy": "該資料夾內仍有待處理的刪除操作，請等待復原時間結束。",
             "unsupported": "此頁面不支援重新命名資料夾",
-            "noRoot": "未設定模型根目錄"
+            "missing": "該資料夾在磁碟上已不存在，請重新整理側邊欄後再試。",
+            "symlink": "該資料夾是符號連結，無法從側邊欄中重新命名。"
+        },
+        "folderRoot": {
+            "chooseTitle": "該資料夾存在於多個模型根目錄中",
+            "symlinkOption": "符號連結",
+            "rootsHint": "選擇要從中刪除該資料夾的模型根目錄：",
+            "checkingStatus": "正在檢查...",
+            "okStatus": "無模型",
+            "notEmptyStatus": "包含 {count} 個模型檔案 —— 請先刪除或移出這些模型",
+            "notEmptyExcludedStatus": "包含 {count} 個模型檔案，其中 {excluded} 個已從模型庫中排除",
+            "busyStatus": "仍有刪除操作待處理",
+            "missingStatus": "磁碟上已不存在",
+            "symlinkStatus": "符號連結 —— 無法在此刪除",
+            "protectedStatus": "存放配方庫 —— 無法在此刪除",
+            "unknownStatus": "無法檢查",
+            "deletedStatus": "已刪除"
+        },
+        "folderResult": {
+            "unresolved": "無法確定該資料夾位於哪個模型根目錄。請重新整理側邊欄後再試。"
         },
         "dragDrop": {
             "unableToResolveRoot": "無法確定移動的目標路徑。",
@@ -1432,6 +1553,10 @@
             "success": "在此資料夾中找到 {count} 個{type}更新",
             "none": "此資料夾中的所有{type}都是最新版本",
             "error": "檢查資料夾{type}更新失敗: {message}"
+        },
+        "scanFolder": "掃描此資料夾",
+        "scanFolderResult": {
+            "missing": "該資料夾在磁碟上已不存在，請重新整理側邊欄後再試。"
         }
     },
     "statistics": {
@@ -1568,6 +1693,10 @@
                 "label": "目標類型：",
                 "tooltip": "根據模型中繼資料自動偵測。如果偵測結果有誤，請切換；切換會為本次下載關閉「使用預設路徑」。"
             },
+            "routedByRule": {
+                "baseModel": "已由規則路由：基礎模型「{value}」",
+                "tag": "已由規則路由：標籤「{value}」"
+            },
             "targetFolderPath": "目標資料夾路徑：",
             "browseFolders": "瀏覽資料夾：",
             "createNewFolder": "建立新資料夾",
@@ -1593,6 +1722,8 @@
             "errors": {
                 "invalidUrl": "模型網址格式無效",
                 "noVersions": "此模型無可用版本",
+                "linkedFileNotFound": "[TODO: Translate] File {fileId} was not found in the requested model version.",
+                "linkedFileNotWeightFile": "[TODO: Translate] File {fileId} is not a downloadable model file.",
                 "mixedSources": "無法在同一批次中混合使用 CivitAI 和 Hugging Face / ModelScope URL。",
                 "noModelFiles": "在此倉庫中未找到模型檔案。"
             },
@@ -1689,7 +1820,8 @@
             "titleToAlongside": "要將附屬檔案移回模型檔案旁邊嗎？",
             "confirmButton": "立即遷移",
             "titleRelocateRoot": "要將附屬檔案移到新的儲存目錄嗎？",
-            "destination": "目標位置：{path}"
+            "destination": "目標位置：{path}",
+            "defaultLocationHint": "將使用預設儲存位置。如需使用自訂資料夾，請取消，在上方設定儲存路徑，然後點擊「立即遷移附屬檔案」。"
         },
         "sidecarMigrationResult": {
             "title": "附屬檔案遷移摘要",
@@ -1835,6 +1967,7 @@
                 "viewOnHuggingFaceText": "在 Hugging Face 查看",
                 "viewCreatorProfile": "查看創作者個人檔案",
                 "openFileLocation": "開啟檔案位置",
+                "openSidecarLocation": "開啟中繼資料位置",
                 "sendToWorkflow": "傳送到 ComfyUI",
                 "sendToWorkflowText": "傳送到 ComfyUI",
                 "copyHash": "複製雜湊值",
@@ -1845,6 +1978,12 @@
             "openFileLocation": {
                 "success": "檔案位置已成功開啟",
                 "failed": "開啟檔案位置失敗",
+                "copied": "路徑已複製到剪貼簿：{{path}}",
+                "clipboardFallback": "路徑：{{path}}"
+            },
+            "openSidecarLocation": {
+                "success": "中繼資料位置已成功開啟",
+                "failed": "開啟中繼資料位置失敗",
                 "copied": "路徑已複製到剪貼簿：{{path}}",
                 "clipboardFallback": "路徑：{{path}}"
             },
@@ -1977,7 +2116,9 @@
                 "nsfwMature": "成熟內容",
                 "nsfwR": "R 級內容",
                 "nsfwX": "X 級內容",
-                "nsfwXxx": "XXX 級內容"
+                "nsfwXxx": "XXX 級內容",
+                "layoutGallery": "圖庫檢視",
+                "layoutList": "清單檢視"
             },
             "versions": {
                 "heading": "模型版本",
@@ -2008,10 +2149,15 @@
                     "earlyAccessTooltip": "此版本目前需要 CivitAI 搶先體驗權限",
                     "paid": "付費",
                     "paidTooltip": "此版本需要付費才能下載",
+                    "priceSaleTooltip": "特價中，原價 {list} Buzz",
+                    "priceBlueBuzzTooltip": "也可以使用 Blue Buzz 支付",
+                    "freeNow": "現已免費",
+                    "freeNowTooltip": "此版本已不再需要付費",
                     "ignored": "已忽略",
                     "ignoredTooltip": "此版本已關閉更新通知",
                     "onSiteOnly": "僅站內生成",
-                    "onSiteOnlyTooltip": "此版本僅在 CivitAI 站內可用，無法下載"
+                    "onSiteOnlyTooltip": "此版本僅在 CivitAI 站內可用，無法下載",
+                    "earlyAccessTooltipUntil": "搶先體驗至 {date}，之後可免費下載"
                 },
                 "actions": {
                     "download": "下載",
@@ -2066,6 +2212,7 @@
             "statSuccess": "成功",
             "statFailed": "失敗",
             "statSkipped": "已跳過",
+            "statOffline": "磁碟機離線",
             "statTotal": "總計掃描",
             "statDuration": "耗時",
             "successMessage": "全部 {count} 個 {type} 更新成功！",
@@ -2199,7 +2346,8 @@
             "embeddingAdded": "Embedding 已附加到工作流",
             "embeddingFailed": "傳送 Embedding 到工作流失敗",
             "promptSent": "提示詞已發送到工作流",
-            "promptFailed": "提示詞發送失敗"
+            "promptFailed": "提示詞發送失敗",
+            "nodeTypeExcluded": "節點類型 \"{type}\" 已從傳送目標中排除"
         },
         "nodeSelector": {
             "recipe": "配方",
@@ -2209,7 +2357,8 @@
             "replace": "取代",
             "append": "附加",
             "selectTargetNode": "選擇目標節點",
-            "sendToAll": "全部傳送"
+            "sendToAll": "全部傳送",
+            "excludeNodeType": "不再建議此節點類型"
         },
         "exampleImages": {
             "opened": "範例圖片資料夾已開啟",
@@ -2671,7 +2820,9 @@
             "noItemsSelected": "未選擇要刪除的 {type}",
             "deleteError": "錯誤：{message}",
             "deleteSuccess": "成功刪除 {count} 個 {type}",
-            "deleteFailed": "刪除 {type} 失敗：{message}"
+            "deleteFailed": "刪除 {type} 失敗：{message}",
+            "deletePartialFailed": "[TODO: Translate] Failed to delete {failed} selected {type}: {message}",
+            "cacheUpdateFailed": "[TODO: Translate] The files were deleted but the library cache could not be updated. Run Rebuild Cache to refresh the list."
         },
         "controls": {
             "reloadFailed": "重新載入 {pageType} 失敗：{message}",
@@ -2750,7 +2901,10 @@
             "exampleImagesDownloadFailed": "下載範例圖片失敗：{message}",
             "moveFailed": "移動項目失敗：{message}",
             "copiedToClipboard": "已複製到剪貼簿",
-            "downloadStarted": "下載已開始"
+            "downloadStarted": "下載已開始",
+            "refreshCompleteScoped": "已掃描 {scope}：新增 {added}，移除 {removed}",
+            "refreshKeptUnreachable": "已保留 {count} 個模型：{paths} 目前無法存取",
+            "scanRootUnreachable": "{scope} 目前無法存取，未做任何變更。"
         },
         "agent": {
             "llmNotConfigured": "AI 提供者尚未設定。請在 設定 → AI 提供者 中進行設定。",

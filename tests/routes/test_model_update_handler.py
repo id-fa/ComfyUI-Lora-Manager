@@ -10,9 +10,12 @@ import pytest
 from py.config import config
 from py.routes.handlers.model_handlers import (
     ModelCivitaiHandler,
+    ModelHandlerSet,
     ModelManagementHandler,
     ModelUpdateHandler,
 )
+from py.routes.model_route_registrar import COMMON_ROUTE_DEFINITIONS
+from py.services.errors import ResourceNotFoundError
 from py.services.service_registry import ServiceRegistry
 from py.utils.metadata_manager import MetadataManager
 from py.services.model_update_service import ModelUpdateRecord, ModelVersionRecord
@@ -230,6 +233,43 @@ async def test_get_civitai_versions_degrades_when_download_history_unavailable(m
 
 
 @pytest.mark.asyncio
+async def test_get_civitai_versions_surfaces_not_found_details():
+    cache = SimpleNamespace(version_index={})
+    service = DummyService(cache)
+
+    class NotFoundProvider:
+        async def get_model_versions(self, model_id):
+            raise ResourceNotFoundError(f"Civitai model {model_id} was not found")
+
+    async def metadata_provider_factory():
+        return NotFoundProvider()
+
+    handler = ModelCivitaiHandler(
+        service=service,
+        settings_service=SimpleNamespace(get=lambda *_: False),  # pyright: ignore[reportArgumentType]
+        ws_manager=SimpleNamespace(),  # pyright: ignore[reportArgumentType]
+        logger=logging.getLogger(__name__),
+        metadata_provider_factory=metadata_provider_factory,
+        validate_model_type=lambda *_: True,
+        expected_model_types=lambda: "LoRA",
+        find_model_file=lambda *_: None,
+        metadata_sync=SimpleNamespace(),  # pyright: ignore[reportArgumentType]
+        metadata_refresh_use_case=SimpleNamespace(),  # pyright: ignore[reportArgumentType]
+        metadata_progress_callback=lambda *_args, **_kwargs: None,  # pyright: ignore[reportArgumentType]
+    )
+
+    response = await handler.get_civitai_versions(
+        SimpleNamespace(match_info={"model_id": "42"})  # pyright: ignore[reportArgumentType]
+    )
+    text = response.text
+    assert text is not None
+    payload = json.loads(text)
+
+    assert response.status == 404
+    assert "42" in payload["error"]
+
+
+@pytest.mark.asyncio
 async def test_refresh_model_updates_filters_records_without_updates():
     cache = SimpleNamespace(version_index={})
     service = DummyService(cache)
@@ -322,6 +362,72 @@ async def test_refresh_model_updates_filters_records_without_updates():
     assert call["force_refresh"] is False
     assert call["provider"] is not None
     assert call["target_model_ids"] is None
+
+
+
+
+@pytest.mark.asyncio
+async def test_refresh_model_updates_reports_gate_events_for_all_records():
+    """Gate transitions are reported even for records that do not qualify as
+    updates (a version already in the library that became free)."""
+
+    cache = SimpleNamespace(version_index={})
+    service = DummyService(cache)
+    record = ModelUpdateRecord(
+        model_type="lora",
+        model_id=1,
+        versions=[
+            ModelVersionRecord(
+                version_id=11,
+                name="v11",
+                base_model=None,
+                released_at=None,
+                size_bytes=None,
+                preview_url=None,
+                is_in_library=True,
+                should_ignore=False,
+            )
+        ],
+        last_checked_at=None,
+        should_ignore_model=False,
+        events=[{"versionId": 11, "kind": "became_free", "versionName": "v11", "isInLibrary": True}],
+    )
+    update_service = DummyUpdateService({1: record})
+    metadata_selector = AsyncMock(return_value=SimpleNamespace())
+
+    handler = ModelUpdateHandler(
+        service=service,
+        update_service=update_service,
+        metadata_provider_selector=metadata_selector,
+        settings_service=SimpleNamespace(get=lambda *_: False),
+        logger=logging.getLogger(__name__),
+    )
+
+    class DummyRequest:
+        can_read_body = True
+        query = {}
+
+        async def json(self):
+            return {}
+
+    response = await handler.refresh_model_updates(
+        DummyRequest()  # pyright: ignore[reportArgumentType]
+    )
+    payload = json.loads(response.text)
+
+    # The record itself does not qualify as an update...
+    assert payload["records"] == []
+    # ...but its transition is still surfaced.
+    assert payload["events"] == [
+        {
+            "modelId": 1,
+            "modelType": "lora",
+            "versionId": 11,
+            "kind": "became_free",
+            "versionName": "v11",
+            "isInLibrary": True,
+        }
+    ]
 
 
 @pytest.mark.asyncio
@@ -1077,3 +1183,50 @@ async def test_relink_civitai_surfaces_provider_unavailable_without_500():
     payload = json.loads(response.text)
     assert payload["success"] is False
     assert "CivitArchive" in payload["error"]
+
+
+def test_every_common_route_definition_resolves_to_a_handler():
+    """Guard the declarative route table against a missing mapping entry.
+
+    Adding a RouteDefinition without registering it in
+    ``ModelHandlerSet.to_route_mapping`` fails at request time with a bare
+    KeyError from the handler lookup (and only on a live server), so assert the
+    whole table resolves here instead.
+    """
+
+    class AnyHandler:
+        def __getattr__(self, _name):
+            return lambda request: None
+
+    handler_set = ModelHandlerSet(
+        page_view=AnyHandler(),
+        listing=AnyHandler(),
+        management=AnyHandler(),
+        query=AnyHandler(),
+        download=AnyHandler(),
+        civitai=AnyHandler(),
+        move=AnyHandler(),
+        auto_organize=AnyHandler(),
+        filename_template=AnyHandler(),
+        updates=AnyHandler(),
+    )
+
+    mapping = handler_set.to_route_mapping()
+    missing = [
+        definition.handler_name
+        for definition in COMMON_ROUTE_DEFINITIONS
+        if definition.handler_name not in mapping
+    ]
+
+    assert missing == []
+
+
+def test_price_alert_endpoints_are_not_registered():
+    """The redesign dropped the standalone alerts surface: obtainability rides on
+    the update surfaces, so no per-type alert route may remain."""
+
+    assert [
+        definition.path_template
+        for definition in COMMON_ROUTE_DEFINITIONS
+        if "price-alert" in definition.path_template
+    ] == []

@@ -2,15 +2,18 @@ import json
 import os
 import logging
 import asyncio
+import threading
 import time
 import shutil
-from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from contextlib import asynccontextmanager, suppress
+from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Type, Union, cast
 
-from ..utils.models import BaseModelMetadata, autov3_from_civitai_files
+from ..utils.models import BaseModelMetadata, autov3_from_civitai_files, quantization_from_civitai_files
 from ..config import config
 from ..utils.file_utils import find_preview_file, get_preview_extension, calculate_sha256, calculate_autov3
+from ..utils.gc_utils import schedule_refreeze_after_rebuild
+from ..utils.gguf_utils import detect_quantization
 from ..utils.metadata_manager import MetadataManager
 from ..utils.sidecar_paths import (
     get_metadata_path,
@@ -20,6 +23,11 @@ from ..utils.sidecar_paths import (
     resolve_centralized_dir_for_dir,
 )
 from ..utils.civitai_utils import resolve_license_info
+from ..utils.recipes_paths import (
+    get_effective_recipes_dir,
+    normalized_recipes_dir_key,
+)
+from ..utils.root_paths import normalize_root_identity, normalize_root_spelling
 from .model_cache import ModelCache
 from .model_hash_index import ModelHashIndex
 from .model_lifecycle_service import delete_model_artifacts, _require_path_in_library_roots
@@ -71,6 +79,11 @@ def _is_hidden_relative_path(rel_path: str) -> bool:
     return any(part.startswith(".") for part in rel_path.replace(os.sep, "/").split("/"))
 
 
+def _dir_entry_key(parent: str, name: str) -> str:
+    """normcase+abspath key for a directory entry, for reserved-dir checks."""
+    return os.path.normcase(os.path.abspath(os.path.join(parent, name)))
+
+
 def _file_name_stem(file_path: str) -> str:
     """Return the extension-free file name of a normalized model path.
 
@@ -89,11 +102,692 @@ PAGE_TYPE_MAP = {
     'other': 'other',
 }
 
+# Case-insensitive cache matching is a Windows-only safety net (NTFS treats
+# "Model.txt" and "model.TXT" as the same file). Module-level so the branch can
+# be exercised on case-sensitive filesystems in tests.
+_CASE_INSENSITIVE_PATHS: bool = os.name == "nt"
+
+# Cadence of walk-phase progress broadcasts during a reconcile.
+_WALK_PROGRESS_INTERVAL_SECONDS = 0.5
+
+# Share of the progress bar owned by the reconcile walk. The new-file pass
+# takes the rest (50-99) so the bar never jumps backwards between phases.
+_WALK_PROGRESS_SHARE = 50
+
+# How many files a walk worker may scan between two progress reports.
+_WALK_PROGRESS_REPORT_EVERY = 256
+
+
+def _new_file_pass_progress(processed: int, total: int) -> int:
+    """Bar percentage for the new-file pass (walk share .. 99)."""
+    if total <= 0:
+        return _WALK_PROGRESS_SHARE
+    ratio = min(max(processed / total, 0.0), 1.0)
+    return _WALK_PROGRESS_SHARE + min(49, int(ratio * 49))
+
+
+# Maximum length of a root label in progress messages and menus; the full path
+# always stays available in the tooltip.
+_ROOT_LABEL_MAX_LENGTH = 40
+
+
+def _truncate_label(label: str, limit: int = _ROOT_LABEL_MAX_LENGTH) -> str:
+    """Middle-truncate an over-long label."""
+    if len(label) <= limit:
+        return label
+    keep = max(limit - 3, 1)
+    head = (keep + 1) // 2
+    tail = keep - head
+    if not tail:
+        return f"{label[:head]}..."
+    return f"{label[:head]}...{label[-tail:]}"
+
+
+def _root_path_parts(root: str) -> Tuple[str, List[str]]:
+    """Split a root into its drive prefix (Windows) and its path segments."""
+    drive, tail = os.path.splitdrive(root)
+    normalized = tail.replace("\\", "/").strip("/")
+    return drive, [part for part in normalized.split("/") if part]
+
+
+def _root_display_labels(roots: Sequence[str]) -> Dict[str, str]:
+    """Return a unique, human-friendly label for every root in the set.
+
+    The label starts as the last path segment (prefixed with the drive letter on
+    Windows, e.g. ``G: loras``) and grows leftwards with **real parent path
+    segments** until it is unique inside the set (``usb/loras`` vs
+    ``ssd/loras``). Roots that still render identically (Windows case variants,
+    a duplicated config entry) get a deterministic numeric suffix.
+
+    Labels are a property of the whole set, so they are computed from the sorted
+    root list: the same configuration always yields the same labels, whatever
+    order the roots are walked in.
+    """
+    if not roots:
+        return {}
+
+    parts_by_root = {root: _root_path_parts(root) for root in roots}
+    depth = {root: (1 if parts_by_root[root][1] else 0) for root in roots}
+
+    def _render(root: str) -> str:
+        drive, parts = parts_by_root[root]
+        if not parts:
+            return drive or root
+        take = max(min(depth[root], len(parts)), 1)
+        tail = "/".join(parts[len(parts) - take:])
+        return f"{drive} {tail}" if drive else tail
+
+    # Grow the depth of colliding labels until they can be told apart.
+    while True:
+        groups: Dict[str, List[str]] = {}
+        for root in roots:
+            groups.setdefault(_render(root), []).append(root)
+        colliding = [group for group in groups.values() if len(group) > 1]
+        if not colliding:
+            break
+        grew = False
+        for group in colliding:
+            for root in group:
+                if depth[root] < len(parts_by_root[root][1]):
+                    depth[root] += 1
+                    grew = True
+        if not grew:
+            break
+
+    labels = {root: _render(root) for root in roots}
+    fallback: Dict[str, List[str]] = {}
+    for root in sorted(roots):
+        fallback.setdefault(labels[root], []).append(root)
+    for label, group in fallback.items():
+        if len(group) > 1:
+            for index, root in enumerate(group, start=1):
+                labels[root] = f"{label} ({index})"
+
+    return {root: _truncate_label(label) for root, label in labels.items()}
+
+
+def _root_identity(root: str) -> str:
+    """Comparable identity of a model root, folding the host's spelling (issue #1146).
+
+    The live root list is forward-slashed while ``Config`` keeps the configured
+    paths exactly as the host handed them over -- ComfyUI's ``os.path.normpath()``
+    output is all backslashes on Windows. Comparing the two as raw strings turns
+    one directory into two roots: a duplicated menu row, a bogus "unavailable"
+    report, and -- worse -- an unreachable prefix registered over a root the walk
+    just read, which stops deleted models from ever being pruned.
+    """
+    return normalize_root_identity(root)
+
+
+def _normalized_root_prefix(root: str) -> str:
+    """Forward-slash root prefix used to attribute cached paths to a root."""
+    prefix = _root_identity(root)
+    if prefix and not prefix.endswith("/"):
+        prefix += "/"
+    return prefix
+
+
+def _path_matches_prefix(path: str, prefix: str) -> bool:
+    """Match a cached business path against a normalized scope prefix."""
+    if not prefix:
+        # An empty prefix would match every path; callers filter empty roots, so
+        # keep it inert instead of turning it into a catch-all.
+        return False
+    candidate = path.lower() if _CASE_INSENSITIVE_PATHS else path
+    return candidate.startswith(prefix)
+
+
+def _scope_prefix(root: str, folder: Optional[str] = None) -> str:
+    """Normalized prefix covering a root, or a folder inside that root."""
+    prefix = _normalized_root_prefix(root)
+    if folder:
+        relative = folder.replace("\\", "/").strip("/")
+        if relative:
+            if _CASE_INSENSITIVE_PATHS:
+                relative = relative.lower()
+            prefix = f"{prefix}{relative}/"
+    return prefix
+
+
+def _scope_walk_path(root: str, folder: Optional[str] = None) -> str:
+    """Filesystem path a scoped walk starts at (the root itself when unscoped)."""
+    if not folder:
+        return root
+    relative = folder.replace("\\", "/").strip("/")
+    if not relative:
+        return root
+    return os.path.join(root, *relative.split("/"))
+
+
+@dataclass(frozen=True)
+class ReconcileScope:
+    """Restrict a reconcile to some of the configured roots and/or a folder.
+
+    ``roots=None`` means "every configured root". ``folder`` is a root-relative
+    folder in forward-slash form and applies to each root in the scope.
+    """
+
+    roots: Optional[Tuple[str, ...]] = None
+    folder: Optional[str] = None
+
+
+class _UnreachablePaths:
+    """Prefixes this reconcile could not read; their entries are never pruned.
+
+    Populated from three sources: a configured root that is not reachable, a
+    directory ``os.walk`` failed to enter (permissions, I/O error, a Windows
+    junction to an offline drive), and a known first-level symlink whose target
+    is not a directory. Cached entries under these prefixes are reported instead
+    of removed, so switching a drive off can no longer wipe its models.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._prefixes: List[str] = []
+        self._details: Dict[str, Dict[str, Any]] = {}
+
+    def add(self, path: str, reason: str, kept: int = 0) -> None:
+        """Register an unreadable prefix.
+
+        ``kept`` seeds the count for a root whose entries never reach the prune
+        phase because they are outside the scan scope entirely (a configured root
+        that was not even part of the live root list).
+        """
+        prefix = _normalized_root_prefix(path)
+        with self._lock:
+            if prefix in self._details:
+                return
+            self._details[prefix] = {
+                'path': path.replace(os.sep, '/'),
+                'reason': reason,
+                'kept': kept,
+            }
+            self._prefixes.append(prefix)
+
+    def match(self, cached_path: str) -> Optional[str]:
+        """Return the prefix covering ``cached_path``, if any."""
+        for prefix in self._prefixes:
+            if _path_matches_prefix(cached_path, prefix):
+                return prefix
+        return None
+
+    def covers_folder(self, root: str, folder: str) -> bool:
+        """Whether *folder* (relative to *root*) sits in an unreadable area.
+
+        Used when refreshing the recorded folder list: an entry the walk did not
+        find is only kept while a *specific* area we could not read may still hold
+        it -- a directory ``os.walk`` failed to enter, or a first-level symlink
+        whose target is gone. Both directions count: the folder may be inside the
+        unreadable directory, or hold it.
+
+        A root that is unreadable *as a whole* (drive switched off) deliberately
+        does not count here. The recorded list holds library-relative names, so a
+        missing root would trivially "cover" every entry and no ghost could ever be
+        cleared (issue #1145). Its folders still show up while they hold cached
+        models -- ``get_all_folders()`` unions the model-derived folders -- and a
+        genuinely empty folder comes back the next time that root is walked.
+        """
+        relative = (folder or "").replace("\\", "/").strip("/")
+        if not relative:
+            return False
+
+        root_prefix = _normalized_root_prefix(root)
+        candidate = f"{root_prefix}{relative}/"
+        if _CASE_INSENSITIVE_PATHS:
+            candidate = candidate.lower()
+        return any(
+            prefix != root_prefix
+            and (candidate.startswith(prefix) or prefix.startswith(candidate))
+            for prefix in self._prefixes
+        )
+
+    def record_kept(self, prefix: str, amount: int = 1) -> None:
+        detail = self._details.get(prefix)
+        if detail is not None:
+            detail['kept'] += amount
+
+    def total_kept(self) -> int:
+        return sum(detail['kept'] for detail in self._details.values())
+
+    def count(self) -> int:
+        return len(self._details)
+
+    def has_entries(self) -> bool:
+        return bool(self._details)
+
+    def payload(self, limit: int = 5) -> List[Dict[str, Any]]:
+        """Most affected prefixes first, capped for the progress payload."""
+        entries = sorted(
+            self._details.values(), key=lambda detail: detail['kept'], reverse=True
+        )
+        return [dict(entry) for entry in entries[:limit]]
+
+
+def _count_cached_entries_for_prefixes(
+    cached_paths: Set[str], prefixes: Sequence[Tuple[str, str]]
+) -> Dict[str, int]:
+    """Count cached entries per ``(key, normalized prefix)`` pair.
+
+    Longest prefix wins, so a folder scope counts only the entries inside it.
+    Used as the walk-workload weight for progress reporting: the walk itself is
+    what discovers the real file count, so the cached entry count is the only
+    estimate available up front.
+    """
+    counts: Dict[str, int] = {key: 0 for key, _prefix in prefixes}
+    if not prefixes:
+        return counts
+
+    ordered = sorted(prefixes, key=lambda item: len(item[1]), reverse=True)
+    case_insensitive = _CASE_INSENSITIVE_PATHS
+    for path in cached_paths:
+        candidate = path.lower() if case_insensitive else path
+        for key, prefix in ordered:
+            # An empty prefix would claim every path; see _path_matches_prefix.
+            if prefix and candidate.startswith(prefix):
+                counts[key] += 1
+                break
+    return counts
+
+
+def _count_cached_entries_per_root(
+    cached_paths: Set[str], roots: Sequence[str]
+) -> Dict[str, int]:
+    """Attribute cached entries to model roots (longest prefix wins)."""
+    return _count_cached_entries_for_prefixes(
+        cached_paths, [(root, _normalized_root_prefix(root)) for root in roots]
+    )
+
+
+def _root_device_key(root: str) -> str:
+    """Group key identifying the storage device that holds a root.
+
+    Roots sharing a device must be walked sequentially so directory claims stay
+    deterministic (configured order wins), while roots on different devices are
+    independent and can be walked by parallel workers.
+    """
+    drive, _tail = os.path.splitdrive(root)
+    if drive:
+        return drive.lower()
+    try:
+        return f"dev:{os.stat(root).st_dev}"
+    except OSError:
+        return f"path:{os.path.normpath(root)}"
+
+
+def _group_roots_by_device(roots: Sequence[str]) -> List[List[str]]:
+    """Group roots by device, preserving the configured root order.
+
+    Roots on distinct devices cannot alias unless a symlink crosses devices, so
+    walking them in parallel cannot disturb the directory-claim order in any
+    realistic layout (and even then the realpath alias index keeps the cached
+    business path stable).
+    """
+    groups: Dict[str, List[str]] = {}
+    for root in roots:
+        groups.setdefault(_root_device_key(root), []).append(root)
+    return list(groups.values())
+
+
+def _build_realpath_index(cached_paths: Set[str]) -> Dict[str, str]:
+    """Map realpath -> cached business path (overlapping roots / symlinks)."""
+    index: Dict[str, str] = {}
+    for cached_path in cached_paths:
+        try:
+            index.setdefault(os.path.realpath(cached_path), cached_path)
+        except Exception:
+            continue
+    return index
+
+
+def _build_casefold_index(cached_paths: Set[str]) -> Dict[str, str]:
+    """Map lower-cased path -> cached business path (Windows case fallback)."""
+    index: Dict[str, str] = {}
+    for cached_path in cached_paths:
+        index.setdefault(cached_path.lower(), cached_path)
+    return index
+
+
+class _CachedPathLookups:
+    """Lazily built path indexes over the cached paths, safe for workers.
+
+    Both indexes are only ever consulted for walk *misses*, so building them on
+    first use keeps a no-change refresh free of per-cached-entry realpath work.
+    The case-fold index replaces the former linear scan over every cached path,
+    which was O(files x cached entries) whenever it was reached.
+    """
+
+    def __init__(self, cached_paths: Set[str]) -> None:
+        self.cached_paths = cached_paths
+        self._lock = threading.Lock()
+        self._realpath_index: Optional[Dict[str, str]] = None
+        self._casefold_index: Optional[Dict[str, str]] = None
+
+    def match_real_path(self, real_path: str) -> Optional[str]:
+        index = self._realpath_index
+        if index is None:
+            with self._lock:
+                if self._realpath_index is None:
+                    self._realpath_index = _build_realpath_index(self.cached_paths)
+                index = self._realpath_index
+        return index.get(real_path)
+
+    def match_casefold_path(self, file_path: str) -> Optional[str]:
+        index = self._casefold_index
+        if index is None:
+            with self._lock:
+                if self._casefold_index is None:
+                    self._casefold_index = _build_casefold_index(self.cached_paths)
+                index = self._casefold_index
+        return index.get(file_path.lower())
+
+
+class _RealDirClaims:
+    """Thread-safe claim set for real directory paths.
+
+    Mirrors the historical global ``visited_real_paths`` set: a directory
+    reachable through several roots (overlapping roots, symlinked aliases) must
+    only be walked once, otherwise the same physical file could end up in the
+    library under two business paths.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._claimed: Set[str] = set()
+
+    def claim(self, real_path: str) -> bool:
+        with self._lock:
+            if real_path in self._claimed:
+                return False
+            self._claimed.add(real_path)
+            return True
+
+
+class _ReconcileWalkTracker:
+    """Thread-safe progress bookkeeping for the reconcile walk.
+
+    Per-root progress is weighted by the number of cached entries under that
+    root: the walk is what discovers the real file count, so the cached count
+    is the only workload estimate available before it runs. Roots with no
+    cached entries contribute a single weight unit and are reported only once
+    they finish.
+    """
+
+    def __init__(
+        self,
+        roots: Sequence[str],
+        expected: Mapping[str, int],
+        labels: Optional[Mapping[str, str]] = None,
+    ) -> None:
+        self._lock = threading.Lock()
+        self._roots: List[str] = list(roots)
+        # Callers that already labelled the full configured root set pass those
+        # labels in, so the progress line and the refresh menu never disagree on
+        # how a root is named.
+        resolved = dict(labels) if labels else _root_display_labels(self._roots)
+        self._labels = {root: resolved.get(root) or root for root in self._roots}
+        self._expected = {
+            root: max(int(expected.get(root, 0) or 0), 0) for root in self._roots
+        }
+        self._weight = {
+            root: max(self._expected[root], 1) for root in self._roots
+        }
+        self._seen = {root: 0 for root in self._roots}
+        self._done = {root: False for root in self._roots}
+        self._active: Set[str] = set()
+
+    def start_root(self, root: str) -> None:
+        with self._lock:
+            if root in self._seen:
+                self._active.add(root)
+
+    def report(self, root: str, files_seen: int) -> None:
+        with self._lock:
+            if root in self._seen:
+                self._seen[root] = max(int(files_seen), 0)
+
+    def finish_root(self, root: str) -> None:
+        with self._lock:
+            self._done[root] = True
+            self._active.discard(root)
+
+    def snapshot(self) -> Optional[Dict[str, Any]]:
+        """Return the current payload extras plus the bar percentage."""
+        with self._lock:
+            if not self._roots:
+                return None
+
+            total_weight = sum(self._weight.values()) or 1
+            completed = 0.0
+            files_seen = 0
+            roots_done = 0
+            for root in self._roots:
+                files_seen += self._seen[root]
+                if self._done[root]:
+                    completed += self._weight[root]
+                    roots_done += 1
+                    continue
+                expected = self._expected[root]
+                if expected > 0:
+                    completed += self._weight[root] * min(
+                        self._seen[root] / expected, 0.99
+                    )
+
+            active = [root for root in self._roots if root in self._active]
+            if active:
+                current = max(active, key=lambda root: self._seen[root])
+            else:
+                current = self._roots[-1]
+
+            expected_total = sum(self._expected.values())
+            ratio = min(completed / total_weight, 1.0)
+            return {
+                'progress': min(_WALK_PROGRESS_SHARE, int(ratio * _WALK_PROGRESS_SHARE)),
+                # processed/total feed the client-side ETA; the total is a lower
+                # bound and never below the files already seen, so the estimate
+                # stays coherent when the library grew since the last scan.
+                'processed': files_seen,
+                'total': max(expected_total, files_seen),
+                'files_seen': files_seen,
+                'roots_total': len(self._roots),
+                'roots_done': roots_done,
+                'active_roots': [self._labels[root] for root in active][:4],
+                'current_name': self._labels[current],
+            }
+
+
+@dataclass
+class _RootWalkResult:
+    """Outcome of walking a single model root (no scanner state touched)."""
+
+    root_path: str
+    found_paths: Set[str] = field(default_factory=set)
+    stale_paths: List[str] = field(default_factory=list)
+    # (cached path, expected folder) pairs: the entry's stored folder no longer
+    # matches where its file_path actually sits (written wrong by an older
+    # version, e.g. issue #1148). Repaired in place after the walk.
+    folder_repairs: List[Tuple[str, str]] = field(default_factory=list)
+    # (business path, real path) pairs for files that are neither cached nor
+    # excluded; the caller claims real paths in configured root order.
+    new_candidates: List[Tuple[str, str]] = field(default_factory=list)
+    discovered_folders: Set[str] = field(default_factory=set)
+    files_seen: int = 0
+    cancelled: bool = False
+
+
+def _walk_root_for_reconcile(
+    *,
+    root_path: str,
+    file_extensions: Set[str],
+    cached_paths: Set[str],
+    path_to_item: Mapping[str, Dict[str, Any]],
+    lookups: _CachedPathLookups,
+    dir_claims: _RealDirClaims,
+    excluded_models: Set[str],
+    is_cancelled: Callable[[], bool],
+    report_progress: Callable[[int], None],
+    expected_folder_of: Callable[[str], str],
+    walk_path: Optional[str] = None,
+    unreachable: Optional[_UnreachablePaths] = None,
+) -> _RootWalkResult:
+    """Walk one model root and classify every model file found.
+
+    ``walk_path`` defaults to the root itself; a folder scope starts the walk
+    deeper but still resolves ``folder``/``file_path`` against ``root_path`` so
+    cache entries keep their library-relative shape.
+
+    Runs synchronously (worker thread) and never mutates scanner state: all
+    cache updates happen on the event loop once every root has been walked.
+    """
+    result = _RootWalkResult(root_path=root_path)
+    stale_seen: Set[str] = set()
+    folder_repair_seen: Set[str] = set()
+
+    def mark_stale_if_needed(cached_path: str) -> None:
+        """Queue a cached path for file_name repair when it drifted."""
+        if cached_path in stale_seen:
+            return
+        item = path_to_item.get(cached_path)
+        if item is None:
+            return
+        if item.get("file_name") == _file_name_stem(cached_path):
+            return
+        stale_seen.add(cached_path)
+        result.stale_paths.append(cached_path)
+
+    def mark_folder_repair_if_needed(cached_path: str) -> None:
+        """Queue a cached entry whose folder no longer matches its file_path.
+
+        A wrong folder is more than cosmetic: the sidebar drag-and-drop derives
+        the library root by stripping the folder off the file path, so a
+        mismatch makes the next move nest the target under the source directory
+        (issue #1148). Refresh never rewrote existing entries, so a folder
+        recorded wrong by an older version kept poisoning moves forever.
+        """
+        if cached_path in folder_repair_seen:
+            return
+        folder_repair_seen.add(cached_path)
+        item = path_to_item.get(cached_path)
+        if item is None:
+            return
+        expected = expected_folder_of(cached_path)
+        if (item.get("folder") or "") != expected:
+            result.folder_repairs.append((cached_path, expected))
+
+    files_since_report = 0
+    walk_start = walk_path or root_path
+    # The recipe library sits inside a lora root by default; it is a reserved
+    # directory, never a model folder, so the walk must not descend into it.
+    recipes_dir_key = normalized_recipes_dir_key()
+
+    def _on_walk_error(error: OSError) -> None:
+        """Record a directory the walk could not enter (offline/denied)."""
+        filename = getattr(error, 'filename', None)
+        if filename and unreachable is not None:
+            unreachable.add(str(filename), 'unreadable_dir')
+
+    for root, dirnames, files in os.walk(
+        walk_start, followlinks=True, onerror=_on_walk_error
+    ):
+        dirnames[:] = [
+            d
+            for d in dirnames
+            if not _is_excluded_dir(d) and _dir_entry_key(root, d) != recipes_dir_key
+        ]
+
+        real_root = os.path.realpath(root)
+        if not dir_claims.claim(real_root):
+            continue
+
+        # Record every visited directory (including empty ones) so the folder
+        # tree stays accurate without a live walk.
+        rel_dir = os.path.relpath(
+            os.path.abspath(root), os.path.abspath(root_path)
+        ).replace(os.path.sep, "/")
+        if rel_dir != "." and not _is_hidden_relative_path(rel_dir):
+            result.discovered_folders.add(rel_dir)
+
+        for file in files:
+            ext = os.path.splitext(file)[1].lower()
+            if ext not in file_extensions:
+                continue
+
+            result.files_seen += 1
+            files_since_report += 1
+            if files_since_report >= _WALK_PROGRESS_REPORT_EVERY:
+                # A flat library (thousands of files in one directory) would
+                # otherwise report nothing until that directory ends.
+                files_since_report = 0
+                report_progress(result.files_seen)
+
+            # Construct paths exactly as they would be in cache
+            file_path = os.path.join(root, file).replace(os.sep, '/')
+
+            if file_path in cached_paths:
+                result.found_paths.add(file_path)
+                mark_stale_if_needed(file_path)
+                mark_folder_repair_if_needed(file_path)
+                continue
+
+            # Only a cache miss needs the physical path, so the realpath
+            # syscalls are paid per changed file rather than per file in the
+            # library.
+            real_file_path = os.path.realpath(os.path.join(root, file))
+
+            cached_real_match = lookups.match_real_path(real_file_path)
+            if cached_real_match:
+                result.found_paths.add(cached_real_match)
+                mark_stale_if_needed(cached_real_match)
+                mark_folder_repair_if_needed(cached_real_match)
+                continue
+
+            if file_path in excluded_models:
+                continue
+
+            # Windows: a cached path may differ from the walk result only by
+            # case. O(1) via the lower-cased index (was a full scan of the
+            # cached paths per miss).
+            if _CASE_INSENSITIVE_PATHS:
+                cached_case_match = lookups.match_casefold_path(file_path)
+                if cached_case_match:
+                    result.found_paths.add(cached_case_match)
+                    mark_stale_if_needed(cached_case_match)
+                    mark_folder_repair_if_needed(cached_case_match)
+                    continue
+
+            # Not cached yet; the caller claims the real path in root order so
+            # a file reachable through several roots is only added once.
+            result.new_candidates.append((file_path, real_file_path))
+
+        if files_since_report:
+            # Publish per directory so a library spread over many directories
+            # reports as it progresses, not only at the end of the walk.
+            files_since_report = 0
+            report_progress(result.files_seen)
+
+        if is_cancelled():
+            result.cancelled = True
+            break
+
+    report_progress(result.files_seen)
+    return result
+
 
 def _is_pending_delete_path(path: str) -> bool:
     """Return True when any path component is the pending-delete staging dir."""
     normalized = str(path).replace(os.sep, "/")
     return any(part == PENDING_DELETE_DIR_NAME for part in normalized.split("/"))
+
+
+def _file_already_gone(file_path: str, target_dir: str) -> bool:
+    """True when a model's file is already gone but its folder is reachable.
+
+    A missing folder means an offline or unmounted root, so the entry is kept
+    instead of mistaking an unavailable drive for a completed deletion.
+    """
+    try:
+        return not os.path.exists(file_path) and os.path.isdir(target_dir)
+    except OSError:  # pragma: no cover - defensive
+        return False
 
 
 @dataclass
@@ -171,6 +865,9 @@ class ModelScanner:
         self._defer_persist_depth = 0
         self._deferred_persist_pending = False
         self._autov3_backfill_scheduled = False  # One-time AutoV3 backfill trigger per process
+        self._quantization_backfill_scheduled = False  # One-time quantization backfill trigger per process
+        # Summary of the last incremental reconcile (see last_reconcile_summary)
+        self._last_reconcile_summary: Optional[Dict[str, Any]] = None
         # Guard against concurrent all-folders backfill walks (cold fallback
         # for persisted snapshots that predate folder recording).
         self._all_folders_backfill_running = False
@@ -261,7 +958,16 @@ class ModelScanner:
         if loop and not loop.is_closed():
             self._loop = loop
             self.loop = loop
-            loop.create_task(self.initialize_in_background(reconcile=reconcile))
+            loop.create_task(self._reinitialize_after_library_change(reconcile=reconcile))
+
+    async def _reinitialize_after_library_change(self, reconcile: bool = False) -> None:
+        """Re-hydrate the cache for the new library, then re-freeze the GC.
+
+        The replacement cache is built from freshly allocated objects, which
+        are GC-tracked again (issue #1147).
+        """
+        await self.initialize_in_background(reconcile=reconcile)
+        schedule_refreeze_after_rebuild(f"{self.model_type} library change")
 
     def _resolve_name_display_mode(self) -> str:
         """Return the configured display mode for name sorting."""
@@ -384,6 +1090,17 @@ class ModelScanner:
         else:
             entry_autov3 = get_value('autov3', None)
 
+        # quantization follows the same three-state contract as autov3:
+        # absent/None = not checked yet, "" = checked but no quantization
+        # detected, otherwise the canonical name ("Q4_K_M", "FP8", ...).
+        if is_mapping:
+            if 'quantization' in source:
+                entry_quantization = source['quantization'] or ''
+            else:
+                entry_quantization = None
+        else:
+            entry_quantization = get_value('quantization', None)
+
         entry: Dict[str, Any] = {
             'file_path': normalized_path,
             # file_name is always stored WITHOUT extension (e.g. "OWSMianne_ANIMA_V1",
@@ -398,6 +1115,7 @@ class ModelScanner:
             'modified': float(get_value('modified', 0.0) or 0.0),
             'sha256': (get_value('sha256', '') or '').lower(),
             'autov3': entry_autov3,
+            'quantization': entry_quantization,
             'base_model': get_value('base_model', '') or '',
             'preview_url': preview_url,
             'preview_nsfw_level': int(get_value('preview_nsfw_level', 0) or 0),
@@ -701,6 +1419,17 @@ class ModelScanner:
             if loop is not None:
                 loop.create_task(self._run_autov3_backfill())
 
+        # Same one-time scheduling for the quantization backfill (snapshots
+        # that predate the quantization column).
+        if not self._quantization_backfill_scheduled:
+            self._quantization_backfill_scheduled = True
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+            if loop is not None:
+                loop.create_task(self._run_quantization_backfill())
+
         return True
 
     def _rebuild_persisted_cache(self) -> Optional[Tuple[CacheBuildResult, List[Dict[str, Any]]]]:
@@ -780,6 +1509,14 @@ class ModelScanner:
             await Autov3BackfillService.get_instance().backfill(self)
         except Exception as exc:
             logger.warning("AutoV3 backfill failed: %s", exc)
+
+    async def _run_quantization_backfill(self) -> None:
+        """Backfill quantization for entries loaded from the persisted cache that lack it."""
+        try:
+            from ..services.quantization_backfill_service import QuantizationBackfillService  # lazy import (module created by another unit)
+            await QuantizationBackfillService.get_instance().backfill(self)
+        except Exception as exc:
+            logger.warning("Quantization backfill failed: %s", exc)
 
     async def _save_persistent_cache(self, scan_result: CacheBuildResult, *, force: bool = False) -> None:
         if not scan_result or not getattr(self, '_persistent_cache', None):
@@ -863,17 +1600,20 @@ class ModelScanner:
         await self._sync_download_history(snapshot.raw_data, source='scan')
     def _count_model_files(self) -> int:
         """Count all model files with supported extensions in all roots
-        
+
         Returns:
             int: Total number of model files found
         """
         total_files = 0
         visited_real_paths = set()
-        
+        # The recipe library holds no model files; skip it so the progress
+        # estimate matches what the scan itself will walk.
+        recipes_dir_key = normalized_recipes_dir_key()
+
         for root_path in self.get_model_roots():
             if not os.path.exists(root_path):
                 continue
-                
+
             def count_recursive(path):
                 nonlocal total_files
                 try:
@@ -881,7 +1621,7 @@ class ModelScanner:
                     if real_path in visited_real_paths:
                         return
                     visited_real_paths.add(real_path)
-                    
+
                     with os.scandir(path) as it:
                         for entry in it:
                             try:
@@ -891,6 +1631,8 @@ class ModelScanner:
                                         total_files += 1
                                 elif entry.is_dir(follow_symlinks=True):
                                     if _is_excluded_dir(entry.name):
+                                        continue
+                                    if _dir_entry_key(path, entry.name) == recipes_dir_key:
                                         continue
                                     count_recursive(entry.path)
                             except Exception as e:
@@ -951,12 +1693,19 @@ class ModelScanner:
             asyncio.set_event_loop(None)
             loop.close()
 
-    async def get_cached_data(self, force_refresh: bool = False, rebuild_cache: bool = False) -> ModelCache:
+    async def get_cached_data(
+        self,
+        force_refresh: bool = False,
+        rebuild_cache: bool = False,
+        scope: Optional[ReconcileScope] = None,
+    ) -> ModelCache:
         """Get cached model data, refresh if needed
         
         Args:
             force_refresh: Whether to refresh the cache
             rebuild_cache: Whether to completely rebuild the cache
+            scope: Restrict an incremental reconcile to some roots / a folder
+                (ignored by a full rebuild, which always walks everything)
         """
         # If cache is not initialized, return an empty cache
         # Actual initialization should be done via initialize_in_background
@@ -970,11 +1719,114 @@ class ModelScanner:
         # If force refresh is requested, initialize the cache directly
         if force_refresh:
             if rebuild_cache:
+                self._last_reconcile_summary = None
                 await self._initialize_cache()
             else:
-                await self._reconcile_cache()
+                self._last_reconcile_summary = await self._reconcile_cache(scope=scope)
         
         return cast(ModelCache, self._cache)
+
+    @property
+    def last_reconcile_summary(self) -> Optional[Dict[str, Any]]:
+        """Summary of the most recent incremental reconcile (None otherwise).
+
+        Carries the counts the refresh toast reports (added / removed /
+        repaired) plus the scan scope and the paths that were left untouched
+        because they were unreachable.
+        """
+        return self._last_reconcile_summary
+
+    def get_configured_model_roots(self) -> List[str]:
+        """Roots the user configured for this type, including unavailable ones.
+
+        ``get_model_roots()` answers "what can be walked right now"; this answers
+        "what did the user configure", which is what the refresh menu reports and
+        what must survive a switched-off drive.
+        """
+        try:
+            from ..config import config
+        except Exception:  # pragma: no cover - import guard
+            return []
+
+        # The checkpoint page scans two configured keys.
+        keys = ('checkpoint', 'unet') if self.model_type == 'checkpoint' else (self.model_type,)
+        roots: List[str] = []
+        seen: Set[str] = set()
+        for key in keys:
+            for root in config.configured_roots_for(key):
+                identity = _root_identity(root)
+                if identity and identity not in seen:
+                    seen.add(identity)
+                    roots.append(root)
+        return roots
+
+    def refresh_model_roots(self) -> List[str]:
+        """Admit configured roots whose directory is readable again.
+
+        Append-only and idempotent: a drive plugged in while the process runs
+        becomes scannable without a restart. Called before describing the roots
+        (`/roots`) and before a scan, so both see the same list.
+        """
+        try:
+            from ..config import config
+
+            return config.admit_configured_roots()
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.debug("Failed to refresh model roots: %s", exc)
+            return []
+
+    def describe_model_roots(self) -> List[Dict[str, Any]]:
+        """Describe the configured roots for the refresh scope menu.
+
+        ``models`` is the cached entry count per root (the same attribution the
+        walk-progress weights use) and ``reachable`` is a live filesystem check,
+        so a switched-off drive shows as offline without touching the cache.
+        """
+        roots: List[str] = []
+        seen: Set[str] = set()
+        for root in self.get_model_roots():
+            identity = _root_identity(root)
+            if not identity or identity in seen:
+                continue
+            seen.add(identity)
+            roots.append(root)
+
+        # Configured roots that are missing from the live list: their directory
+        # did not exist when it was built (a drive switched off at startup).
+        # Compared by identity, never by string -- the live list is forward-slashed
+        # while Config keeps the host's own spelling, which is all backslashes on
+        # Windows (issue #1146). Only roots that still hold cached entries are
+        # reported: a path that neither exists nor was ever scanned has nothing to
+        # keep, and ComfyUI registers `<output>/loras` for its save nodes whether or
+        # not that directory is there.
+        candidates: List[str] = []
+        reported: Set[str] = set()
+        for root in self.get_configured_model_roots():
+            identity = _root_identity(root)
+            if not identity or identity in seen or identity in reported:
+                continue
+            reported.add(identity)
+            candidates.append(root)
+
+        cached_paths = (
+            {item.get('file_path', '') for item in self._cache.raw_data}
+            if self._cache is not None
+            else set()
+        )
+        counts = _count_cached_entries_per_root(cached_paths, roots + candidates)
+        unavailable = [root for root in candidates if counts.get(root, 0)]
+
+        labels = _root_display_labels(roots + unavailable)
+        return [
+            {
+                'path': root.replace(os.sep, '/'),
+                'label': labels[root],
+                'reachable': os.path.exists(root),
+                'available': _root_identity(root) in seen,
+                'models': counts.get(root, 0),
+            }
+            for root in roots + unavailable
+        ]
 
     async def _initialize_cache(self) -> None:
         """Initialize or refresh the cache"""
@@ -1042,6 +1894,10 @@ class ModelScanner:
                     f"{self.model_type.capitalize()} Scanner: Cache initialization completed in {time.time() - start_time:.2f} seconds, "
                     f"found {len(scan_result.raw_data)} models"
                 )
+                # A full rebuild replaces the (frozen) cache with freshly
+                # allocated, GC-tracked objects; re-freeze once the follow-up
+                # work settles (issue #1147).
+                schedule_refreeze_after_rebuild(f"{self.model_type} cache rebuild")
             else:
                 await self._broadcast_scan_progress(
                     'cancelled', 'process_models', last_progress_percent, True,
@@ -1067,8 +1923,15 @@ class ModelScanner:
         finally:
             self._is_initializing = False # Unset flag
 
-    async def _reconcile_cache(self) -> None:
-        """Fast cache reconciliation - only process differences between cache and filesystem"""
+    async def _reconcile_cache(self, scope: Optional[ReconcileScope] = None) -> Optional[Dict[str, Any]]:
+        """Fast cache reconciliation - only process differences between cache and filesystem.
+
+        ``scope`` restricts the reconcile to some of the configured roots and/or
+        a folder inside them: entries outside the scope are neither re-read nor
+        removed, so scanning one drive can never touch another. Paths the walk
+        could not read are kept and reported instead of being treated as
+        deleted. Returns a summary of the run (also broadcast to the UI).
+        """
         self.reset_cancellation()
         self._is_initializing = True # Set flag for reconciliation duration
         try:
@@ -1082,129 +1945,178 @@ class ModelScanner:
             cached_paths = {item['file_path'] for item in self._cache.raw_data}
             path_to_item = {item['file_path']: item for item in self._cache.raw_data}
 
-            # physical path -> cached business path, for the alias case where the
-            # same file is reachable under a different path than the cached one
-            # (overlapping roots / symlink layout changes): keep the existing
-            # entry instead of delete + re-add (which would re-read metadata and
-            # re-hash every file). Built lazily on the first miss, because a
-            # realpath per cached entry is ~half the cost of a no-change
-            # reconcile and the map is only ever consulted for misses.
-            cached_real_paths: Optional[Dict[str, str]] = None
+            # Snapshot the configured roots once for this phase: scope
+            # resolution, reachability, symlink relevance and the new-file pass
+            # all read from this list.
+            configured_roots: List[str] = []
+            seen_roots: Set[str] = set()
+            for root_path in self.get_model_roots():
+                identity = _root_identity(root_path)
+                if not identity or identity in seen_roots:
+                    continue
+                seen_roots.add(identity)
+                configured_roots.append(root_path)
 
-            def lookup_cached_real_path(real_path: str) -> Optional[str]:
-                nonlocal cached_real_paths
-                if cached_real_paths is None:
-                    cached_real_paths = {}
-                    for cached_path in cached_paths:
-                        try:
-                            cached_real_paths.setdefault(os.path.realpath(cached_path), cached_path)
-                        except Exception:
-                            continue
-                return cached_real_paths.get(real_path)
-            
-            # Track found files and new files
-            found_paths = set()
-            new_files = []
+            # Configured roots that never made it into the live list (their
+            # directory was missing when it was built). They are outside the scan
+            # scope entirely — which is exactly why their cached entries survive
+            # — so they only need reporting, and their labels must not collide
+            # with the live ones. Identity, not string: the live list is
+            # forward-slashed while Config keeps the host's own spelling -- all
+            # backslashes on Windows -- and a raw compare would report every root
+            # twice and shadow it as unreachable (issue #1146).
+            configured_only: List[str] = []
+            for root in self.get_configured_model_roots():
+                identity = _root_identity(root)
+                if not identity or identity in seen_roots:
+                    continue
+                seen_roots.add(identity)
+                configured_only.append(root)
+
+            all_labels = _root_display_labels(configured_roots + configured_only)
+            scope_root_ids = (
+                {_root_identity(root) for root in scope.roots}
+                if scope is not None and scope.roots is not None
+                else None
+            )
+            scope_roots = [
+                root for root in configured_roots
+                if scope_root_ids is None or _root_identity(root) in scope_root_ids
+            ]
+            scope_folder = scope.folder if scope is not None else None
+
+            # A configured root that is not reachable (drive switched off,
+            # unmounted share) is skipped instead of being treated as deleted.
+            unreachable = _UnreachablePaths()
+            roots: List[str] = []
+            skipped_roots: List[Dict[str, Any]] = []
+            for root_path in scope_roots:
+                if not os.path.exists(root_path):
+                    unreachable.add(root_path, 'root_unreachable')
+                    skipped_roots.append({
+                        'path': root_path.replace(os.sep, '/'),
+                        'label': all_labels.get(root_path, root_path),
+                        'reason': 'root_unreachable',
+                    })
+                    continue
+                roots.append(root_path)
+
+            # Report the roots that were filtered out of the live list, so a
+            # switched-off drive no longer keeps its models in silence. A scoped
+            # scan stays quiet about them: with explicit roots the caller asked
+            # for specific ones, and for a folder only the roots that actually
+            # hold cached entries of that folder are relevant.
+            if configured_only and (scope is None or scope.roots is None):
+                folder_candidates = [
+                    (root, _scope_prefix(root, scope_folder)) for root in configured_only
+                ]
+                folder_counts = _count_cached_entries_for_prefixes(
+                    cached_paths, folder_candidates
+                )
+                for root_path, _prefix in folder_candidates:
+                    kept = folder_counts.get(root_path, 0)
+                    # Only a root that still holds cached entries is reported --
+                    # and protected from pruning. A configured path that neither
+                    # exists nor was ever scanned has nothing to keep, and ComfyUI
+                    # registers `<output>/loras` for its save nodes even when that
+                    # directory is absent (issue #1146).
+                    if not kept:
+                        continue
+                    unreachable.add(root_path, 'root_unavailable', kept=kept)
+                    skipped_roots.append({
+                        'path': root_path.replace(os.sep, '/'),
+                        'label': all_labels.get(root_path, root_path),
+                        'reason': 'root_unavailable',
+                    })
+
+            self._collect_offline_symlink_prefixes(roots, unreachable)
+
+            # Scope prefixes come from every root the caller asked for (even the
+            # unreachable ones) so their entries are recognised as "in scope but
+            # unreadable" and reported instead of silently disappearing.
+            scope_prefixes = [
+                (root, _scope_prefix(root, scope_folder)) for root in scope_roots
+            ]
+            walk_prefixes = [
+                (root, _scope_prefix(root, scope_folder)) for root in roots
+            ]
+
+            # Roots on different devices are walked by parallel workers (a cold
+            # or slow drive then no longer serializes the others); roots sharing
+            # a device stay sequential so directory claims remain deterministic.
+            tracker = _ReconcileWalkTracker(
+                roots,
+                _count_cached_entries_for_prefixes(cached_paths, walk_prefixes),
+                labels={root: all_labels.get(root, root) for root in roots},
+            )
+            # The folder-drift check reuses this phase's roots snapshot: the
+            # walk runs in worker threads and must not re-read config per file.
+            def expected_folder_of(path: str) -> str:
+                return self._calculate_folder(path, roots=configured_roots)
+
+            walk_results = await self._walk_roots_for_reconcile(
+                roots=roots,
+                walk_targets={
+                    root: _scope_walk_path(root, scope_folder) for root in roots
+                },
+                tracker=tracker,
+                cached_paths=cached_paths,
+                path_to_item=path_to_item,
+                unreachable=unreachable,
+                expected_folder_of=expected_folder_of,
+            )
+
+            # Final walk snapshot: the bar reaches the walk share, then the
+            # new-file pass continues from there.
+            await self._broadcast_walk_progress(tracker)
+
+            if self.is_cancelled():
+                logger.info(f"{self.model_type.capitalize()} Scanner: Reconcile scan cancelled")
+                await self._broadcast_scan_progress(
+                    'cancelled', 'reconcile_scan', 0, False,
+                    elapsed_seconds=time.time() - start_time,
+                )
+                return
+
+            # Merge the per-root results in configured root order: which
+            # business path wins a file reachable through several roots (and
+            # which cached entry counts as found) must not depend on the order
+            # the workers happened to finish in.
+            found_paths: Set[str] = set()
+            discovered_folders: Set[str] = set()
             # Cached entries whose stored file_name no longer matches the file
-            # on disk (e.g. dotted stems truncated by the legacy .civitai.info
+            # on disk (e.g. dotted stems truncated by the legacy .civitai_info
             # migration, issue #1112). Repaired in place after the walk; the
             # list stays empty on a clean library, so a no-change reconcile
             # only pays one string compare per cached file.
             stale_paths: List[str] = []
             stale_seen: Set[str] = set()
+            folder_repairs: List[Tuple[str, str]] = []
+            folder_repair_seen: Set[str] = set()
+            new_files: List[str] = []
+            discovered_real_files: Set[str] = set()
 
-            def mark_stale_if_needed(cached_path: str) -> None:
-                """Queue a cached path for file_name repair when it drifted."""
-                if cached_path in stale_seen:
-                    return
-                item = path_to_item.get(cached_path)
-                if item is None:
-                    return
-                if item.get("file_name") == _file_name_stem(cached_path):
-                    return
-                stale_seen.add(cached_path)
-                stale_paths.append(cached_path)
-
-            visited_real_paths = set()
-            discovered_real_files = set()
-            discovered_folders: Set[str] = set()
-
-            # Scan all model roots
-            for root_path in self.get_model_roots():
-                if not os.path.exists(root_path):
-                    continue
-
-                # Recursively scan directory
-                for root, dirnames, files in os.walk(root_path, followlinks=True):
-                    dirnames[:] = [d for d in dirnames if not _is_excluded_dir(d)]
-                    real_root = os.path.realpath(root)
-                    if real_root in visited_real_paths:
+            for result in walk_results:
+                found_paths |= result.found_paths
+                discovered_folders |= result.discovered_folders
+                for cached_path in result.stale_paths:
+                    if cached_path in stale_seen:
                         continue
-                    visited_real_paths.add(real_root)
+                    stale_seen.add(cached_path)
+                    stale_paths.append(cached_path)
+                for cached_path, expected_folder in result.folder_repairs:
+                    if cached_path in folder_repair_seen:
+                        continue
+                    folder_repair_seen.add(cached_path)
+                    folder_repairs.append((cached_path, expected_folder))
 
-                    # Record every visited directory (including empty ones) so
-                    # the folder tree stays accurate without a live walk.
-                    rel_dir = os.path.relpath(
-                        os.path.abspath(root), os.path.abspath(root_path)
-                    ).replace(os.path.sep, "/")
-                    if rel_dir != "." and not _is_hidden_relative_path(rel_dir):
-                        discovered_folders.add(rel_dir)
-
-                    for file in files:
-                        ext = os.path.splitext(file)[1].lower()
-                        if ext in self.file_extensions:
-                            # Construct paths exactly as they would be in cache
-                            file_path = os.path.join(root, file).replace(os.sep, '/')
-
-                            # Check if this file is already in cache
-                            if file_path in cached_paths:
-                                found_paths.add(file_path)
-                                mark_stale_if_needed(file_path)
-                                continue
-
-                            # Only a cache miss needs the physical path, so the
-                            # realpath syscalls are paid per changed file rather
-                            # than per file in the library.
-                            real_file_path = os.path.realpath(os.path.join(root, file))
-
-                            cached_real_match = lookup_cached_real_path(real_file_path)
-                            if cached_real_match:
-                                found_paths.add(cached_real_match)
-                                mark_stale_if_needed(cached_real_match)
-                                continue
-
-                            if file_path in self._excluded_models:
-                                continue
-                                
-                            # Try case-insensitive match on Windows
-                            if os.name == 'nt':
-                                lower_path = file_path.lower()
-                                matched = False
-                                for cached_path in cached_paths:
-                                    if cached_path.lower() == lower_path:
-                                        found_paths.add(cached_path)
-                                        mark_stale_if_needed(cached_path)
-                                        matched = True
-                                        break
-                                if matched:
-                                    continue
-                                
-                            if real_file_path in discovered_real_files:
-                                continue
-
-                            discovered_real_files.add(real_file_path)
-                            # This is a new file to process
-                            new_files.append(file_path)
-                    
-                    # Yield control periodically
-                    await asyncio.sleep(0)
-                    if self.is_cancelled():
-                        logger.info(f"{self.model_type.capitalize()} Scanner: Reconcile scan cancelled")
-                        await self._broadcast_scan_progress(
-                            'cancelled', 'reconcile_scan', 0, False,
-                            elapsed_seconds=time.time() - start_time,
-                        )
-                        return
+            for result in walk_results:
+                for file_path, real_file_path in result.new_candidates:
+                    if real_file_path in discovered_real_files:
+                        continue
+                    discovered_real_files.add(real_file_path)
+                    # This is a new file to process
+                    new_files.append(file_path)
 
             # Process new files in batches
             total_added = 0
@@ -1281,7 +2193,7 @@ class ModelScanner:
                             last_progress_time = current_time
                             await self._broadcast_scan_progress(
                                 'processing', 'process_new',
-                                min(99, int(1 + (processed_new / total_new) * 98)), False,
+                                _new_file_pass_progress(processed_new, total_new), False,
                                 processed=processed_new, total=total_new,
                                 current_name=os.path.basename(path),
                             )
@@ -1290,7 +2202,7 @@ class ModelScanner:
                             logger.info(f"{self.model_type.capitalize()} Scanner: Reconcile processing cancelled")
                             await self._broadcast_scan_progress(
                                 'cancelled', 'process_new',
-                                min(99, int(1 + (processed_new / total_new) * 98)), False,
+                                _new_file_pass_progress(processed_new, total_new), False,
                                 elapsed_seconds=time.time() - start_time,
                             )
                             return
@@ -1345,8 +2257,39 @@ class ModelScanner:
                             exc,
                         )
 
-            # Find missing files (in cache but not in filesystem)
-            missing_files = cached_paths - found_paths
+            # Repair entries whose folder drifted from where their file_path
+            # actually sits (written wrong by an older version, issue #1148).
+            # The value comes from the file path itself, so unlike the
+            # file_name repair no metadata re-read is needed.
+            total_folder_repaired = 0
+            for cached_path, expected_folder in folder_repairs:
+                item = path_to_item.get(cached_path)
+                if item is None or (item.get('folder') or '') == expected_folder:
+                    continue
+                item['folder'] = expected_folder
+                total_folder_repaired += 1
+            if total_folder_repaired:
+                logger.info(
+                    "%s Scanner: Repaired %d cached entries whose folder no longer matched their file location",
+                    self.model_type.capitalize(),
+                    total_folder_repaired,
+                )
+
+            # Find missing files (in cache but not in filesystem). Only paths
+            # inside this scan's scope are candidates, and paths the walk could
+            # not read are kept and reported instead of being removed.
+            missing_files: Set[str] = set()
+            for path in cached_paths - found_paths:
+                if not any(
+                    _path_matches_prefix(path, prefix)
+                    for _root, prefix in scope_prefixes
+                ):
+                    continue
+                unreachable_prefix = unreachable.match(path)
+                if unreachable_prefix is not None:
+                    unreachable.record_kept(unreachable_prefix)
+                    continue
+                missing_files.add(path)
             total_removed = 0
             
             if missing_files:
@@ -1402,16 +2345,52 @@ class ModelScanner:
                     self._cache.raw_data = list(reversed(deduped))
                     total_removed += dedup_removed
             
-            # The walk above visited every directory, so refresh the recorded
-            # folder list (including empty folders) even when no model files
-            # changed — e.g. an empty folder was created or removed externally.
+            # The walk above visited every directory *in scope*, so refresh the
+            # recorded folder list (including empty folders) when this run could
+            # speak for every root: e.g. an empty folder was created or removed
+            # externally.
+            #
+            # A folder the walk did not find is dropped unless a root we could not
+            # read still covers it — the drive is off, ``os.walk`` failed to enter
+            # a directory, or a first-level symlink lost its target. Keeping the
+            # *whole* list whenever anything was unreadable is what made a ghost
+            # folder outlive every refresh, a restart and even the folder being
+            # deleted in the UI (issue #1145). A scoped scan cannot speak for the
+            # roots it was not asked about, so it still only adds: dropping
+            # folders it never looked at would empty the sidebar for every drive
+            # that was not scanned.
             sorted_discovered = sorted(discovered_folders, key=lambda x: x.lower())
-            folders_changed = self._cache.all_folders != sorted_discovered
+            discovered_set = set(sorted_discovered)
+            recorded = set(self._cache.all_folders or [])
+            speaks_for_every_root = scope_folder is None and (
+                scope is None
+                or scope.roots is None
+                or len(scope_roots) == len(configured_roots)
+            )
+            if speaks_for_every_root:
+                merged_folders = sorted(
+                    discovered_set
+                    | {
+                        folder
+                        for folder in recorded - discovered_set
+                        if any(
+                            unreachable.covers_folder(root, folder)
+                            for root in configured_roots + configured_only
+                        )
+                    },
+                    key=lambda x: x.lower(),
+                )
+            else:
+                merged_folders = sorted(
+                    recorded | discovered_set,
+                    key=lambda x: x.lower(),
+                )
+            folders_changed = self._cache.all_folders != merged_folders
             if folders_changed:
-                self._cache.all_folders = sorted_discovered
+                self._cache.all_folders = merged_folders
 
             # Resort cache if changes were made
-            if total_added > 0 or total_removed > 0:
+            if total_added > 0 or total_removed > 0 or total_folder_repaired > 0:
                 # Update folders list
                 all_folders = set(item.get('folder', '') for item in self._cache.raw_data)
                 self._cache.folders = sorted(list(all_folders), key=lambda x: x.lower())
@@ -1425,16 +2404,42 @@ class ModelScanner:
             elif folders_changed:
                 await self._persist_current_cache()
                 
+            summary: Dict[str, Any] = {
+                'added': total_added,
+                'removed': total_removed,
+                'repaired': total_repaired,
+                'folder_repaired': total_folder_repaired,
+                'scanned_roots': [all_labels.get(root, root) for root in roots],
+                # A folder scope is named by the folder the user clicked, not by
+                # the roots it happens to live under.
+                'scope_label': scope_folder or '',
+                'skipped_roots': skipped_roots,
+                'unavailable_paths': unreachable.payload(),
+                'unavailable_paths_total': unreachable.count(),
+                'kept_unreachable': unreachable.total_kept(),
+            }
             logger.info(
                 f"{self.model_type.capitalize()} Scanner: Cache reconciliation completed in "
                 f"{time.time() - start_time:.2f} seconds. Added {total_added}, "
                 f"removed {total_removed}, repaired {total_repaired} models."
+                + (
+                    f" Repaired {total_folder_repaired} folder field(s)."
+                    if total_folder_repaired
+                    else ""
+                )
+                + (
+                    f" Skipped {len(skipped_roots)} unreachable root(s), kept "
+                    f"{summary['kept_unreachable']} model(s) under unreadable paths."
+                    if skipped_roots or unreachable.has_entries()
+                    else ""
+                )
             )
             await self._broadcast_scan_progress(
                 'completed', 'process_new', 100, False,
-                added=total_added, removed=total_removed,
                 elapsed_seconds=time.time() - start_time,
+                **summary,
             )
+            return summary
         except Exception as e:
             logger.error(f"{self.model_type.capitalize()} Scanner: Error reconciling cache: {e}", exc_info=True)
             await self._broadcast_scan_progress(
@@ -1444,7 +2449,164 @@ class ModelScanner:
         finally:
             self._is_initializing = False # Unset flag
             self.bump_cache_version()
-    
+
+    async def _walk_roots_for_reconcile(
+        self,
+        *,
+        roots: List[str],
+        walk_targets: Mapping[str, str],
+        tracker: _ReconcileWalkTracker,
+        cached_paths: Set[str],
+        path_to_item: Mapping[str, Dict[str, Any]],
+        unreachable: _UnreachablePaths,
+        expected_folder_of: Callable[[str], str],
+    ) -> List[_RootWalkResult]:
+        """Walk every root off the event loop and return results in root order.
+
+        One worker per device: cold or slow drives no longer serialize the
+        others, and the event loop stays free for the whole walk (previously it
+        was re-entered once per directory). Results are re-ordered to the
+        configured root order so the merge below is deterministic.
+        """
+        if not roots:
+            return []
+
+        lookups = _CachedPathLookups(cached_paths)
+        dir_claims = _RealDirClaims()
+        excluded_models = set(self._excluded_models)
+        loop = asyncio.get_running_loop()
+
+        monitor = asyncio.create_task(self._monitor_walk_progress(tracker))
+        try:
+            futures = [
+                loop.run_in_executor(
+                    None,
+                    self._walk_root_group_sync,
+                    group,
+                    tracker,
+                    lookups,
+                    dir_claims,
+                    excluded_models,
+                    path_to_item,
+                    walk_targets,
+                    unreachable,
+                    expected_folder_of,
+                )
+                for group in _group_roots_by_device(roots)
+            ]
+            outcomes = await asyncio.gather(*futures, return_exceptions=True)
+        finally:
+            monitor.cancel()
+            with suppress(asyncio.CancelledError, Exception):
+                await monitor
+
+        for outcome in outcomes:
+            if isinstance(outcome, BaseException):
+                raise outcome
+
+        by_root: Dict[str, _RootWalkResult] = {}
+        for outcome in outcomes:
+            for result in cast(List[_RootWalkResult], outcome):
+                by_root[result.root_path] = result
+        return [by_root[root] for root in roots if root in by_root]
+
+    def _walk_root_group_sync(
+        self,
+        roots: List[str],
+        tracker: _ReconcileWalkTracker,
+        lookups: _CachedPathLookups,
+        dir_claims: _RealDirClaims,
+        excluded_models: Set[str],
+        path_to_item: Mapping[str, Dict[str, Any]],
+        walk_targets: Mapping[str, str],
+        unreachable: _UnreachablePaths,
+        expected_folder_of: Callable[[str], str],
+    ) -> List[_RootWalkResult]:
+        """Walk the roots of one device sequentially (worker-thread entry point)."""
+        results: List[_RootWalkResult] = []
+        for root_path in roots:
+            if self.is_cancelled():
+                break
+
+            tracker.start_root(root_path)
+
+            def report_progress(files_seen: int, _root: str = root_path) -> None:
+                tracker.report(_root, files_seen)
+
+            try:
+                result = _walk_root_for_reconcile(
+                    root_path=root_path,
+                    walk_path=walk_targets.get(root_path, root_path),
+                    file_extensions=self.file_extensions,
+                    cached_paths=lookups.cached_paths,
+                    path_to_item=path_to_item,
+                    lookups=lookups,
+                    dir_claims=dir_claims,
+                    excluded_models=excluded_models,
+                    is_cancelled=self.is_cancelled,
+                    report_progress=report_progress,
+                    expected_folder_of=expected_folder_of,
+                    unreachable=unreachable,
+                )
+            finally:
+                tracker.finish_root(root_path)
+
+            results.append(result)
+            if result.cancelled:
+                break
+        return results
+
+    def _collect_offline_symlink_prefixes(
+        self, roots: Sequence[str], unreachable: _UnreachablePaths
+    ) -> None:
+        """Flag known first-level symlinks whose target is not a directory.
+
+        ``config`` deliberately tracks only symlinks directly under a root (see
+        ``Config._scan_symbolic_links``), so this costs one ``isdir`` per known
+        mapping and covers "the linked drive is switched off" for the layouts the
+        scanner already knows about. Nested symlinks stay out of scope.
+        """
+        try:
+            mappings = config.iter_path_mappings()
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.debug(
+                "%s Scanner: symlink map unavailable: %s",
+                self.model_type.capitalize(),
+                exc,
+            )
+            return
+        if not mappings or not roots:
+            return
+
+        root_prefixes = [_normalized_root_prefix(root) for root in roots]
+        for target, link in mappings:
+            link_prefix = _normalized_root_prefix(link)
+            if not any(
+                link_prefix == root_prefix
+                or _path_matches_prefix(link_prefix, root_prefix)
+                for root_prefix in root_prefixes
+            ):
+                continue
+            if os.path.isdir(target):
+                continue
+            unreachable.add(link, 'symlink_target_offline')
+
+    async def _monitor_walk_progress(self, tracker: _ReconcileWalkTracker) -> None:
+        """Broadcast walk progress while the root workers are running."""
+        while True:
+            await asyncio.sleep(_WALK_PROGRESS_INTERVAL_SECONDS)
+            await self._broadcast_walk_progress(tracker)
+
+    async def _broadcast_walk_progress(self, tracker: _ReconcileWalkTracker) -> None:
+        """Emit one walk-phase progress message (best effort)."""
+        snapshot = tracker.snapshot()
+        if not snapshot:
+            return
+        progress = int(snapshot.pop('progress', 0))
+        await self._broadcast_scan_progress(
+            'processing', 'reconcile_scan', progress, False, **snapshot
+        )
+
     def is_initializing(self) -> bool:
         """Check if the scanner is currently initializing"""
         return self._is_initializing
@@ -1495,7 +2657,48 @@ class ModelScanner:
         else:
             self._schedule_all_folders_backfill()
 
+        reserved = self._recipes_folder_rel_paths()
+        if reserved:
+            folders = {
+                folder
+                for folder in folders
+                if not any(
+                    folder.casefold() == rel or folder.casefold().startswith(rel + "/")
+                    for rel in reserved
+                )
+            }
+
         return sorted(folders, key=lambda x: x.lower())
+
+    def _recipes_folder_rel_paths(self) -> Set[str]:
+        """Casefolded library-relative names of the recipes dir, per root.
+
+        The recipe library sits inside a lora root by default; it is a
+        reserved directory, never a model folder. The scan walks no longer
+        record it, but snapshots persisted before that exclusion still carry
+        it, so readers filter it out here.
+        """
+        try:
+            recipes_dir = get_effective_recipes_dir()
+        except Exception:  # pragma: no cover - defensive
+            return set()
+        if not recipes_dir:
+            return set()
+
+        recipes_abs = os.path.abspath(recipes_dir)
+        recipes_key = os.path.normcase(recipes_abs)
+        reserved: Set[str] = set()
+        for root in self.get_model_roots():
+            root_abs = os.path.abspath(root)
+            root_key = os.path.normcase(root_abs)
+            if recipes_key != root_key and not recipes_key.startswith(
+                root_key + os.sep
+            ):
+                continue
+            rel = os.path.relpath(recipes_abs, root_abs).replace(os.sep, "/")
+            if rel and rel != ".":
+                reserved.add(rel.casefold())
+        return reserved
 
     async def add_known_folder(self, folder: str) -> None:
         """Record a folder (and its parents) in the known folder list.
@@ -1525,7 +2728,9 @@ class ModelScanner:
             await self._persist_current_cache()
             self.bump_cache_version()
 
-    async def remove_known_folder(self, folder: str) -> None:
+    async def remove_known_folder(
+        self, folder: str, absolute_path: Optional[str] = None
+    ) -> None:
         """Forget a folder (and its subtree) that no longer exists on disk.
 
         Counterpart of :meth:`add_known_folder`, called after a directory is
@@ -1534,11 +2739,18 @@ class ModelScanner:
         full rescan. Ancestors are kept on purpose: every recorded ancestor
         exists on disk in its own right, so only the removed subtree is dropped.
 
-        Cache entries that referenced the now-missing directory are purged as
-        well, which keeps a stale (phantom) model card from surviving the
-        deletion. When ``all_folders`` has not been recorded yet (legacy
-        snapshot) only the cache purge runs — the scheduled backfill walk
-        rebuilds the folder list from disk.
+        The recorded folder list is a *union over the model roots*, so an entry
+        is dropped only when no root still holds that directory: deleting
+        ``<rootA>/test`` must not hide a ``test`` that ``<rootB>`` still has,
+        which made the node vanish on the next tree load and reappear after the
+        next scan. The cache purge is keyed on the removed directory's absolute
+        path when the caller knows it (``absolute_path``); without that, a
+        folder deleted in one root would evict the model cards of its
+        same-named twin in another root.
+
+        When ``all_folders`` has not been recorded yet (legacy snapshot) only
+        the cache purge runs — the scheduled backfill walk rebuilds the folder
+        list from disk.
         """
         normalized = folder.replace("\\", "/").strip("/")
         if not normalized:
@@ -1552,20 +2764,23 @@ class ModelScanner:
         folders_changed = False
         recorded = getattr(cache, "all_folders", None)
         if recorded is not None:
+            removed = [
+                entry
+                for entry in recorded
+                if entry == normalized or entry.startswith(prefix)
+            ]
+            still_present = await self._folders_present_on_disk(removed)
             updated = [
                 entry
                 for entry in recorded
-                if entry != normalized and not entry.startswith(prefix)
+                if entry in still_present
+                or (entry != normalized and not entry.startswith(prefix))
             ]
             if updated != list(recorded):
                 cache.all_folders = updated
                 folders_changed = True
 
-        stale_paths = [
-            item.get("file_path")
-            for item in (cache.raw_data or [])
-            if self._folder_within(item.get("folder", ""), normalized)
-        ]
+        stale_paths = self._folder_cache_purge_paths(cache, normalized, absolute_path)
         if stale_paths:
             # The purge persists the cache — including the already updated
             # all_folders list — and bumps the version itself.
@@ -1576,6 +2791,63 @@ class ModelScanner:
             await self._persist_current_cache()
 
         self.bump_cache_version()
+
+    def _folder_cache_purge_paths(
+        self, cache: "ModelCache", normalized: str, absolute_path: Optional[str]
+    ) -> List[str]:
+        """Cache entries that removing *normalized* invalidates.
+
+        With an absolute path the purge is exact: only models that lived inside
+        the removed directory. Without one (legacy caller) the relative folder is
+        the only handle available, which over-purges same-named folders in other
+        roots and is therefore a fallback rather than the norm.
+        """
+        if absolute_path:
+            prefix = f"{str(absolute_path).replace(chr(92), '/').rstrip('/')}/"
+            return [
+                item.get("file_path")
+                for item in (cache.raw_data or [])
+                if str(item.get("file_path", "")).replace(chr(92), "/").startswith(prefix)
+            ]
+
+        return [
+            item.get("file_path")
+            for item in (cache.raw_data or [])
+            if self._folder_within(item.get("folder", ""), normalized)
+        ]
+
+    async def _folders_present_on_disk(self, folders: Sequence[str]) -> Set[str]:
+        """Subset of *folders* that at least one model root still holds.
+
+        Folder records are relative, so "does this folder still exist?" is a
+        question about every root at once. The check is stat-only and runs off
+        the event loop because model roots can live on slow network shares.
+        Stand-in scanners without roots report nothing, which preserves the
+        caller's previous behaviour.
+        """
+        candidates = [folder for folder in folders if folder]
+        if not candidates:
+            return set()
+
+        try:
+            roots = self.get_model_roots()
+        except NotImplementedError:
+            return set()
+        if not roots:
+            return set()
+
+        return await asyncio.to_thread(self._folders_present_sync, candidates, roots)
+
+    @staticmethod
+    def _folders_present_sync(folders: Sequence[str], roots: Sequence[str]) -> Set[str]:
+        present: Set[str] = set()
+        for folder in folders:
+            for root in roots:
+                if os.path.isdir(os.path.join(root, folder)):
+                    present.add(folder)
+                    break
+        return present
+
 
     @staticmethod
     def _folder_within(candidate: str, target: str) -> bool:
@@ -1663,6 +2935,17 @@ class ModelScanner:
                 ),
                 key=lambda entry: entry.lower(),
             )
+            # The recorded list is a union over the roots, and a same-named
+            # folder in another root keeps the old name. Those entries still
+            # exist on disk under the old relative path, so re-adding them is
+            # what stops the rename from hiding the other root's twin.
+            survivors = await self._folders_present_on_disk([
+                entry
+                for entry in recorded
+                if entry == previous or entry.startswith(old_rel_prefix)
+            ])
+            if survivors:
+                rekeyed = sorted(set(rekeyed) | survivors, key=lambda entry: entry.lower())
             if rekeyed != list(recorded):
                 cache.all_folders = rekeyed
                 changed = True
@@ -1679,13 +2962,20 @@ class ModelScanner:
 
         touched: List[Dict[str, Any]] = []
         for item in cache.raw_data or []:
+            old_file_path = item.get("file_path", "")
+            normalized_old_path = str(old_file_path).replace(chr(92), "/")
+            # Only records physically inside the renamed directory. Matching on
+            # the relative folder alone would also re-key the same-named folder
+            # in another root, whose files never moved.
+            if old_file_path and not normalized_old_path.startswith(old_abs_prefix):
+                continue
+
             folder_value = item.get("folder", "") or self._calculate_folder(
                 item.get("file_path", "")
             )
             if not self._folder_within(folder_value, previous):
                 continue
 
-            old_file_path = item.get("file_path", "")
             if old_file_path:
                 cache.remove_from_version_index(item)
                 item["file_path"] = self._rekey_path(
@@ -1895,17 +3185,25 @@ class ModelScanner:
         """Enumerate every directory under the model roots, live from disk.
 
         Runs in a worker thread. Hidden directories (any segment starting
-        with '.') and the pending-delete staging dir are excluded.
+        with '.'), the pending-delete staging dir and the recipes storage
+        dir are excluded.
         """
         discovered: Set[str] = set()
         visited_real_paths: Set[str] = set()
+        # The recipe library is a reserved directory (see the reconcile walk).
+        recipes_dir_key = normalized_recipes_dir_key()
 
         for root_path in self.get_model_roots():
             if not os.path.exists(root_path):
                 continue
 
             for root, dirnames, _files in os.walk(root_path, followlinks=True):
-                dirnames[:] = [d for d in dirnames if not _is_excluded_dir(d)]
+                dirnames[:] = [
+                    d
+                    for d in dirnames
+                    if not _is_excluded_dir(d)
+                    and _dir_entry_key(root, d) != recipes_dir_key
+                ]
                 # realpath is used only for symlink dedup, never for the
                 # recorded path (business paths stay unresolved).
                 real_root = os.path.realpath(root)
@@ -1924,13 +3222,43 @@ class ModelScanner:
         """Get model file info and metadata (extensible for different model types)"""
         return await MetadataManager.create_default_metadata(file_path, self.model_class)
     
-    def _calculate_folder(self, file_path: str) -> str:
-        """Calculate the folder path for a model file"""
-        for root in self.get_model_roots():
-            if file_path.startswith(root):
-                rel_path = os.path.relpath(file_path, root)
-                return os.path.dirname(rel_path).replace(os.path.sep, '/')
-        return ''
+    def _calculate_folder(self, file_path: str, roots: Optional[List[str]] = None) -> str:
+        """Return the library-relative folder holding *file_path*.
+
+        The path arrives in whichever spelling its caller holds: ComfyUI's own
+        (backslashes on Windows) or the forward-slashed business form used for
+        cache entries. A raw ``startswith(root)`` matched neither the mixed nor
+        the opposite spelling, so every forward-slashed path on Windows resolved
+        to the root folder and a moved model was filed under the library root.
+        Compare identities instead, then slice the relative part off.
+
+        The identity folds case on case-insensitive filesystems, so the slice
+        comes from the case-preserving spelling: slicing the identity itself
+        recorded every folder in lowercase on Windows, and the sidebar grew a
+        lowercase twin branch on every move until the next disk walk healed it.
+
+        ``roots`` defaults to the live root list; reconcile workers pass a
+        snapshot so the walk never re-reads config off the event loop.
+        """
+        candidate = _root_identity(file_path)
+        if not candidate:
+            return ""
+        spelling = normalize_root_spelling(file_path)
+        if len(spelling) != len(candidate):
+            # Case folding changed the length (e.g. a Unicode character whose
+            # lowercase form spans two code points): fall back to the identity
+            # rather than slice at a wrong offset.
+            spelling = candidate
+        for root in (roots if roots is not None else self.get_model_roots()):
+            identity = _root_identity(root)
+            if not identity:
+                continue
+            if candidate == identity:
+                return ""
+            if candidate.startswith(f"{identity}/"):
+                relative = spelling[len(identity) + 1:]
+                return relative.rsplit("/", 1)[0] if "/" in relative else ""
+        return ""
 
     def adjust_metadata(self, metadata, file_path, root_path):
         """Hook for subclasses: adjust metadata during scanning"""
@@ -2123,6 +3451,40 @@ class ModelScanner:
             except Exception as e:
                 logger.error(f"Failed to resolve AutoV3 for {file_path}: {e}")
 
+        # Quantization resolution: content detection (GGUF file_type /
+        # safetensors dtypes) is authoritative and only runs for models never
+        # checked before (quantization is None). The Civitai fp8 flag is only
+        # a fallback — it may upgrade a checked-unavailable state ('') to
+        # "FP8", but never overrides a content-detected value, and the header
+        # is never re-read for an already-checked model.
+        current_quantization = model_data.get('quantization')
+        if current_quantization in (None, ''):
+            try:
+                quantization = None
+                if current_quantization is None:
+                    quantization = detect_quantization(os.path.realpath(file_path))
+                if not quantization:
+                    civitai_data = None
+                    if isinstance(metadata, BaseModelMetadata):
+                        civitai_data = metadata.civitai
+                    elif isinstance(metadata, dict):
+                        civitai_data = metadata.get("civitai")
+                    quantization = quantization_from_civitai_files(
+                        civitai_data, model_data.get("sha256") or ""
+                    )
+                quantization = quantization or ""
+                if quantization != current_quantization:
+                    model_data['quantization'] = quantization
+                    if isinstance(metadata, BaseModelMetadata):
+                        metadata.quantization = quantization
+                        await MetadataManager.save_metadata(file_path, metadata)
+                    elif isinstance(metadata, dict):
+                        # Dict payload: JSON null encodes the checked-unavailable state.
+                        metadata['quantization'] = quantization or None
+                        await MetadataManager.save_metadata(file_path, metadata)
+            except Exception as e:
+                logger.error(f"Failed to resolve quantization for {file_path}: {e}")
+
         # Skip excluded models
         if model_data.get('exclude', False):
             excluded_models.append(model_data['file_path'])
@@ -2257,6 +3619,10 @@ class ModelScanner:
         processed_real_files: Set[str] = set()
         visited_real_dirs: Set[str] = set()
         discovered_folders: Set[str] = set()
+        # The recipe library sits inside a lora root by default; it is a
+        # reserved directory, never a model folder, so the scan must not
+        # descend into it.
+        recipes_dir_key = normalized_recipes_dir_key()
 
         async def handle_progress(current_name: str = '') -> None:
             if progress_callback is None:
@@ -2334,6 +3700,11 @@ class ModelScanner:
                                 return
                         elif entry.is_dir(follow_symlinks=True):
                             if _is_excluded_dir(entry.name):
+                                continue
+                            if (
+                                _dir_entry_key(current_path, entry.name)
+                                == recipes_dir_key
+                            ):
                                 continue
                             # Record every directory (including empty ones) so
                             # the folder tree can be served without a live walk.
@@ -3103,6 +4474,70 @@ class ModelScanner:
             logger.warning("Failed to update AutoV3 for %s: %s", file_path, exc)
             return False
 
+    async def update_quantization_for_model(self, model_type: str, file_path: str, quantization: str) -> bool:
+        """Persist a quantization value for a single model (single write path used by the backfill service).
+
+        Locates the in-memory cache entry by ``file_path`` and updates only its
+        ``quantization`` field: the SQLite snapshot via
+        :meth:`PersistentModelCache.update_single_model` and the
+        ``.metadata.json`` sidecar. sha256, tags, and every other field are
+        left untouched, so the persistent delta only ever differs in
+        quantization. Unlike autov3, quantization is not part of the hash
+        index, so no index update is needed.
+
+        Returns:
+            ``True`` when the entry was found and updated, ``False`` otherwise.
+            Never raises — failures are logged and swallowed.
+        """
+        try:
+            if self._cache is None:
+                return False
+
+            entry = next(
+                (item for item in self._cache.raw_data if item.get('file_path') == file_path),
+                None,
+            )
+            if entry is None:
+                return False
+
+            # Normalize once so the memory entry, sidecar, and SQLite row agree.
+            # Canonical names are case-sensitive ("Q4_K_M", "FP8"), so unlike
+            # autov3 no lowering happens here.
+            quantization = quantization or ""
+
+            # Capture the pre-mutation state so update_single_model only sees
+            # a quantization delta between old and new.
+            old_item = dict(entry)
+
+            entry['quantization'] = quantization
+
+            persistent = getattr(self, '_persistent_cache', None)
+            if persistent is not None:
+                await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    persistent.update_single_model,
+                    model_type,
+                    entry,
+                    old_item,
+                )
+
+            # Sidecar write-back: JSON null encodes the checked-unavailable
+            # state. Skip silently when the sidecar does not exist.
+            metadata_path = get_metadata_path(file_path)
+            if os.path.exists(metadata_path):
+                with open(metadata_path, 'r', encoding='utf-8') as handle:
+                    payload = json.load(handle)
+                if not isinstance(payload, dict):
+                    payload = {}
+                payload['quantization'] = entry['quantization'] or None
+                await MetadataManager.save_metadata(metadata_path, payload)
+
+            self.bump_cache_version()
+            return True
+        except Exception as exc:
+            logger.warning("Failed to update quantization for %s: %s", file_path, exc)
+            return False
+
     @staticmethod
     def _cache_entries_differ(a: Dict[str, Any], b: Dict[str, Any]) -> bool:
         """Return ``True`` when two cache-entry dicts differ in any field.
@@ -3455,6 +4890,19 @@ class ModelScanner:
                             'deleted_files': deleted_files
                         })
                         total_deleted += 1
+                    elif _file_already_gone(file_path, target_dir):
+                        # Nothing was left on disk but the folder is still
+                        # reachable: a previous delete removed the artifacts and
+                        # only the stale cache row survived. Clean it up instead
+                        # of failing forever with "No files deleted" (#1154).
+                        deleted_models.append(file_path)
+                        results.append({
+                            'file_path': file_path,
+                            'success': True,
+                            'already_missing': True,
+                            'deleted_files': []
+                        })
+                        total_deleted += 1
                     else:
                         results.append({
                             'file_path': file_path,
@@ -3485,16 +4933,34 @@ class ModelScanner:
             if deleted_models:
                 # Update the cache in a batch operation
                 cache_updated = await self._batch_update_cache_for_deleted_models(deleted_models)
-                
-            return {
-                'success': True,
-                'status': 'cancelled' if self.is_cancelled() else 'success',
+
+            status = 'cancelled' if self.is_cancelled() else 'success'
+            response: Dict[str, Any] = {
+                # An operation that removed nothing must not present itself as
+                # a success: the caller would otherwise show "deleted" while
+                # every file is still on disk (issue #1154).
+                'success': total_deleted > 0,
+                'status': status,
                 'total_deleted': total_deleted,
                 'total_attempted': len(file_paths),
                 'cache_updated': cache_updated,
                 'results': results,
                 **batch_field
             }
+            if total_deleted == 0:
+                first_error = next(
+                    (entry.get('error') for entry in results if entry.get('error')),
+                    None,
+                )
+                if first_error:
+                    response['error'] = first_error
+                elif status == 'cancelled':
+                    response['error'] = (
+                        'Deletion was cancelled before any file was processed'
+                    )
+                else:
+                    response['error'] = 'No files were deleted'
+            return response
             
         except Exception as e:
             logger.error(f"Error in bulk delete: {e}", exc_info=True)
@@ -3516,18 +4982,24 @@ class ModelScanner:
         if not file_paths or self._cache is None:
             return False
 
+        # A cancellation request is deliberately ignored: the files are already
+        # gone from disk by the time this runs, so skipping the cache update
+        # leaves ghost entries that nothing but a full rebuild can clear
+        # (issue #1154).
         if self.is_cancelled():
             logger.info(
-                f"{self.model_type.capitalize()} Scanner: Skipping cache update "
-                "after cancelled bulk delete"
+                f"{self.model_type.capitalize()} Scanner: Applying cache update "
+                "for a bulk delete that was interrupted by cancellation"
             )
-            return False
             
         try:
             # Get all models that need to be removed from cache
             models_to_remove = [item for item in self._cache.raw_data if item['file_path'] in file_paths]
             
             if not models_to_remove:
+                # The rows are already gone, but path-keyed index entries can
+                # survive a partially applied update. Clean them anyway.
+                self._purge_paths_from_hash_index(file_paths)
                 return False
                 
             # Update tag counts
@@ -3545,13 +5017,29 @@ class ModelScanner:
                 if hasattr(self, '_hash_index') and self._hash_index:
                     # Get the hash and filename before removal for duplicate checking
                     file_name = os.path.splitext(os.path.basename(file_path))[0]
-                    hash_val = model.get('sha256', '').lower()
+                    hash_val = (model.get('sha256') or '').lower()
 
-                    # Remove from hash index
-                    self._hash_index.remove_by_path(file_path, hash_val)
-                    
-                    # Check and clean up duplicates
-                    self._cleanup_duplicates_after_removal(hash_val, file_name)
+                    try:
+                        # Remove from hash index
+                        self._hash_index.remove_by_path(file_path, hash_val)
+
+                        # Check and clean up duplicates
+                        self._cleanup_duplicates_after_removal(hash_val, file_name)
+                    except Exception as exc:
+                        # One inconsistent index entry must never abort the
+                        # whole batch - the cache rows below still have to go.
+                        logger.warning(
+                            "%s Scanner: Failed to clean hash index for %s: %s",
+                            self.model_type.capitalize(),
+                            file_path,
+                            exc,
+                        )
+
+            # Paths that were never in the cache can still leak into the
+            # path-keyed indexes; clean those too.
+            stale_paths = [path for path in file_paths if path not in {m['file_path'] for m in models_to_remove}]
+            if stale_paths:
+                self._purge_paths_from_hash_index(stale_paths)
             
             # Update cache data
             self._cache.raw_data = [item for item in self._cache.raw_data if item['file_path'] not in file_paths]
@@ -3569,7 +5057,22 @@ class ModelScanner:
         except Exception as e:
             logger.error(f"Error updating cache after bulk delete: {e}", exc_info=True)
             return False
-    
+
+    def _purge_paths_from_hash_index(self, file_paths: List[str]) -> None:
+        """Remove path-keyed hash index entries for paths no longer in the cache."""
+        if not hasattr(self, '_hash_index') or not self._hash_index:
+            return
+        for file_path in file_paths:
+            try:
+                self._hash_index.remove_by_path(file_path)
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning(
+                    "%s Scanner: Failed to purge hash index entry for %s: %s",
+                    self.model_type.capitalize(),
+                    file_path,
+                    exc,
+                )
+
     def _cleanup_duplicates_after_removal(self, hash_val: str, file_name: str) -> None:
         """Clean up duplicate entries in hash index after removing a model
         

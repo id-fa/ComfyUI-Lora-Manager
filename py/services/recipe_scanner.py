@@ -17,6 +17,7 @@ from ..config import config
 from ..utils.constants import VALID_CHECKPOINT_SUB_TYPES, VALID_LORA_TYPES
 from ..utils.exif_utils import ExifUtils
 from ..utils.file_utils import calculate_autov3
+from ..utils.gc_utils import schedule_refreeze_after_rebuild
 from ..utils.recipe_open_stats import RecipeOpenStats
 from .model_scanner import WEIGHT_FILE_EXTENSIONS
 from .recipe_cache import RecipeCache
@@ -803,7 +804,16 @@ class RecipeScanner:
             loop = None
 
         if loop and not loop.is_closed():
-            loop.create_task(self.initialize_in_background())
+            loop.create_task(self._reinitialize_after_library_change())
+
+    async def _reinitialize_after_library_change(self) -> None:
+        """Rebuild the cache for the new library, then re-freeze the GC.
+
+        The rebuilt cache is freshly allocated and GC-tracked again
+        (issue #1147).
+        """
+        await self.initialize_in_background()
+        schedule_refreeze_after_rebuild("recipe library change")
 
     async def _get_civitai_client(self):
         """Lazily initialize CivitaiClient from registry"""
@@ -2676,23 +2686,11 @@ class RecipeScanner:
     @property
     def recipes_dir(self) -> str:
         """Get path to recipes directory"""
-        from .settings_manager import get_settings_manager
+        from ..utils.recipes_paths import get_effective_recipes_dir
 
-        custom_recipes_dir = get_settings_manager().get("recipes_path", "")
-        if isinstance(custom_recipes_dir, str) and custom_recipes_dir.strip():
-            recipes_dir = os.path.abspath(
-                os.path.normpath(os.path.expanduser(custom_recipes_dir.strip()))
-            )
+        recipes_dir = get_effective_recipes_dir()
+        if recipes_dir:
             os.makedirs(recipes_dir, exist_ok=True)
-            return recipes_dir
-
-        if not config.loras_roots:
-            return ""
-
-        # config.loras_roots already sorted case-insensitively, use the first one
-        recipes_dir = os.path.join(config.loras_roots[0], "recipes")
-        os.makedirs(recipes_dir, exist_ok=True)
-
         return recipes_dir
 
     async def get_cached_data(self, force_refresh: bool = False) -> RecipeCache:
@@ -2765,6 +2763,11 @@ class RecipeScanner:
                         self._schedule_post_scan_enrichment()
                         if not self._prune_skipped:
                             self._schedule_fts_index_build()
+
+                        # The rebuilt cache is freshly allocated and GC-tracked
+                        # again; re-freeze once the follow-up work settles
+                        # (issue #1147).
+                        schedule_refreeze_after_rebuild("recipe cache refresh")
 
                         return cast(RecipeCache, self._cache)
 
@@ -3749,6 +3752,12 @@ class RecipeScanner:
                             for item in filtered_data
                             if self._compute_availability_statuses(item) & selected
                         ]
+
+                # Filter by embedded workflow presence
+                if filters.get("has_workflow"):
+                    filtered_data = [
+                        item for item in filtered_data if item.get("has_workflow")
+                    ]
 
         # Apply sorting if not already handled by pre-sorted cache
         if ":" in sort_by or sort_field in ("loras_count", "random", "opened"):

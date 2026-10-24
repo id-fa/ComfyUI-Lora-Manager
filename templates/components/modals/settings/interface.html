@@ -87,6 +87,11 @@
             ('hover', 'settings.layoutSettings.cardInfoDisplayOptions.hover'),
         ], 'settings.layoutSettings.cardInfoDisplayHelp') }}
 
+        {{ sm.setting_select('showcaseLayout', 'showcase_layout', 'settings.layoutSettings.showcaseLayout', [
+            ('gallery', 'settings.layoutSettings.showcaseLayoutOptions.gallery'),
+            ('vertical', 'settings.layoutSettings.showcaseLayoutOptions.vertical'),
+        ], 'settings.layoutSettings.showcaseLayoutHelp') }}
+
         <div class="setting-item">
             <div class="setting-row">
                 <div class="setting-info">
@@ -105,6 +110,8 @@
         </div>
 
         {{ sm.setting_toggle('showVersionOnCard', 'show_version_on_card', 'settings.layoutSettings.showVersionOnCard', 'settings.layoutSettings.showVersionOnCardHelp') }}
+
+        {{ sm.setting_toggle('showQuantizationOnCard', 'show_quantization_on_card', 'settings.layoutSettings.showQuantizationOnCard', 'settings.layoutSettings.showQuantizationOnCardHelp') }}
 
         {{ sm.setting_select('modelCardFooterAction', 'model_card_footer_action', 'settings.layoutSettings.modelCardFooterAction', [
             ('example_images', 'settings.layoutSettings.modelCardFooterActionOptions.exampleImages'),

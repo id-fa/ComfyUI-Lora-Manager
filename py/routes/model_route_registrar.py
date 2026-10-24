@@ -42,6 +42,10 @@ COMMON_ROUTE_DEFINITIONS: tuple[RouteDefinition, ...] = (
     RouteDefinition("POST", "/api/lm/{prefix}/move_models_bulk", "move_models_bulk"),
     RouteDefinition("POST", "/api/lm/{prefix}/create-folder", "create_folder"),
     RouteDefinition("POST", "/api/lm/{prefix}/delete-folder", "delete_folder"),
+    # Forgetting a folder that is gone from disk is a state change, so it takes
+    # GET with query params too (the browser extension is GET-only by convention).
+    RouteDefinition("POST", "/api/lm/{prefix}/forget-folder", "forget_folder"),
+    RouteDefinition("GET", "/api/lm/{prefix}/forget-folder", "forget_folder"),
     RouteDefinition("POST", "/api/lm/{prefix}/rename-folder", "rename_folder"),
     RouteDefinition("GET", "/api/lm/{prefix}/auto-organize", "auto_organize_models"),
     RouteDefinition("POST", "/api/lm/{prefix}/auto-organize", "auto_organize_models"),
@@ -61,6 +65,7 @@ COMMON_ROUTE_DEFINITIONS: tuple[RouteDefinition, ...] = (
     RouteDefinition("GET", "/api/lm/{prefix}/scan", "scan_models"),
     RouteDefinition("GET", "/api/lm/{prefix}/roots", "get_model_roots"),
     RouteDefinition("GET", "/api/lm/{prefix}/folders", "get_folders"),
+    RouteDefinition("GET", "/api/lm/{prefix}/resolve-folder", "resolve_folder"),
     RouteDefinition("GET", "/api/lm/{prefix}/folder-tree", "get_folder_tree"),
     RouteDefinition(
         "GET", "/api/lm/{prefix}/unified-folder-tree", "get_unified_folder_tree"

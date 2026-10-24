@@ -85,12 +85,21 @@ export function getApiEndpoints(modelType) {
         moveBulk: `/api/lm/${modelType}/move_models_bulk`,
         createFolder: `/api/lm/${modelType}/create-folder`,
         deleteFolder: `/api/lm/${modelType}/delete-folder`,
+        // Drops the sidebar records of a folder that no longer exists on disk:
+        // the only cleanup left for a node whose directory was moved or deleted
+        // outside LoRA Manager.
+        forgetFolder: `/api/lm/${modelType}/forget-folder`,
         renameFolder: `/api/lm/${modelType}/rename-folder`,
+        // Resolves a tree-relative folder onto the root(s) that hold it: the
+        // unified folder tree merges every root, so a node does not carry its
+        // own absolute path.
+        resolveFolder: `/api/lm/${modelType}/resolve-folder`,
 
         // CivitAI integration
         fetchCivitai: `/api/lm/${modelType}/fetch-civitai`,
         fetchAllCivitai: `/api/lm/${modelType}/fetch-all-civitai`,
         relinkCivitai: `/api/lm/${modelType}/relink-civitai`,
+        civitaiModelByVersion: `/api/lm/${modelType}/civitai/model/version`,
         civitaiVersions: `/api/lm/${modelType}/civitai/versions`,
         refreshUpdates: `/api/lm/${modelType}/updates/refresh`,
         fetchMissingLicenses: `/api/lm/${modelType}/updates/fetch-missing-license`,
@@ -98,6 +107,9 @@ export function getApiEndpoints(modelType) {
         modelUpdateVersions: `/api/lm/${modelType}/updates/versions`,
         ignoreModelUpdate: `/api/lm/${modelType}/updates/ignore`,
         ignoreVersionUpdate: `/api/lm/${modelType}/updates/ignore-version`,
+
+        // Price alerts are app-wide (all model types in one query), so they are
+        // not part of this per-type endpoint map; see UpdateService.js.
 
         // Preview management
         replacePreview: `/api/lm/${modelType}/replace-preview`,
@@ -142,7 +154,6 @@ export const MODEL_SPECIFIC_ENDPOINTS = {
         civitaiUrl: `/api/lm/${MODEL_TYPES.LORA}/civitai-url`,
         metadata: `/api/lm/${MODEL_TYPES.LORA}/metadata`,
         getTriggerWordsPost: `/api/lm/${MODEL_TYPES.LORA}/get_trigger_words`,
-        civitaiModelByVersion: `/api/lm/${MODEL_TYPES.LORA}/civitai/model/version`,
         civitaiModelByHash: `/api/lm/${MODEL_TYPES.LORA}/civitai/model/hash`,
     },
     [MODEL_TYPES.CHECKPOINT]: {
