@@ -36,6 +36,7 @@
       'sidecar_storage_root_is_default': True,
       'standalone_mode': False,
       'theme': 'dark',
+      'workflow_path': '',
     }),
     'success': True,
   })

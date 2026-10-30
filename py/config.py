@@ -209,6 +209,11 @@ class Config:
         self.other_root_subtypes: Dict[str, str] = {}
         self.other_folder_roots: Dict[str, List[str]] = {}
         self.other_roots = self._init_other_paths()
+        # Workflow roots (ComfyUI workflow JSON library). Opt-in feature:
+        # empty while ``enable_workflows`` is off. Not a ComfyUI folder_paths
+        # category — sourced from LoRA Manager's own settings in both modes.
+        self.workflows_roots: List[str] = []
+        self.workflows_roots = self._init_workflow_paths()
         # Extra paths (only for LoRA Manager, not shared with ComfyUI)
         self.extra_loras_roots: List[str] = []
         self.extra_checkpoints_roots: List[str] = []
@@ -460,6 +465,10 @@ class Config:
                     self.embeddings_roots or [],
                 ),
             }
+            # The workflow library folder is a top-level LM setting
+            # (workflow_path), not a folder_paths entry, so it is persisted by
+            # SettingsManager and never written into the library's
+            # folder_paths map here.
             # Persist the other-model roots under their original folder_paths
             # keys so library switching round-trips them.
             for key, roots in (self.other_folder_roots or {}).items():
@@ -762,13 +771,86 @@ class Config:
             if fingerprint_valid and mappings_valid:
                 return
 
-            logger.info("Symlink configuration changed; rescanning symbolic links")
+            logger.info(
+                "Symlink configuration changed; rescanning symbolic links (%s)",
+                self._describe_symlink_cache_invalidation(current_fingerprint),
+            )
 
         self.rebuild_symlink_cache()
         logger.info(
             "Symlink mappings rebuilt and cached in %.2f ms",
             (time.perf_counter() - start) * 1000,
         )
+
+    def _describe_symlink_cache_invalidation(
+        self, current_fingerprint: Dict[str, object]
+    ) -> str:
+        """Summarize why the persisted symlink cache was invalidated.
+
+        Distinguishes a fingerprint mismatch (root set or first-level symlink
+        layout changed) from a stale mapping (a cached link vanished or was
+        retargeted), so the startup log records what actually changed instead
+        of a bare "configuration changed".
+        """
+        cached = self._cached_fingerprint
+        if not isinstance(cached, dict) or not cached:
+            return "cache has no usable fingerprint"
+
+        if current_fingerprint == cached:
+            return "cached symlink mapping failed validation"
+
+        def _root_set(value: object) -> Set[str]:
+            if not isinstance(value, list):
+                return set()
+            return {item for item in value if isinstance(item, str)}
+
+        def _link_set(value: object) -> Set[Tuple[str, str]]:
+            pairs: Set[Tuple[str, str]] = set()
+            if isinstance(value, list):
+                for entry in value:
+                    if isinstance(entry, (list, tuple)) and len(entry) == 2:
+                        pairs.add((str(entry[0]), str(entry[1])))
+            return pairs
+
+        def _format(items: List[str]) -> str:
+            shown = items[:3]
+            suffix = f" +{len(items) - 3} more" if len(items) > 3 else ""
+            return ", ".join(shown) + suffix
+
+        reasons: List[str] = []
+        added_roots = sorted(
+            _root_set(current_fingerprint.get("roots"))
+            - _root_set(cached.get("roots"))
+        )
+        removed_roots = sorted(
+            _root_set(cached.get("roots"))
+            - _root_set(current_fingerprint.get("roots"))
+        )
+        if added_roots:
+            reasons.append(f"roots added: {_format(added_roots)}")
+        if removed_roots:
+            reasons.append(f"roots removed: {_format(removed_roots)}")
+
+        added_links = sorted(
+            _link_set(current_fingerprint.get("direct_symlinks"))
+            - _link_set(cached.get("direct_symlinks"))
+        )
+        removed_links = sorted(
+            _link_set(cached.get("direct_symlinks"))
+            - _link_set(current_fingerprint.get("direct_symlinks"))
+        )
+        if added_links:
+            reasons.append(
+                "symlinks added: "
+                + _format([f"{link} -> {target}" for link, target in added_links])
+            )
+        if removed_links:
+            reasons.append(
+                "symlinks removed: "
+                + _format([f"{link} -> {target}" for link, target in removed_links])
+            )
+
+        return "; ".join(reasons) or "fingerprint structure differs"
 
     def rebuild_symlink_cache(self) -> None:
         """Force a fresh scan of all symbolic links and update the persistent cache."""
@@ -871,14 +953,14 @@ class Config:
 
             # Check if symlink still exists
             if not self._is_link(link_path):
-                logger.debug("Cached symlink no longer exists: %s", link_path)
+                logger.info("Cached symlink no longer exists: %s", link_path)
                 return False
 
             # Check if target is still the same
             try:
                 actual_target = self._normalize_path(os.path.realpath(link_path))
                 if actual_target != target:
-                    logger.debug(
+                    logger.info(
                         "Symlink target changed: %s -> %s (cached: %s)",
                         link_path,
                         actual_target,
@@ -886,7 +968,7 @@ class Config:
                     )
                     return False
             except OSError:
-                logger.debug("Cannot resolve symlink: %s", link_path)
+                logger.info("Cannot resolve symlink: %s", link_path)
                 return False
 
         return True
@@ -1050,6 +1132,8 @@ class Config:
         for root in self.embeddings_roots or []:
             preview_roots.update(self._expand_preview_root(root))
         for root in self.other_roots or []:
+            preview_roots.update(self._expand_preview_root(root))
+        for root in self.workflows_roots or []:
             preview_roots.update(self._expand_preview_root(root))
         # Include extra paths for preview access
         for root in self.extra_loras_roots or []:
@@ -1483,6 +1567,7 @@ class Config:
         folder_paths: Mapping[str, Any],
         extra_folder_paths: Optional[Mapping[str, Any]] = None,
         recipes_path: str = "",
+        workflow_path: str = "",
     ) -> None:
         self._path_mappings.clear()
         self._preview_root_paths = set()
@@ -1522,6 +1607,27 @@ class Config:
             self.other_root_subtypes,
             self.other_folder_roots,
         ) = self._prepare_other_paths(other_path_map)
+
+        # The workflow library is a single LM-owned folder (workflow_path),
+        # not a ComfyUI folder_paths category; the live root stays empty while
+        # the opt-in feature is off.
+        normalized_workflow_path = (
+            workflow_path.strip() if isinstance(workflow_path, str) else ""
+        )
+        self._remember_configured_paths(
+            "workflow", [normalized_workflow_path] if normalized_workflow_path else []
+        )
+        try:
+            from .services.settings_manager import get_settings_manager
+
+            workflows_enabled = get_settings_manager().is_workflows_enabled()
+        except Exception:  # pragma: no cover - defensive fallback
+            workflows_enabled = False
+        self.workflows_roots = (
+            self._prepare_lora_paths([normalized_workflow_path])
+            if workflows_enabled and normalized_workflow_path
+            else []
+        )
 
         # Process extra paths (only for LoRA Manager, not shared with ComfyUI)
         extra_paths = extra_folder_paths or {}
@@ -1735,6 +1841,56 @@ class Config:
         except Exception as e:
             logger.warning(f"Error initializing other model paths: {e}")
             return []
+
+    def _get_configured_workflow_paths(self) -> List[str]:
+        """Return the configured workflow library folder as a root list.
+
+        Workflow management keeps a single LM-owned folder (``workflow_path``)
+        rather than a ComfyUI ``folder_paths`` category, so both modes source
+        it from LoRA Manager's own settings. The scanner API stays list-based.
+        """
+        try:
+            from .services.settings_manager import get_settings_manager
+
+            path = get_settings_manager().get_workflow_path()
+        except Exception:
+            return []
+        return [path] if path else []
+
+    def _init_workflow_paths(self) -> List[str]:
+        """Initialize and validate the workflow library root.
+
+        Opt-in feature: the live root list stays empty while
+        ``enable_workflows`` is off. The configured folder is remembered so
+        diagnostics can report an unavailable/offline root.
+        """
+        try:
+            raw_paths = self._get_configured_workflow_paths()
+            self._remember_configured_paths("workflow", raw_paths)
+
+            from .services.settings_manager import get_settings_manager
+
+            if not get_settings_manager().is_workflows_enabled():
+                return []
+
+            unique_paths = self._prepare_lora_paths(raw_paths)
+            logger.info(
+                "Found workflow root: %s"
+                % (unique_paths[0] if unique_paths else "[]")
+            )
+            return unique_paths
+        except Exception as e:
+            logger.warning(f"Error initializing workflow paths: {e}")
+            return []
+
+    def refresh_workflow_roots(self) -> None:
+        """Rebuild the workflow root after the opt-in toggle or path change.
+
+        Called when ``enable_workflows`` or ``workflow_path`` is updated so the
+        scanner immediately reflects the new folder without a restart.
+        """
+        self.workflows_roots = self._init_workflow_paths()
+        self._rebuild_preview_roots()
 
     def _remember_configured_paths(
         self, model_type: str, paths: Iterable[str]
@@ -2101,7 +2257,14 @@ class Config:
             if isinstance(library_config, Mapping)
             else ""
         )
-        self._apply_library_paths(folder_paths, extra_folder_paths, recipes_path)
+        workflow_path = (
+            str(library_config.get("workflow_path", "") or "")
+            if isinstance(library_config, Mapping)
+            else ""
+        )
+        self._apply_library_paths(
+            folder_paths, extra_folder_paths, recipes_path, workflow_path
+        )
 
         logger.info(
             "Applied library settings with %d lora roots (%d extra), %d checkpoint roots (%d extra), and %d embedding roots (%d extra)",

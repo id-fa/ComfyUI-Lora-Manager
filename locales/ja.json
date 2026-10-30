@@ -156,7 +156,9 @@
             "embeddingNameCopied": "Embedding構文をコピーしました",
             "modelNameCopied": "モデル名をコピーしました",
             "sendCheckpointToWorkflow": "ComfyUIに送信",
-            "sendEmbeddingToWorkflow": "ComfyUIに送信"
+            "sendEmbeddingToWorkflow": "ComfyUIに送信",
+            "openInComfyUI": "ComfyUIで開く",
+            "copyWorkflowToClipboard": "ワークフローをクリップボードにコピー"
         },
         "nsfw": {
             "matureContent": "成人向けコンテンツ",
@@ -244,6 +246,7 @@
             "checkpoints": "Checkpoint",
             "embeddings": "Embedding",
             "other": "その他",
+            "workflows": "ワークフロー",
             "statistics": "統計"
         },
         "search": {
@@ -609,8 +612,8 @@
             "cardBlurAmountHelp": "モデルカードとレシピカードのヘッダー・フッターオーバーレイのぼかし強度を調整します（0 = ぼかしなし、20 = 最大ぼかし）。"
         },
         "folderSettings": {
-            "activeLibrary": "アクティブライブラリ",
-            "activeLibraryHelp": "設定済みのライブラリを切り替えてデフォルトのフォルダを更新します。選択を変更するとページが再読み込みされます。",
+            "activeLibrary": "アクティブライブラリ（非推奨）",
+            "activeLibraryHelp": "設定済みのライブラリを切り替えてデフォルトのフォルダを更新します。選択を変更するとページが再読み込みされます。非推奨：複数ライブラリのサポートは今後のリリースで削除されます。単一ライブラリ内の複数のフォルダルートは引き続き完全にサポートされます。",
             "loadingLibraries": "ライブラリを読み込み中...",
             "noLibraries": "ライブラリが設定されていません",
             "defaultLoraRoot": "LoRAルート",
@@ -633,6 +636,11 @@
             "defaultControlnetRootHelp": "ダウンロード、インポート、移動用のデフォルトControlNetルートディレクトリを設定",
             "enableOtherModels": "その他のモデル管理",
             "enableOtherModelsHelp": "オフにすると、VAE / Upscaler / Text Encoder / CLIP Vision / ControlNet フォルダーはスキャンされず、その他のモデルページは無効のままになり、これらのモデルタイプはダウンロードできません。",
+            "enableWorkflows": "ワークフロー管理",
+            "enableWorkflowsHelp": "オフにすると、ワークフローライブラリフォルダーはスキャンされず、ワークフローページは無効のままになり、CivitAIのWorkflowリソースをリンクしたりダウンロードしたりできなくなります。",
+            "workflowFolder": "ワークフローライブラリフォルダー",
+            "workflowFolderHelp": "ComfyUIのワークフローJSONファイルをスキャンする単一のフォルダーです。LoRA Managerのみが管理し（ComfyUIとは共有されません）、変更はすぐに反映されます。",
+            "workflowFolderPlaceholder": "/path/to/workflows",
             "otherSubTypes": "管理するモデルタイプ",
             "otherSubTypesHelp": "その他のモデルページでスキャンおよび表示するカテゴリを選択します。",
             "subTypeVae": "VAE",
@@ -1447,6 +1455,49 @@
             "openSettingsFolder": "設定フォルダーを開く"
         }
     },
+    "workflows": {
+        "title": "ワークフロー",
+        "contextMenu": {
+            "sendToComfy": "ComfyUIで開く",
+            "updateFromComfy": "ComfyUIから更新",
+            "copyWorkflow": "ワークフローをコピー",
+            "restoreDownloaded": "ダウンロード済みバージョンを復元"
+        },
+        "sendToComfy": {
+            "success": "ワークフローをComfyUIへ送信しました",
+            "failed": "ワークフローの送信に失敗しました：{message}"
+        },
+        "restoreDownloaded": {
+            "title": "ダウンロード済みバージョンを復元しますか？",
+            "message": "ローカルの編集内容は破棄され、ワークフローはダウンロード時のバージョンに復元されます。",
+            "confirmButton": "復元",
+            "restoring": "ワークフローを復元中...",
+            "success": "ワークフローをダウンロード済みバージョンに復元しました",
+            "failed": "ワークフローの復元に失敗しました：{message}"
+        },
+        "updateFromComfy": {
+            "success": "ComfyUIからワークフローを更新しました",
+            "noChanges": "ComfyUI側に書き戻す変更はありません",
+            "cancelled": "更新はキャンセルされました",
+            "failed": "ComfyUIからの更新に失敗しました：{message}"
+        },
+        "copyWorkflow": {
+            "failed": "ワークフローのコピーに失敗しました：{message}"
+        },
+        "disabled": {
+            "title": "ワークフロー管理はオフです",
+            "description": "有効にすると、ComfyUIのワークフローファイルをスキャン・管理し、CivitAIのメタデータとプレビューを保持したまま、実行中のComfyUIに送信できます。",
+            "enableButton": "ワークフローを有効にする",
+            "hint": "この機能は後で「設定 > ライブラリ」から再度オフにできます。",
+            "enableFailed": "ワークフローの有効化に失敗しました"
+        },
+        "noPaths": {
+            "title": "ワークフローフォルダーが設定されていません",
+            "description": "ワークフロー管理はオンですが、ワークフローフォルダーが設定されていません。「設定 > ライブラリ」でワークフローフォルダーを設定し、このページを再読み込みしてください。",
+            "hint": "ワークフローライブラリフォルダーは、ComfyUI標準のワークフローリストとは別です。",
+            "openSettings": "設定を開く"
+        }
+    },
     "sidebar": {
         "modelRoot": "ルート",
         "collapseAll": "すべてのフォルダを折りたたむ",
@@ -1722,8 +1773,8 @@
             "errors": {
                 "invalidUrl": "無効なモデル URL 形式",
                 "noVersions": "このモデルの利用可能なバージョンがありません",
-                "linkedFileNotFound": "[TODO: Translate] File {fileId} was not found in the requested model version.",
-                "linkedFileNotWeightFile": "[TODO: Translate] File {fileId} is not a downloadable model file.",
+                "linkedFileNotFound": "要求されたモデルバージョンにファイル {fileId} が見つかりません。",
+                "linkedFileNotWeightFile": "ファイル {fileId} はダウンロード可能なモデルファイルではありません。",
                 "mixedSources": "同じバッチ内でCivitAIとHugging Face / ModelScopeのURLを混在させることはできません。",
                 "noModelFiles": "このリポジトリにモデルファイルが見つかりませんでした。"
             },
@@ -2221,7 +2272,8 @@
             "copyReport": "レポートをコピー",
             "downloadCsv": "CSVをダウンロード",
             "columnModelName": "モデル名",
-            "columnError": "エラー"
+            "columnError": "エラー",
+            "rateLimitedNotice": "取得を中止しました：メタデータ提供元のレート制限に達しました。残りのモデルを再試行するには、後で「CivitAIからメタデータを取得」を再実行してください。"
         },
         "downloadBatchSummary": {
             "title": "バッチダウンロードの概要",
@@ -2271,6 +2323,10 @@
             "title": "その他のモデルマネージャーを初期化中",
             "message": "モデルキャッシュをスキャンして構築中です。数分かかる場合があります..."
         },
+        "workflows": {
+            "title": "ワークフローマネージャーを初期化中",
+            "message": "ワークフローキャッシュをスキャンして構築中。数分かかる場合があります..."
+        },
         "recipes": {
             "title": "レシピマネージャーを初期化中",
             "message": "レシピを読み込んで処理中。数分かかる場合があります..."
@@ -2306,6 +2362,52 @@
                 "description": "Ctrl+F（MacではCmd+F）を押して、現在のビュー内を素早く検索できます。",
                 "alt": "クイック検索"
             }
+        },
+        "error": {
+            "title": "初期化に失敗しました",
+            "message": "モデルライブラリのスキャン中に問題が発生しました。",
+            "retry": "再試行"
+        }
+    },
+    "firstRun": {
+        "title": "LoRA Managerへようこそ",
+        "description": "開始する前に、LoRA Manager はモデルライブラリをスキャンしてメタデータのサイドカーファイルを生成します。この処理は初回のみで、所要時間はライブラリのサイズとディスク速度によって異なります。",
+        "libraries": {
+            "loras": "LoRA",
+            "checkpoints": "Checkpoint",
+            "embeddings": "Embedding",
+            "other": "その他のモデル"
+        },
+        "language": {
+            "label": "言語"
+        },
+        "libraryStats": "{count} 個のモデル · {size}",
+        "rootMissing": "フォルダが見つかりません",
+        "estimate": "約 {count} 個のモデル（{size}）。推定スキャン時間は約 {minutes} 分で、ライブラリのサイズとディスク速度によって変わります。",
+        "noRoots": {
+            "plugin": "アクセス可能なモデルフォルダが見つかりません。設定を開いてモデルディレクトリを構成してから、このページを再読み込みしてください。",
+            "standalone": "アクセス可能なモデルフォルダが見つかりません。settings.json の folder_paths を編集してから、サーバーを再起動してください。"
+        },
+        "sidecar": {
+            "title": "メタデータの保存",
+            "alongside": {
+                "label": "モデルファイルの隣（推奨）",
+                "description": "メタデータの .json ファイルを各モデルファイルの隣に保存するため、モデルと一緒に移動します。"
+            },
+            "centralized": {
+                "label": "集中ディレクトリ",
+                "description": "メタデータは別のディレクトリに保存されるため、モデルフォルダをきれいに保てます。",
+                "pathPlaceholder": "集中メタデータ保存用ディレクトリ"
+            }
+        },
+        "actions": {
+            "start": "スキャン開始",
+            "defer": "後で"
+        },
+        "errors": {
+            "loadFailed": "ライブラリ情報の読み込みに失敗しました。",
+            "pathRequired": "集中メタデータ保存用のディレクトリを入力してください。",
+            "startFailed": "スキャンを開始できませんでした。"
         }
     },
     "duplicates": {
@@ -2821,8 +2923,8 @@
             "deleteError": "エラー：{message}",
             "deleteSuccess": "{count} {type} が正常に削除されました",
             "deleteFailed": "{type} の削除に失敗しました：{message}",
-            "deletePartialFailed": "[TODO: Translate] Failed to delete {failed} selected {type}: {message}",
-            "cacheUpdateFailed": "[TODO: Translate] The files were deleted but the library cache could not be updated. Run Rebuild Cache to refresh the list."
+            "deletePartialFailed": "選択した {failed} 個の {type} の削除に失敗しました：{message}",
+            "cacheUpdateFailed": "ファイルは削除されましたが、ライブラリのキャッシュを更新できませんでした。リストを更新するには「キャッシュを再構築」を実行してください。"
         },
         "controls": {
             "reloadFailed": "{pageType}の再読み込みに失敗しました：{message}",
@@ -2835,7 +2937,7 @@
             "contentRatingFailed": "コンテンツレーティングの設定に失敗しました：{message}",
             "relinkSuccess": "モデルがCivitAIに正常に再リンクされました",
             "relinkFailed": "エラー：{message}",
-            "linkHfSuccess": "モデルを HuggingFace にリンクしました",
+            "linkHfSuccess": "モデルをモデルソースにリンクしました",
             "linkHfFailed": "エラー：{message}",
             "linkCivArchSuccess": "モデルがCivitArchive経由で正常に再リンクされました",
             "fetchMetadataFirst": "最初にCivitAIからメタデータを取得してください",
@@ -2882,6 +2984,7 @@
             "metadataUpdateComplete": "メタデータ更新完了",
             "operationCancelled": "ユーザーによって操作がキャンセルされました",
             "operationCancelledPartial": "操作がキャンセルされました。{success} 個の項目が処理されました。",
+            "metadataFetchRateLimited": "レート制限によりメタデータの取得を中止しました — {total} 個中 {success} 個を更新、失敗 {failed} 個、スキップ {skipped} 個。後で再度 CivitAI からメタデータを取得して、残りを再試行してください。",
             "metadataFetchFailed": "メタデータの取得に失敗しました：{message}",
             "bulkMetadataCompleteAll": "{count} {type}すべてが正常に更新されました",
             "bulkMetadataCompletePartial": "{total} {type}のうち {success} が更新されました",
@@ -3012,6 +3115,12 @@
             "content": "専用ページで VAE、Upscaler、Text Encoder、CLIP Vision、ControlNet の各ファイルをスキャン・管理し、CivitAI からダウンロードできます。",
             "enable": "その他のモデルを有効にする",
             "openSettings": "設定を開く"
+        },
+        "bulkFetchPrompt": {
+            "title": "ライブラリに命を吹き込もう",
+            "content": "初回スキャンで、メタデータのないモデルが {count} 個見つかりました。CivitAI から情報を取得すると、プレビュー画像、説明、トリガーワードを利用できます。",
+            "fetch": "メタデータを取得",
+            "later": "また今度"
         },
         "pager": {
             "previous": "前の通知",

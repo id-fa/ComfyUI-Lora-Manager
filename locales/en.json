@@ -156,7 +156,9 @@
       "embeddingNameCopied": "Embedding syntax copied",
       "modelNameCopied": "Model name copied",
       "sendCheckpointToWorkflow": "Send to ComfyUI",
-      "sendEmbeddingToWorkflow": "Send to ComfyUI"
+      "sendEmbeddingToWorkflow": "Send to ComfyUI",
+      "openInComfyUI": "Open in ComfyUI",
+      "copyWorkflowToClipboard": "Copy workflow to clipboard"
     },
     "nsfw": {
       "matureContent": "Mature Content",
@@ -244,6 +246,7 @@
       "checkpoints": "Checkpoints",
       "embeddings": "Embeddings",
       "other": "Other",
+      "workflows": "Workflows",
       "statistics": "Stats"
     },
     "search": {
@@ -633,6 +636,11 @@
       "defaultControlnetRootHelp": "Set default ControlNet root directory for downloads, imports and moves",
       "enableOtherModels": "Other Models Management",
       "enableOtherModelsHelp": "When off, VAE / upscaler / text encoder / CLIP vision / ControlNet folders are not scanned, the Other Models page stays disabled, and these model types cannot be downloaded.",
+      "enableWorkflows": "Workflow Management",
+      "enableWorkflowsHelp": "When off, the workflow library folder is not scanned, the Workflows page stays disabled, and CivitAI Workflow resources cannot be linked or downloaded.",
+      "workflowFolder": "Workflow Library Folder",
+      "workflowFolderHelp": "The single folder scanned for ComfyUI workflow JSON files. Managed by LoRA Manager only (not shared with ComfyUI); changes apply immediately.",
+      "workflowFolderPlaceholder": "/path/to/workflows",
       "otherSubTypes": "Managed Types",
       "otherSubTypesHelp": "Choose which other-model categories are scanned and shown on the Other Models page.",
       "subTypeVae": "VAE",
@@ -1447,6 +1455,49 @@
       "openSettingsFolder": "Open Settings Folder"
     }
   },
+  "workflows": {
+    "title": "Workflows",
+    "contextMenu": {
+      "sendToComfy": "Open in ComfyUI",
+      "updateFromComfy": "Update from ComfyUI",
+      "copyWorkflow": "Copy Workflow",
+      "restoreDownloaded": "Restore Downloaded Version"
+    },
+    "sendToComfy": {
+      "success": "Workflow sent to ComfyUI",
+      "failed": "Failed to send workflow: {message}"
+    },
+    "restoreDownloaded": {
+      "title": "Restore Downloaded Version?",
+      "message": "This discards local edits and restores the workflow to its downloaded version.",
+      "confirmButton": "Restore",
+      "restoring": "Restoring workflow...",
+      "success": "Workflow restored to its downloaded version",
+      "failed": "Failed to restore workflow: {message}"
+    },
+    "updateFromComfy": {
+      "success": "Workflow updated from ComfyUI",
+      "noChanges": "No changes in ComfyUI to write back",
+      "cancelled": "Update cancelled",
+      "failed": "Failed to update from ComfyUI: {message}"
+    },
+    "copyWorkflow": {
+      "failed": "Failed to copy workflow: {message}"
+    },
+    "disabled": {
+      "title": "Workflow management is off",
+      "description": "Enable it to scan and manage ComfyUI workflow files, keep their CivitAI metadata and previews, and send them into the running ComfyUI graph.",
+      "enableButton": "Enable Workflows",
+      "hint": "You can turn the feature off again later in Settings > Library.",
+      "enableFailed": "Failed to enable Workflows"
+    },
+    "noPaths": {
+      "title": "No workflow folder configured",
+      "description": "Workflow management is on, but no workflow folder is configured. Set the workflow folder in Settings → Library, then reload this page.",
+      "hint": "The workflow library folder is separate from ComfyUI's built-in workflow list.",
+      "openSettings": "Open Settings"
+    }
+  },
   "sidebar": {
     "modelRoot": "Root",
     "collapseAll": "Collapse All Folders",
@@ -2221,7 +2272,8 @@
       "copyReport": "Copy Report",
       "downloadCsv": "Download CSV",
       "columnModelName": "Model Name",
-      "columnError": "Error"
+      "columnError": "Error",
+      "rateLimitedNotice": "Fetch aborted: the metadata provider rate limit was reached. Re-run \"Fetch from Civitai\" later to retry the remaining models."
     },
     "downloadBatchSummary": {
       "title": "Batch Download Summary",
@@ -2271,6 +2323,10 @@
       "title": "Initializing Other Models Manager",
       "message": "Scanning and building model cache. This may take a few minutes..."
     },
+    "workflows": {
+      "title": "Initializing Workflow Manager",
+      "message": "Scanning and building workflow cache. This may take a few minutes..."
+    },
     "recipes": {
       "title": "Initializing Recipe Manager",
       "message": "Loading and processing recipes. This may take a few minutes..."
@@ -2306,6 +2362,52 @@
         "description": "Press Ctrl+F (Cmd+F on Mac) to quickly search within your current view.",
         "alt": "Quick Search"
       }
+    },
+    "error": {
+      "title": "Initialization failed",
+      "message": "Something went wrong while scanning your model library.",
+      "retry": "Retry"
+    }
+  },
+  "firstRun": {
+    "title": "Welcome to LoRA Manager",
+    "description": "Before you start, LoRA Manager needs to scan your model libraries and generate metadata sidecar files. This is a one-time step; how long it takes depends on the size of your library and the speed of your disk.",
+    "libraries": {
+      "loras": "LoRAs",
+      "checkpoints": "Checkpoints",
+      "embeddings": "Embeddings",
+      "other": "Other Models"
+    },
+    "language": {
+      "label": "Language"
+    },
+    "libraryStats": "{count} models · {size}",
+    "rootMissing": "Directory not found",
+    "estimate": "About {count} models ({size}) — estimated scan time ~{minutes} min, depending on library size and disk speed.",
+    "noRoots": {
+      "plugin": "No accessible model folders were found. Open Settings to configure your model directories, then reload this page.",
+      "standalone": "No accessible model folders were found. Edit folder_paths in settings.json, then restart the server."
+    },
+    "sidecar": {
+      "title": "Metadata storage",
+      "alongside": {
+        "label": "Next to model files (recommended)",
+        "description": "Metadata .json files are stored next to each model file, so they move together with the model."
+      },
+      "centralized": {
+        "label": "Centralized directory",
+        "description": "Metadata is stored in a separate directory, keeping your model folders clean.",
+        "pathPlaceholder": "Directory for centralized metadata storage"
+      }
+    },
+    "actions": {
+      "start": "Start Scan",
+      "defer": "Later"
+    },
+    "errors": {
+      "loadFailed": "Failed to load library information.",
+      "pathRequired": "Please enter a storage directory for centralized metadata.",
+      "startFailed": "Failed to start the scan."
     }
   },
   "duplicates": {
@@ -2882,6 +2984,7 @@
       "metadataUpdateComplete": "Metadata update complete",
       "operationCancelled": "Operation cancelled by user",
       "operationCancelledPartial": "Operation cancelled. {success} items processed.",
+      "metadataFetchRateLimited": "Metadata fetch aborted due to rate limiting — updated {success} of {total}, {failed} failed, {skipped} skipped. Re-run Fetch from Civitai later to retry the rest.",
       "metadataFetchFailed": "Failed to fetch metadata: {message}",
       "bulkMetadataCompleteAll": "Successfully refreshed all {count} {type}s",
       "bulkMetadataCompletePartial": "Refreshed {success} of {total} {type}s",
@@ -3012,6 +3115,12 @@
       "content": "Scan and manage VAE, upscaler, text encoder, CLIP vision and ControlNet files — and download them from CivitAI — from one dedicated page.",
       "enable": "Enable Other Models",
       "openSettings": "Open Settings"
+    },
+    "bulkFetchPrompt": {
+      "title": "Bring Your Library to Life",
+      "content": "Your first scan found {count} models without metadata. Fetch their info from CivitAI to get preview images, descriptions, and trigger words.",
+      "fetch": "Fetch Metadata",
+      "later": "Maybe Later"
     },
     "pager": {
       "previous": "Previous message",

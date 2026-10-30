@@ -40,6 +40,14 @@ CIVITAI_SAMPLER_MAP = {
     "lcm": "LCM",
 }
 
+# Civitai infers the image's "Tools" field from a lowercase `engine` detail key
+# when the image is uploaded: post.addImage resolves it with getToolByAlias /
+# getToolByName, and a Tool named "ComfyUI" exists, so this value tags every
+# saved image as ComfyUI. Techniques are intentionally NOT written: the detail
+# keys are `process`/`type`/`workflow` and the graph alone cannot tell txt2img
+# from img2img reliably, while a wrong value is user-visible on Civitai.
+CIVITAI_ENGINE = "ComfyUI"
+
 # Base model display name → AIR URN slug
 # Sourced from civitai source: src/shared/constants/basemodel.constants.ts
 BASE_MODEL_AIR_SLUG = {
@@ -204,6 +212,12 @@ class SaveImageLM:
                 ),
             },
             "optional": {
+                "metadata": (
+                    "METADATA",
+                    {
+                        "tooltip": "Optional metadata input from a Metadata Overwrite (LoraManager) node. When connected, that node's values override the automatically collected metadata for this Save node only.",
+                    },
+                ),
                 "lossless_webp": (
                     "BOOLEAN",
                     {
@@ -491,6 +505,10 @@ class SaveImageLM:
                 params.append(f"Clip skip: {abs(int(clip_skip))}")
             except (ValueError, TypeError):
                 pass
+        # Tells Civitai which Tool generated the image. Emitted before
+        # additional_data on purpose: duplicate detail keys are last-one-wins,
+        # so a user-supplied `engine:` in additional_data still overrides this.
+        params.append(f"engine: {CIVITAI_ENGINE}")
         additional_data = metadata_dict.get("additional_data", "")
         if additional_data:
             params.append(additional_data)
@@ -825,6 +843,7 @@ class SaveImageLM:
         id,
         prompt=None,
         extra_pnginfo=None,
+        metadata=None,
         lossless_webp=True,
         quality=100,
         webp_method=6,
@@ -842,7 +861,14 @@ class SaveImageLM:
         raw_metadata = get_metadata()
         metadata_dict = MetadataProcessor.to_dict(raw_metadata, id)
 
-        metadata = self.format_metadata(metadata_dict, add_loras_to_prompt)
+        # A Metadata Overwrite node wired directly into this Save node applies
+        # its values on top of the collected metadata for this node only.
+        if metadata:
+            metadata_dict = MetadataProcessor.apply_overwrite_params(
+                metadata_dict, metadata
+            )
+
+        metadata_text = self.format_metadata(metadata_dict, add_loras_to_prompt)
 
         # Process filename_prefix with pattern substitution
         filename_prefix = self.format_filename(filename_prefix, metadata_dict)
@@ -922,8 +948,8 @@ class SaveImageLM:
             try:
                 if file_format == "png":
                     assert pnginfo is not None
-                    if save_with_metadata and metadata:
-                        pnginfo.add_text("parameters", metadata)
+                    if save_with_metadata and metadata_text:
+                        pnginfo.add_text("parameters", metadata_text)
                     if embed_workflow and extra_pnginfo is not None:
                         workflow_json = json.dumps(extra_pnginfo["workflow"])
                         pnginfo.add_text("workflow", workflow_json)
@@ -931,12 +957,12 @@ class SaveImageLM:
                     img.save(file_path, format="PNG", **save_kwargs)
                 elif file_format == "jpeg":
                     # For JPEG, use piexif
-                    if save_with_metadata and metadata:
+                    if save_with_metadata and metadata_text:
                         try:
                             exif_dict = {
                                 "Exif": {
                                     piexif.ExifIFD.UserComment: b"UNICODE\0"
-                                    + metadata.encode("utf-16be")
+                                    + metadata_text.encode("utf-16be")
                                 }
                             }
                             exif_bytes = piexif.dump(exif_dict)
@@ -949,10 +975,10 @@ class SaveImageLM:
                         # For WebP, use piexif for metadata
                         exif_dict = {}
 
-                        if save_with_metadata and metadata:
+                        if save_with_metadata and metadata_text:
                             exif_dict["Exif"] = {
                                 piexif.ExifIFD.UserComment: b"UNICODE\0"
-                                + metadata.encode("utf-16be")
+                                + metadata_text.encode("utf-16be")
                             }
 
                         # Add workflow if needed
@@ -995,6 +1021,7 @@ class SaveImageLM:
         file_format="png",
         prompt=None,
         extra_pnginfo=None,
+        metadata=None,
         lossless_webp=True,
         quality=100,
         webp_method=6,
@@ -1027,6 +1054,7 @@ class SaveImageLM:
             id,
             prompt,
             extra_pnginfo,
+            metadata,
             lossless_webp,
             quality,
             webp_method,

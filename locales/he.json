@@ -156,7 +156,9 @@
             "embeddingNameCopied": "תחביר Embedding הועתק",
             "modelNameCopied": "שם המודל הועתק",
             "sendCheckpointToWorkflow": "שלח ל-ComfyUI",
-            "sendEmbeddingToWorkflow": "שלח ל-ComfyUI"
+            "sendEmbeddingToWorkflow": "שלח ל-ComfyUI",
+            "openInComfyUI": "פתח ב-ComfyUI",
+            "copyWorkflowToClipboard": "העתק workflow ללוח"
         },
         "nsfw": {
             "matureContent": "תוכן למבוגרים",
@@ -244,6 +246,7 @@
             "checkpoints": "Checkpoints",
             "embeddings": "Embeddings",
             "other": "אחרים",
+            "workflows": "Workflows",
             "statistics": "סטטיסטיקה"
         },
         "search": {
@@ -609,8 +612,8 @@
             "cardBlurAmountHelp": "כוונן את עוצמת הטשטוש של שכבת-העל בכותרת ובכותרות תחתונה בכרטיסי מודל ומתכונים (0 = ללא טשטוש, 20 = טשטוש מקסימלי)."
         },
         "folderSettings": {
-            "activeLibrary": "ספרייה פעילה",
-            "activeLibraryHelp": "החלפה בין הספריות המוגדרות לעדכן את תיקיות ברירת המחדל. שינוי הבחירה ירענן את הדף.",
+            "activeLibrary": "ספרייה פעילה (מיושן)",
+            "activeLibraryHelp": "החלפה בין הספריות המוגדרות לעדכן את תיקיות ברירת המחדל. שינוי הבחירה ירענן את הדף. מיושן: התמיכה בריבוי ספריות תוסר בגרסה קרובה. מספר תיקיות שורש בתוך ספרייה אחת עדיין נתמך במלואו.",
             "loadingLibraries": "טוען ספריות...",
             "noLibraries": "לא הוגדרו ספריות",
             "defaultLoraRoot": "תיקיית שורש LoRA",
@@ -633,6 +636,11 @@
             "defaultControlnetRootHelp": "הגדר את ספריית השורש המוגדרת כברירת מחדל של ControlNet להורדות, ייבוא והעברות",
             "enableOtherModels": "ניהול מודלים אחרים",
             "enableOtherModelsHelp": "כשהאפשרות כבויה, תיקיות VAE / Upscaler / Text Encoder / CLIP Vision / ControlNet אינן נסרקות, עמוד המודלים האחרים נשאר מושבת ולא ניתן להוריד סוגי מודלים אלה.",
+            "enableWorkflows": "ניהול workflow",
+            "enableWorkflowsHelp": "כשהאפשרות כבויה, תיקיית ספריית ה-workflow אינה נסרקת, עמוד Workflows נשאר מושבת ולא ניתן לקשר או להוריד משאבי Workflow מ-CivitAI.",
+            "workflowFolder": "תיקיית ספריית ה-workflow",
+            "workflowFolderHelp": "התיקייה היחידה שנסרקת עבור קובצי JSON של workflow של ComfyUI. מנוהלת על ידי LoRA Manager בלבד (אינה משותפת עם ComfyUI); השינויים חלים מיד.",
+            "workflowFolderPlaceholder": "/path/to/workflows",
             "otherSubTypes": "סוגי מודלים מנוהלים",
             "otherSubTypesHelp": "בחר אילו קטגוריות של מודלים אחרים ייסרקו ויוצגו בעמוד המודלים האחרים.",
             "subTypeVae": "VAE",
@@ -1447,6 +1455,49 @@
             "openSettingsFolder": "פתח תיקיית הגדרות"
         }
     },
+    "workflows": {
+        "title": "Workflows",
+        "contextMenu": {
+            "sendToComfy": "פתח ב-ComfyUI",
+            "updateFromComfy": "עדכן מ-ComfyUI",
+            "copyWorkflow": "העתק workflow",
+            "restoreDownloaded": "שחזר את הגרסה שהורדה"
+        },
+        "sendToComfy": {
+            "success": "ה-workflow נשלח ל-ComfyUI",
+            "failed": "שליחת ה-workflow נכשלה: {message}"
+        },
+        "restoreDownloaded": {
+            "title": "לשחזר את הגרסה שהורדה?",
+            "message": "פעולה זו מבטלת עריכות מקומיות ומשחזרת את ה-workflow לגרסה שהורדה.",
+            "confirmButton": "שחזר",
+            "restoring": "משחזר workflow...",
+            "success": "ה-workflow שוחזר לגרסה שהורדה",
+            "failed": "שחזור ה-workflow נכשל: {message}"
+        },
+        "updateFromComfy": {
+            "success": "ה-workflow עודכן מ-ComfyUI",
+            "noChanges": "אין שינויים ב-ComfyUI לכתיבה חזרה",
+            "cancelled": "העדכון בוטל",
+            "failed": "העדכון מ-ComfyUI נכשל: {message}"
+        },
+        "copyWorkflow": {
+            "failed": "העתקת ה-workflow נכשלה: {message}"
+        },
+        "disabled": {
+            "title": "ניהול ה-workflow כבוי",
+            "description": "הפעל כדי לסרוק ולנהל קבצי workflow של ComfyUI, לשמור את המטא-נתונים והתצוגות המקדימות שלהם מ-CivitAI, ולשלוח אותם ל-ComfyUI הפעיל.",
+            "enableButton": "הפעל Workflows",
+            "hint": "ניתן לכבות את התכונה שוב מאוחר יותר בהגדרות > ספרייה.",
+            "enableFailed": "הפעלת Workflows נכשלה"
+        },
+        "noPaths": {
+            "title": "לא הוגדרה תיקיית workflow",
+            "description": "ניהול ה-workflow פועל, אך לא הוגדרה תיקיית workflow. הגדר את תיקיית ה-workflow תחת הגדרות > ספרייה, ולאחר מכן טען מחדש עמוד זה.",
+            "hint": "תיקיית ספריית ה-workflow נפרדת מרשימת ה-workflow המובנית של ComfyUI.",
+            "openSettings": "פתח הגדרות"
+        }
+    },
     "sidebar": {
         "modelRoot": "שורש",
         "collapseAll": "כווץ את כל התיקיות",
@@ -1722,8 +1773,8 @@
             "errors": {
                 "invalidUrl": "פורמט URL של מודל לא חוקי",
                 "noVersions": "אין גרסאות זמינות למודל זה",
-                "linkedFileNotFound": "[TODO: Translate] File {fileId} was not found in the requested model version.",
-                "linkedFileNotWeightFile": "[TODO: Translate] File {fileId} is not a downloadable model file.",
+                "linkedFileNotFound": "הקובץ {fileId} לא נמצא בגרסת המודל המבוקשת.",
+                "linkedFileNotWeightFile": "הקובץ {fileId} אינו קובץ מודל שניתן להורדה.",
                 "mixedSources": "לא ניתן לערבב כתובות URL של CivitAI ו-Hugging Face / ModelScope באותה קבוצה.",
                 "noModelFiles": "לא נמצאו קבצי מודל במאגר זה."
             },
@@ -2221,7 +2272,8 @@
             "copyReport": "העתק דוח",
             "downloadCsv": "הורד CSV",
             "columnModelName": "שם המודל",
-            "columnError": "שגיאה"
+            "columnError": "שגיאה",
+            "rateLimitedNotice": "האחזור הופסק: הגבלת הקצב של ספק המטא-נתונים הושגה. הרץ שוב את «אחזר מטא-נתונים מ-CivitAI» מאוחר יותר כדי לנסות שוב את המודלים הנותרים."
         },
         "downloadBatchSummary": {
             "title": "סיכום הורדה בכמות",
@@ -2271,6 +2323,10 @@
             "title": "מאתחל את מנהל המודלים האחרים",
             "message": "סורק ובונה מטמון מודלים. זה עשוי לקחת מספר דקות..."
         },
+        "workflows": {
+            "title": "מאתחל מנהל Workflow",
+            "message": "סורק ובונה מטמון workflow. זה עשוי לקחת מספר דקות..."
+        },
         "recipes": {
             "title": "מאתחל מנהל מתכונים",
             "message": "טוען ומעבד מתכונים. זה עשוי לקחת מספר דקות..."
@@ -2306,6 +2362,52 @@
                 "description": "לחץ על Ctrl+F (Cmd+F ב-Mac) כדי לחפש במהירות בתצוגה הנוכחית שלך.",
                 "alt": "חיפוש מהיר"
             }
+        },
+        "error": {
+            "title": "האתחול נכשל",
+            "message": "משהו השתבש בעת סריקת ספריית המודלים שלך.",
+            "retry": "נסה שוב"
+        }
+    },
+    "firstRun": {
+        "title": "ברוכים הבאים ל-LoRA Manager",
+        "description": "לפני שמתחילים, LoRA Manager צריך לסרוק את ספריות המודלים שלך וליצור קובצי לוואי של מטא-נתונים. זהו שלב חד-פעמי; משך הזמן תלוי בגודל הספרייה ובמהירות הדיסק.",
+        "libraries": {
+            "loras": "LoRAs",
+            "checkpoints": "Checkpoints",
+            "embeddings": "Embeddings",
+            "other": "מודלים אחרים"
+        },
+        "language": {
+            "label": "שפה"
+        },
+        "libraryStats": "{count} מודלים · {size}",
+        "rootMissing": "התיקייה לא נמצאה",
+        "estimate": "כ-{count} מודלים ({size}) — זמן סריקה משוער ~{minutes} דקות, בהתאם לגודל הספרייה ולמהירות הדיסק.",
+        "noRoots": {
+            "plugin": "לא נמצאו תיקיות מודלים נגישות. פתח את ההגדרות כדי להגדיר את תיקיות המודלים, ואז רענן את העמוד.",
+            "standalone": "לא נמצאו תיקיות מודלים נגישות. ערוך את folder_paths בקובץ settings.json, ואז הפעל מחדש את השרת."
+        },
+        "sidecar": {
+            "title": "אחסון מטא-נתונים",
+            "alongside": {
+                "label": "לצד קובצי המודלים (מומלץ)",
+                "description": "קובצי ה-.json של המטא-נתונים נשמרים לצד כל קובץ מודל, ולכן עוברים יחד עם המודל."
+            },
+            "centralized": {
+                "label": "תיקייה מרכזית",
+                "description": "המטא-נתונים נשמרים בתיקייה נפרדת, כך שתיקיות המודלים שלך נשארות נקיות.",
+                "pathPlaceholder": "תיקייה לאחסון מטא-נתונים מרוכז"
+            }
+        },
+        "actions": {
+            "start": "התחל סריקה",
+            "defer": "מאוחר יותר"
+        },
+        "errors": {
+            "loadFailed": "טעינת מידע הספרייה נכשלה.",
+            "pathRequired": "הזן תיקיית אחסון עבור מטא-נתונים מרוכזים.",
+            "startFailed": "הפעלת הסריקה נכשלה."
         }
     },
     "duplicates": {
@@ -2821,8 +2923,8 @@
             "deleteError": "שגיאה: {message}",
             "deleteSuccess": "נמחקו בהצלחה {count} {type}",
             "deleteFailed": "מחיקת {type} נכשלה: {message}",
-            "deletePartialFailed": "[TODO: Translate] Failed to delete {failed} selected {type}: {message}",
-            "cacheUpdateFailed": "[TODO: Translate] The files were deleted but the library cache could not be updated. Run Rebuild Cache to refresh the list."
+            "deletePartialFailed": "מחיקת {failed} {type} שנבחרו נכשלה: {message}",
+            "cacheUpdateFailed": "הקבצים נמחקו, אך לא ניתן היה לעדכן את מטמון הספרייה. הרץ את «בניית מטמון מחדש» כדי לרענן את הרשימה."
         },
         "controls": {
             "reloadFailed": "טעינה מחדש של {pageType} נכשלה: {message}",
@@ -2835,7 +2937,7 @@
             "contentRatingFailed": "הגדרת דירוג התוכן נכשלה: {message}",
             "relinkSuccess": "המודל קושר מחדש ל-CivitAI בהצלחה",
             "relinkFailed": "שגיאה: {message}",
-            "linkHfSuccess": "המודל נקשר בהצלחה ל-HuggingFace",
+            "linkHfSuccess": "המודל נקשר בהצלחה למקור המודל",
             "linkHfFailed": "שגיאה: {message}",
             "linkCivArchSuccess": "המודל קושר מחדש דרך CivitArchive בהצלחה",
             "fetchMetadataFirst": "אנא אחזר מטא-נתונים מ-CivitAI תחילה",
@@ -2882,6 +2984,7 @@
             "metadataUpdateComplete": "עדכון המטא-נתונים הושלם",
             "operationCancelled": "הפעולה בוטלה על ידי המשתמש",
             "operationCancelledPartial": "הפעולה בוטלה. {success} פריטים עובדו.",
+            "metadataFetchRateLimited": "שליפת המטא-נתונים הופסקה עקב מגבלת קצב — עודכנו {success} מתוך {total}, {failed} נכשלו, {skipped} דולגו. הרץ שוב שליפה מ-CivitAI מאוחר יותר כדי לנסות שוב את השאר.",
             "metadataFetchFailed": "אחזור המטא-נתונים נכשל: {message}",
             "bulkMetadataCompleteAll": "רועננו בהצלחה כל {count} ה-{type}s",
             "bulkMetadataCompletePartial": "רועננו {success} מתוך {total} {type}s",
@@ -3012,6 +3115,12 @@
             "content": "סרוק ונהל קבצי VAE, Upscaler, Text Encoder, CLIP Vision ו-ControlNet, והורד אותם מ-CivitAI — מהעמוד הייעודי.",
             "enable": "הפעל מודלים אחרים",
             "openSettings": "פתח הגדרות"
+        },
+        "bulkFetchPrompt": {
+            "title": "החייה את הספרייה שלך",
+            "content": "הסריקה הראשונה מצאה {count} מודלים ללא מטא-נתונים. שלוף את המידע שלהם מ-CivitAI כדי לקבל תמונות תצוגה מקדימה, תיאורים ומילות טריגר.",
+            "fetch": "שלוף מטא-נתונים",
+            "later": "אולי מאוחר יותר"
         },
         "pager": {
             "previous": "הודעה קודמת",
