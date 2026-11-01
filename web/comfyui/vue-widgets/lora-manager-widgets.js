@@ -16081,22 +16081,33 @@ function collectActiveLorasFromChain(node, visited = /* @__PURE__ */ new Set()) 
   }
   return allActiveLoraNames;
 }
+const TRIGGER_WORD_SYNC_TIMER = "__lmTriggerWordSyncTimer";
+const TRIGGER_WORD_SYNC_DELAY_MS = 50;
 function updateConnectedTriggerWords(node, loraNames) {
   const connectedNodes = getConnectedTriggerToggleNodes(node);
-  if (connectedNodes.length > 0) {
-    const nodeIds = connectedNodes.map((connectedNode) => getNodeReference(connectedNode)).filter((reference) => reference !== null);
-    if (nodeIds.length === 0) {
-      return;
-    }
+  if (connectedNodes.length === 0) {
+    return;
+  }
+  const nodeIds = connectedNodes.map((connectedNode) => getNodeReference(connectedNode)).filter((reference) => reference !== null);
+  if (nodeIds.length === 0) {
+    return;
+  }
+  const pendingTimer = node[TRIGGER_WORD_SYNC_TIMER];
+  if (pendingTimer) {
+    clearTimeout(pendingTimer);
+  }
+  const loraNamesSnapshot = Array.from(loraNames);
+  node[TRIGGER_WORD_SYNC_TIMER] = setTimeout(() => {
+    delete node[TRIGGER_WORD_SYNC_TIMER];
     fetch(lmUrl("/api/lm/loras/get_trigger_words"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        lora_names: Array.from(loraNames),
+        lora_names: loraNamesSnapshot,
         node_ids: nodeIds
       })
     }).catch((err) => console.error("Error fetching trigger words:", err));
-  }
+  }, TRIGGER_WORD_SYNC_DELAY_MS);
 }
 function getConnectedPoolConfigNode(node) {
   var _a2, _b;
