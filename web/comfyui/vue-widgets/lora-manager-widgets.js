@@ -1094,7 +1094,7 @@ to { transform: rotate(360deg);
   font-size: 13px;
 }
 
-.lora-pool-widget[data-v-f531418c] {
+.lora-pool-widget[data-v-271afb29] {
   padding: 12px;
   /* The node surface shows through; only interactive controls and cards are
      painted, so the widget never looks like a darkened slab on light themes. */
@@ -2080,7 +2080,7 @@ to { transform: rotate(360deg);
   font-size: 13px;
 }
 
-.lora-cycler-widget[data-v-199bdf7e] {
+.lora-cycler-widget[data-v-39cb48c3] {
   padding: 6px;
   /* Let the node surface show through; only inner controls are painted. */
   background: transparent;
@@ -12384,35 +12384,40 @@ function useLoraPoolState(widget) {
   const previewItems = ref([]);
   const matchCount = ref(0);
   const isLoading = computed(() => api2.isLoading.value);
+  let syncedFilters = "";
+  const buildFilters = () => ({
+    baseModels: selectedBaseModels.value,
+    tags: {
+      include: includeTags.value,
+      exclude: excludeTags.value
+    },
+    folders: {
+      include: includeFolders.value,
+      exclude: excludeFolders.value
+    },
+    license: {
+      noCreditRequired: noCreditRequired.value,
+      allowSelling: allowSelling.value
+    },
+    namePatterns: {
+      include: includePatterns.value,
+      exclude: excludePatterns.value,
+      useRegex: useRegex.value
+    }
+  });
   const buildConfig = () => {
+    const filters = buildFilters();
+    const serializedFilters = JSON.stringify(filters);
     const config = {
       version: 2,
-      filters: {
-        baseModels: selectedBaseModels.value,
-        tags: {
-          include: includeTags.value,
-          exclude: excludeTags.value
-        },
-        folders: {
-          include: includeFolders.value,
-          exclude: excludeFolders.value
-        },
-        license: {
-          noCreditRequired: noCreditRequired.value,
-          allowSelling: allowSelling.value
-        },
-        namePatterns: {
-          include: includePatterns.value,
-          exclude: excludePatterns.value,
-          useRegex: useRegex.value
-        }
-      },
+      filters,
       preview: {
         matchCount: matchCount.value,
         lastUpdated: Date.now()
       }
     };
-    if (!isRestoring) {
+    if (!isRestoring && serializedFilters !== syncedFilters) {
+      syncedFilters = serializedFilters;
       widget.value = config;
     }
     return config;
@@ -12439,6 +12444,7 @@ function useLoraPoolState(widget) {
       updateIfChanged(excludePatterns, ((_h = filters.namePatterns) == null ? void 0 : _h.exclude) || []);
       updateIfChanged(useRegex, ((_i = filters.namePatterns) == null ? void 0 : _i.useRegex) ?? false);
       matchCount.value = (preview == null ? void 0 : preview.matchCount) || 0;
+      syncedFilters = JSON.stringify(buildFilters());
     } finally {
       isRestoring = false;
     }
@@ -12666,7 +12672,7 @@ const _sfc_main$b = /* @__PURE__ */ defineComponent({
     };
   }
 });
-const LoraPoolWidget = /* @__PURE__ */ _export_sfc(_sfc_main$b, [["__scopeId", "data-v-f531418c"]]);
+const LoraPoolWidget = /* @__PURE__ */ _export_sfc(_sfc_main$b, [["__scopeId", "data-v-271afb29"]]);
 const _hoisted_1$8 = { class: "last-used-preview" };
 const _hoisted_2$7 = { class: "last-used-preview__content" };
 const _hoisted_3$5 = ["src", "onError"];
@@ -14377,6 +14383,7 @@ const _sfc_main$4 = /* @__PURE__ */ defineComponent({
 const LoraListModal = /* @__PURE__ */ _export_sfc(_sfc_main$4, [["__scopeId", "data-v-4794e456"]]);
 function useLoraCyclerState(widget) {
   let isRestoring = false;
+  let suspendWidgetWrite = false;
   const currentIndex = ref(1);
   const totalCount = ref(0);
   const poolConfigHash = ref("");
@@ -14524,7 +14531,11 @@ function useLoraCyclerState(widget) {
       isLoading.value = false;
     }
   };
-  const refreshList = async (poolConfig) => {
+  const refreshList = async (poolConfig, options = {}) => {
+    const { write = true } = options;
+    if (!write) {
+      suspendWidgetWrite = true;
+    }
     try {
       const newHash = hashPoolConfig(poolConfig);
       const hashChanged = newHash !== poolConfigHash.value;
@@ -14551,6 +14562,11 @@ function useLoraCyclerState(widget) {
     } catch (error) {
       console.error("[LoraCyclerState] Error refreshing list:", error);
       throw error;
+    } finally {
+      if (!write) {
+        await nextTick();
+        suspendWidgetWrite = false;
+      }
     }
   };
   const setIndex = (index) => {
@@ -14590,6 +14606,9 @@ function useLoraCyclerState(widget) {
     isPaused,
     includeNoLora
   ], () => {
+    if (suspendWidgetWrite) {
+      return;
+    }
     widget.value = buildConfig();
   }, { deep: true });
   return {
@@ -14775,10 +14794,11 @@ const _sfc_main$3 = /* @__PURE__ */ defineComponent({
       const poolConfig = getPoolConfig();
       const newHash = state.hashPoolConfig(poolConfig);
       if (newHash !== lastPoolConfigHash.value) {
+        const isInitialResolution = lastPoolConfigHash.value === "";
         console.log("[LoraCyclerWidget] Pool config changed, refreshing list");
         lastPoolConfigHash.value = newHash;
         try {
-          await state.refreshList(poolConfig);
+          await state.refreshList(poolConfig, { write: !isInitialResolution });
           const loraList = await state.fetchCyclerList(poolConfig);
           cachedLoraList.value = loraList;
         } catch (error) {
@@ -14840,7 +14860,7 @@ const _sfc_main$3 = /* @__PURE__ */ defineComponent({
       try {
         const poolConfig = getPoolConfig();
         lastPoolConfigHash.value = state.hashPoolConfig(poolConfig);
-        await state.refreshList(poolConfig);
+        await state.refreshList(poolConfig, { write: false });
         const loraList = await state.fetchCyclerList(poolConfig);
         cachedLoraList.value = loraList;
       } catch (error) {
@@ -14974,7 +14994,7 @@ const _sfc_main$3 = /* @__PURE__ */ defineComponent({
     };
   }
 });
-const LoraCyclerWidget = /* @__PURE__ */ _export_sfc(_sfc_main$3, [["__scopeId", "data-v-199bdf7e"]]);
+const LoraCyclerWidget = /* @__PURE__ */ _export_sfc(_sfc_main$3, [["__scopeId", "data-v-39cb48c3"]]);
 const _hoisted_1$2 = { class: "json-display-widget" };
 const _hoisted_2$2 = {
   class: "json-content",
@@ -16061,22 +16081,33 @@ function collectActiveLorasFromChain(node, visited = /* @__PURE__ */ new Set()) 
   }
   return allActiveLoraNames;
 }
+const TRIGGER_WORD_SYNC_TIMER = "__lmTriggerWordSyncTimer";
+const TRIGGER_WORD_SYNC_DELAY_MS = 50;
 function updateConnectedTriggerWords(node, loraNames) {
   const connectedNodes = getConnectedTriggerToggleNodes(node);
-  if (connectedNodes.length > 0) {
-    const nodeIds = connectedNodes.map((connectedNode) => getNodeReference(connectedNode)).filter((reference) => reference !== null);
-    if (nodeIds.length === 0) {
-      return;
-    }
+  if (connectedNodes.length === 0) {
+    return;
+  }
+  const nodeIds = connectedNodes.map((connectedNode) => getNodeReference(connectedNode)).filter((reference) => reference !== null);
+  if (nodeIds.length === 0) {
+    return;
+  }
+  const pendingTimer = node[TRIGGER_WORD_SYNC_TIMER];
+  if (pendingTimer) {
+    clearTimeout(pendingTimer);
+  }
+  const loraNamesSnapshot = Array.from(loraNames);
+  node[TRIGGER_WORD_SYNC_TIMER] = setTimeout(() => {
+    delete node[TRIGGER_WORD_SYNC_TIMER];
     fetch(lmUrl("/api/lm/loras/get_trigger_words"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        lora_names: Array.from(loraNames),
+        lora_names: loraNamesSnapshot,
         node_ids: nodeIds
       })
     }).catch((err) => console.error("Error fetching trigger words:", err));
-  }
+  }, TRIGGER_WORD_SYNC_DELAY_MS);
 }
 function getConnectedPoolConfigNode(node) {
   var _a2, _b;

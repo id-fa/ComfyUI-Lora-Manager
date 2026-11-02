@@ -2,7 +2,7 @@ import { BaseContextMenu } from './BaseContextMenu.js';
 import { ModelContextMenuMixin } from './ModelContextMenuMixin.js';
 import { getModelApiClient, resetAndReload } from '../../api/modelApiFactory.js';
 import { moveManager } from '../../managers/MoveManager.js';
-import { showDeleteModal, showExcludeModal } from '../../utils/modalUtils.js';
+import { showDeleteModal } from '../../utils/modalUtils.js';
 import { copyWorkflowToClipboard, restoreWorkflow, sendWorkflowToComfy, updateWorkflowFromComfy } from '../../utils/workflowActions.js';
 import { state } from '../../state/index.js';
 
@@ -21,9 +21,7 @@ export class WorkflowContextMenu extends BaseContextMenu {
         return getModelApiClient().saveModelMetadata(filePath, data);
     }
 
-    showMenu(x, y, card) {
-        super.showMenu(x, y, card);
-        this.updateExcludeMenuItem();
+    prepareMenu(card) {
         // Standalone has no running ComfyUI to push a workflow into; the
         // copy-to-clipboard action covers that mode instead.
         const sendItem = this.menu?.querySelector('[data-action="send-to-comfy"]');
@@ -117,24 +115,12 @@ export class WorkflowContextMenu extends BaseContextMenu {
             case 'delete':
                 showDeleteModal(this.currentCard.dataset.filepath);
                 break;
-            case 'copyname':
-                // Copy workflow name
-                if (this.currentCard.querySelector('.fa-copy')) {
-                    this.currentCard.querySelector('.fa-copy').click();
-                }
-                break;
             case 'refresh-metadata':
                 // Refresh metadata from CivitAI
                 apiClient.refreshSingleModelMetadata(this.currentCard.dataset.filepath);
                 break;
             case 'move':
                 moveManager.showMoveModal(this.currentCard.dataset.filepath);
-                break;
-            case 'exclude':
-                showExcludeModal(this.currentCard.dataset.filepath);
-                break;
-            case 'restore':
-                this.restoreExcludedModel(this.currentCard.dataset.filepath);
                 break;
         }
     }

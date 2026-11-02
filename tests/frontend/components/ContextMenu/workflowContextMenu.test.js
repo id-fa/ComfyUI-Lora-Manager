@@ -52,7 +52,6 @@ vi.mock('../../../../static/js/managers/MoveManager.js', () => ({
 
 vi.mock('../../../../static/js/utils/modalUtils.js', () => ({
   showDeleteModal: vi.fn(),
-  showExcludeModal: vi.fn(),
   showConfirmationModal: showConfirmationModalMock,
 }));
 

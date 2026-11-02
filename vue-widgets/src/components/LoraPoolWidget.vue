@@ -170,7 +170,10 @@ onMounted(async () => {
   await state.fetchFilterOptions()
 
   // Initial preview (only called once on mount)
-  // When workflow is loaded, callback restores config, then watch triggers this
+  // When workflow is loaded, callback restores config, then watch triggers this.
+  // The refresh updates the live match count only: buildConfig() skips the
+  // widget write while the filters are unchanged, so loading a workflow never
+  // reserializes widget_values (which would mark it dirty).
   await state.refreshPreview()
 })
 </script>

@@ -261,6 +261,28 @@ Locales: `en`, `zh-CN`, `zh-TW`, `ja`, `ko`, `fr`, `de`, `es`, `ru`, `he` (RTL).
 > modes, so the manual settings.json guidance and the standalone `openSettingsFolder` fallback
 > were dropped.
 
+> **Status (2026-10, workflow card actions):** workflow cards, dialogs and toasts stopped
+> borrowing the model copy. The card menu now names the workflow
+> (`workflows.contextMenu.{copyFilename,moveWorkflow,deleteWorkflow}`), the info-box label
+> (`workflows.itemLabel`), and the delete / move / bulk-delete dialogs have their own
+> `workflows.modals.*` strings; relinking reports `workflows.relink.*` and failed moves use
+> `workflows.modals.move.failed` instead of "Failed to move model(s)". The **Exclude Workflow**
+> action was removed — workflows, like recipes, have no exclusion concept (the entry is also
+> hidden from the global context menu and the excluded-view banner) — so there is no
+> `workflows.*.exclude*` copy to translate. All 9 locales are translated (renderings in §2,
+> "Workflows feature"), so no `[TODO: Translate]` placeholder remains.
+
+> **Status (2026-10, page-aware nouns and recipes-page copy):** the pages stopped sharing the
+> model library's plural nouns. The header filter panel is now titled per page
+> (`recipes.filter.title`, `workflows.filter.title`), bulk "nothing selected" guards use
+> `recipes.bulk.noSelection` / `workflows.bulk.noSelection`, and failed moves are reported with
+> `recipes.move.failed` / `workflows.modals.move.failed`. The Recipes page also gained the
+> workflow pass's treatment: the card tooltips and the delete dialog now go through i18n
+> (`recipes.actions.sendRecipeModes`, `.shareRecipe`, `recipes.deleteModal.message` / `.note` /
+> `.deleting`, reusing `loras.contextMenu.deleteRecipe`, `modelCard.nsfw.*` and the
+> `common.actions.*` buttons), and the Workflows page got a bulk-action config so the model-only
+> bulk entries stay hidden. All 9 locales are translated, so no `[TODO: Translate]` remains.
+
 ---
 
 ## 1. Hard rules (do not violate)
@@ -982,6 +1004,34 @@ word (`Verwaltung` / `gestion` / `gestión` / `управление` / `ניהו
 - Failure toasts carry `{message}` verbatim. CJK uses the full-width colon (`：`); ko and the
   Latin/Cyrillic/Hebrew locales use ASCII (fr with its space, ` : `). The `restoring` loading
   line follows each locale's existing "… in progress" shape (`recipesPathMigrating`).
+- Card actions name the workflow explicitly.
+  "Move Workflow to Folder": zh-CN 将工作流移动到文件夹 · zh-TW 將工作流移動到資料夾 · ja ワークフローをフォルダに移動 ·
+  ko 워크플로를 폴더로 이동 · fr Déplacer le workflow vers un dossier · de Workflow in Ordner verschieben ·
+  es Mover workflow a carpeta · ru Переместить workflow в папку · he העבר workflow לתיקייה.
+  "Delete Workflow" (menu label *and* delete-dialog title): zh-CN 删除工作流 · zh-TW 刪除工作流 ·
+  ja ワークフローを削除 · ko 워크플로 삭제 · fr Supprimer le workflow · de Workflow löschen ·
+  es Eliminar workflow · ru Удалить workflow · he מחק workflow.
+- The dialogs mirror each locale's model-dialog phrasing with the workflow noun: the delete
+  copy follows `modals.deleteModel.message`, the bulk copy follows `modals.bulkDelete.*`
+  ("Delete Multiple Workflows" / "workflows will be permanently deleted."), and the move root
+  label follows `modals.moveModel.selectModelRoot` + `modals.download.selectRootDirectory`
+  ("Select Workflow Root:" / "Select a workflow root directory"). The bulk move title is
+  "Move {count} Workflows": zh-CN 移动 {count} 个工作流 · zh-TW 移動 {count} 個工作流 ·
+  ja {count} 件のワークフローを移動 · ko {count}개의 워크플로 이동 · fr Déplacer {count} workflows ·
+  de {count} Workflows verschieben · es Mover {count} workflows · ru Переместить {count} workflow ·
+  he העבר {count} workflows.
+- Relink toasts reuse the workflow noun ("Workflow successfully re-linked to CivitAI" /
+  "… via CivitArchive") and keep each locale's existing `toast.contextMenu.relink*` shape.
+- Workflows have no exclusion concept, so there is no `workflows.*` exclude/restore copy: the
+  card menu, the global context menu entry and the excluded-view banner are all absent on that
+  page (recipes are handled the same way).
+- Page chrome names the collection, not models: the header filter panel title is
+  `workflows.filter.title` ("Filter Workflows": zh-CN 筛选工作流 · zh-TW 篩選工作流 ·
+  ja ワークフローをフィルタ · ko 워크플로 필터 · fr Filtrer les workflows · de Workflows filtern ·
+  es Filtrar workflows · ru Фильтр workflow · he סינון workflows) and the bulk guard is
+  `workflows.bulk.noSelection` ("No workflows selected"). The Recipes page mirrors this with
+  `recipes.filter.title` ("Filter Recipes") and `recipes.bulk.noSelection`, following the §4
+  Recipe noun per locale (配方 / 配方 / レシピ / 레시피 / Recipe / Rezept / receta / рецепт / מתכון).
 
 ---
 

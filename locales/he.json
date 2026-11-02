@@ -1107,11 +1107,25 @@
     "recipes": {
         "title": "מתכוני LoRA",
         "filter": {
+            "title": "סינון מתכונים",
             "countTitle": "{name} — {count} מתכונים"
+        },
+        "bulk": {
+            "noSelection": "לא נבחרו מתכונים"
+        },
+        "move": {
+            "failed": "העברת המתכון/ים נכשלה: {message}"
+        },
+        "deleteModal": {
+            "message": "האם אתה בטוח שברצונך למחוק מתכון זה?",
+            "note": "מחיקת המתכון לא תשפיע על קבצי ה-LoRA שבהם הוא משתמש.",
+            "deleting": "מוחק..."
         },
         "actions": {
             "sendCheckpoint": "שלח ל-ComfyUI",
             "sendRecipe": "שלח ל-ComfyUI",
+            "sendRecipeModes": "שלח מתכון ל-workflow (לחיצה: הוספה, Shift+לחיצה: החלפה)",
+            "shareRecipe": "שתף מתכון",
             "copyRecipeSyntax": "העתק תחביר מתכון",
             "deleteRecipeWithShortcut": "מחק מתכון (Del)"
         },
@@ -1457,11 +1471,44 @@
     },
     "workflows": {
         "title": "Workflows",
+        "itemLabel": "workflow",
+        "filter": {
+            "title": "סינון workflows"
+        },
+        "bulk": {
+            "noSelection": "לא נבחרו workflows"
+        },
         "contextMenu": {
             "sendToComfy": "פתח ב-ComfyUI",
             "updateFromComfy": "עדכן מ-ComfyUI",
             "copyWorkflow": "העתק workflow",
-            "restoreDownloaded": "שחזר את הגרסה שהורדה"
+            "restoreDownloaded": "שחזר את הגרסה שהורדה",
+            "moveWorkflow": "העבר workflow לתיקייה",
+            "deleteWorkflow": "מחק workflow"
+        },
+        "modals": {
+            "delete": {
+                "title": "מחק workflow",
+                "message": "האם אתה בטוח שברצונך למחוק workflow זה ואת כל הקבצים הנלווים?",
+                "failed": "מחיקת ה-workflow נכשלה: {message}"
+            },
+            "move": {
+                "title": "העבר workflow",
+                "bulkTitle": "העבר {count} workflows",
+                "selectRoot": "בחר שורש workflow:",
+                "targetHint": "בחר ספריית שורש של workflow",
+                "noRoots": "לא נמצא שורש workflow",
+                "failed": "העברת ה-workflow נכשלה: {message}"
+            },
+            "bulkDelete": {
+                "title": "מחק מספר workflows",
+                "message": "האם אתה בטוח שברצונך למחוק את כל ה-workflows שנבחרו ואת הקבצים הנלווים אליהם?",
+                "countMessage": "workflows יימחקו לצמיתות."
+            }
+        },
+        "relink": {
+            "success": "ה-workflow קושר מחדש ל-CivitAI בהצלחה",
+            "civArchiveSuccess": "ה-workflow קושר מחדש דרך CivitArchive בהצלחה"
         },
         "sendToComfy": {
             "success": "ה-workflow נשלח ל-ComfyUI",

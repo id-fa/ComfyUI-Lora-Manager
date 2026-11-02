@@ -1107,11 +1107,25 @@
     "recipes": {
         "title": "Recetas de LoRA",
         "filter": {
+            "title": "Filtrar recetas",
             "countTitle": "{name} — {count} recetas"
+        },
+        "bulk": {
+            "noSelection": "No hay recetas seleccionadas"
+        },
+        "move": {
+            "failed": "Error al mover receta(s): {message}"
+        },
+        "deleteModal": {
+            "message": "¿Estás seguro de que quieres eliminar esta receta?",
+            "note": "Eliminar esta receta no afectará a los archivos LoRA utilizados en ella.",
+            "deleting": "Eliminando..."
         },
         "actions": {
             "sendCheckpoint": "Enviar a ComfyUI",
             "sendRecipe": "Enviar a ComfyUI",
+            "sendRecipeModes": "Enviar receta al workflow (clic: añadir, Mayús+clic: reemplazar)",
+            "shareRecipe": "Compartir receta",
             "copyRecipeSyntax": "Copiar sintaxis de receta",
             "deleteRecipeWithShortcut": "Eliminar receta (Del)"
         },
@@ -1457,11 +1471,44 @@
     },
     "workflows": {
         "title": "Workflows",
+        "itemLabel": "Workflow",
+        "filter": {
+            "title": "Filtrar workflows"
+        },
+        "bulk": {
+            "noSelection": "No hay workflows seleccionados"
+        },
         "contextMenu": {
             "sendToComfy": "Abrir en ComfyUI",
             "updateFromComfy": "Actualizar desde ComfyUI",
             "copyWorkflow": "Copiar workflow",
-            "restoreDownloaded": "Restaurar versión descargada"
+            "restoreDownloaded": "Restaurar versión descargada",
+            "moveWorkflow": "Mover workflow a carpeta",
+            "deleteWorkflow": "Eliminar workflow"
+        },
+        "modals": {
+            "delete": {
+                "title": "Eliminar workflow",
+                "message": "¿Estás seguro de que quieres eliminar este workflow y todos los archivos asociados?",
+                "failed": "Error al eliminar el workflow: {message}"
+            },
+            "move": {
+                "title": "Mover workflow",
+                "bulkTitle": "Mover {count} workflows",
+                "selectRoot": "Seleccionar raíz del workflow:",
+                "targetHint": "Selecciona un directorio raíz de workflows",
+                "noRoots": "No se encontró ninguna raíz de workflows",
+                "failed": "Error al mover workflow(s): {message}"
+            },
+            "bulkDelete": {
+                "title": "Eliminar múltiples workflows",
+                "message": "¿Estás seguro de que quieres eliminar todos los workflows seleccionados y sus archivos asociados?",
+                "countMessage": "workflows serán eliminados permanentemente."
+            }
+        },
+        "relink": {
+            "success": "Workflow re-vinculado exitosamente a CivitAI",
+            "civArchiveSuccess": "Workflow re-vinculado exitosamente mediante CivitArchive"
         },
         "sendToComfy": {
             "success": "Workflow enviado a ComfyUI",
