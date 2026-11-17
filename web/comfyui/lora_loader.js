@@ -18,6 +18,11 @@ import {
   getWidgetSerializedValue,
 } from "./utils.js";
 import { applyLoraValuesToText, debounce } from "./lora_syntax_utils.js";
+import { enableListedLorasFromCode } from "./lora_selection.js";
+import {
+  applyLoraCodeToNode,
+  hasLoraNodeAdapter,
+} from "./lora_node_adapters.js";
 
 // Node classes whose "text" widget uses the loras autocomplete. Kept in sync
 // with the broadcast-compatible classes in handleLoraCodeUpdate below.
@@ -104,12 +109,15 @@ app.registerExtension({
       const compatibleClasses = new Set(LORA_AUTOCOMPLETE_NODE_CLASSES);
       const targetNodes = getAllGraphNodes(app.graph)
         .map(({ node }) => node)
-        .filter((node) => compatibleClasses.has(node?.comfyClass));
+        .filter(
+          (node) =>
+            compatibleClasses.has(node?.comfyClass) || hasLoraNodeAdapter(node)
+        );
 
       // Update each node found
       if (targetNodes.length > 0) {
         targetNodes.forEach((node) => {
-          this.updateNodeLoraCode(node, loraCode, mode);
+          this.updateTargetNodeLoraCode(node, loraCode, mode);
         });
         console.log(
           `Updated ${targetNodes.length} nodes in broadcast mode`
@@ -127,10 +135,8 @@ app.registerExtension({
     const node = getNodeFromGraph(graphId, numericNodeId);
     if (
       !node ||
-      (node.comfyClass !== "Lora Loader (LoraManager)" &&
-        node.comfyClass !== "Lora Stacker (LoraManager)" &&
-        node.comfyClass !== "WanVideo Lora Select (LoraManager)" &&
-        node.comfyClass !== "Create Hook LoRA (LoraManager)")
+      (!LORA_AUTOCOMPLETE_NODE_CLASSES.includes(node.comfyClass) &&
+        !hasLoraNodeAdapter(node))
     ) {
       console.warn(
         "Node not found or not a compatible LoRA node:",
@@ -140,6 +146,13 @@ app.registerExtension({
       return;
     }
 
+    this.updateTargetNodeLoraCode(node, loraCode, mode);
+  },
+
+  updateTargetNodeLoraCode(node, loraCode, mode) {
+    if (applyLoraCodeToNode(node, loraCode, mode)) {
+      return;
+    }
     this.updateNodeLoraCode(node, loraCode, mode);
   },
 
@@ -148,6 +161,15 @@ app.registerExtension({
     // Update the input widget with new lora code
     const inputWidget = node.inputWidget;
     if (!inputWidget) return;
+
+    // Append mode: a LoRA the node already lists must be switched ON, not
+    // appended again. Appending its tag leaves an existing (possibly disabled)
+    // entry exactly as it was, which is why "Send to ComfyUI" appeared to
+    // ignore LoRAs that were already in the list. Only LoRAs the list does not
+    // know fall through to the textarea path, which is what adds new entries.
+    if (mode !== "replace" && this.enableListedLoras(node, loraCode)) {
+      return;
+    }
 
     // Get the current lora code
     const currentValue = inputWidget.value || "";
@@ -166,6 +188,39 @@ app.registerExtension({
     if (typeof inputWidget.callback === "function") {
       inputWidget.callback(inputWidget.value);
     }
+
+    // Replace mode: mergeLoras keeps the saved active flag of entries that are
+    // also present in the new code, so a listed-but-disabled LoRA would stay
+    // off after the replace. Switch it on after the merge, as the append path
+    // does, so Shift+click "Send to ComfyUI" cannot leave the target disabled.
+    if (mode === "replace") {
+      this.enableListedLoras(node, loraCode);
+    }
+  },
+
+  /**
+   * Switch on every LoRA from `loraCode` that the node already lists.
+   *
+   * Returns true when nothing is left for the textarea path, i.e. every LoRA in
+   * the code was already present. The loras widget value is plain data, so the
+   * callback is what propagates the new active set to trigger words,
+   * downstream loaders and the textarea syntax (assigning the value only
+   * re-renders the rows).
+   */
+  enableListedLoras(node, loraCode) {
+    const lorasWidget = node?.lorasWidget;
+    if (!lorasWidget || !Array.isArray(lorasWidget.value)) {
+      return false;
+    }
+    const { loras, changed, unlistedTags } = enableListedLorasFromCode(
+      lorasWidget.value,
+      loraCode
+    );
+    if (changed) {
+      lorasWidget.value = loras;
+      lorasWidget.callback?.(loras);
+    }
+    return unlistedTags.length === 0;
   },
 
   async beforeRegisterNodeDef(nodeType, nodeData, app) {

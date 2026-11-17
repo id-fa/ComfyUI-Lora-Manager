@@ -27,12 +27,11 @@ MISC_ROUTE_DEFINITIONS: tuple[RouteDefinition, ...] = (
     RouteDefinition("GET", "/api/lm/llm/models", "get_llm_models"),
     RouteDefinition("GET", "/api/lm/llm/provider-models", "get_provider_models"),
     RouteDefinition("GET", "/api/lm/doctor/diagnostics", "get_doctor_diagnostics"),
+    RouteDefinition("GET", "/api/lm/environment", "get_environment"),
     RouteDefinition("POST", "/api/lm/doctor/repair-cache", "repair_doctor_cache"),
     RouteDefinition("POST", "/api/lm/doctor/resolve-filename-conflicts", "resolve_doctor_filename_conflicts"),
     RouteDefinition("POST", "/api/lm/doctor/export-bundle", "export_doctor_bundle"),
     RouteDefinition("GET", "/api/lm/priority-tags", "get_priority_tags"),
-    RouteDefinition("GET", "/api/lm/settings/libraries", "get_settings_libraries"),
-    RouteDefinition("POST", "/api/lm/settings/libraries/activate", "activate_library"),
     RouteDefinition("GET", "/api/lm/health-check", "health_check"),
     RouteDefinition("GET", "/api/lm/init-status", "get_init_status"),
     # First-run welcome page: info + gated initial scan kickoff. The GET alias
@@ -46,6 +45,7 @@ MISC_ROUTE_DEFINITIONS: tuple[RouteDefinition, ...] = (
     RouteDefinition("POST", "/api/lm/wildcards/open-location", "open_wildcards_location"),
     RouteDefinition("POST", "/api/lm/open-file-location", "open_file_location"),
     RouteDefinition("POST", "/api/lm/browse-directory", "browse_directory"),
+    RouteDefinition("POST", "/api/lm/create-directory", "create_directory"),
     RouteDefinition("POST", "/api/lm/validate-path", "validate_path"),
     RouteDefinition("POST", "/api/lm/update-usage-stats", "update_usage_stats"),
     RouteDefinition("GET", "/api/lm/get-usage-stats", "get_usage_stats"),
@@ -74,6 +74,7 @@ MISC_ROUTE_DEFINITIONS: tuple[RouteDefinition, ...] = (
         "/api/lm/set-model-version-download-status",
         "set_model_version_download_status",
     ),
+    RouteDefinition("GET", "/api/lm/creators", "get_creators"),
     RouteDefinition("GET", "/api/lm/civitai/user-models", "get_civitai_user_models"),
     RouteDefinition(
         "POST", "/api/lm/download-metadata-archive", "download_metadata_archive"

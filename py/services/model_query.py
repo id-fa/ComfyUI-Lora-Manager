@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import (
     Any,
@@ -15,7 +16,8 @@ from typing import (
     cast,
 )
 
-from ..utils.constants import NSFW_LEVELS
+from ..utils.constants import MODEL_FILE_EXTENSIONS, NSFW_LEVELS
+from ..utils.trigger_words import iter_trigger_words
 from ..utils.utils import fuzzy_match as default_fuzzy_match
 import time
 import logging
@@ -423,6 +425,24 @@ class ModelFilterSet:
         return items
 
 
+def strip_model_file_extension(value: str) -> str:
+    """Drop a trailing model-file extension from a search term.
+
+    Cached ``file_name`` values and relative-path search both store names
+    without their extension, so a filename copied from a file manager
+    (``"my_lora_v1.safetensors"``) would never match unless the query is
+    normalized the same way. Only recognized model extensions are stripped,
+    leaving names that merely contain a dot (``"v1.5"``) untouched.
+    """
+    if not isinstance(value, str) or not value:
+        return value
+
+    stem, extension = os.path.splitext(value)
+    if stem and extension.lower() in MODEL_FILE_EXTENSIONS:
+        return stem
+    return value
+
+
 class SearchStrategy:
     """Encapsulates text and fuzzy matching behaviour for model queries."""
 
@@ -432,6 +452,7 @@ class SearchStrategy:
         "tags": False,
         "recursive": True,
         "creator": False,
+        "trigger_words": False,
     }
 
     def __init__(
@@ -454,6 +475,15 @@ class SearchStrategy:
         fuzzy: bool = False,
     ) -> List[Dict[str, Any]]:
         """Return items matching the search term using the configured strategy."""
+        if not search_term:
+            return list(data)
+
+        # Users often paste a filename straight from the file manager, complete
+        # with its extension. Normalize once so every match branch (file name,
+        # title, tags, creator, trigger words) sees the same extension-free
+        # query the cache stores.
+        if isinstance(search_term, str):
+            search_term = strip_model_file_extension(search_term.strip())
         if not search_term:
             return list(data)
 
@@ -490,6 +520,23 @@ class SearchStrategy:
                         creator_username = creator.get("username", "")
                 if creator_username and self._matches(
                     creator_username, search_term, search_lower, fuzzy
+                ):
+                    results.append(item)
+                    continue
+
+            # Trigger words are deliberately substring-only (never fuzzy): one
+            # library entry can declare dozens of them, so fuzzy matching would
+            # run the sequence matcher over every word of every entry and take
+            # seconds on large libraries. Users paste trigger words from a
+            # prompt, so substring semantics also matches how they search.
+            # Provenance does not matter: CivitAI/CivArchive sync, a
+            # HuggingFace/ModelScope model card, AI enrichment and manual edits
+            # all land in the same ``civitai.trainedWords`` field.
+            if options.get("trigger_words", False):
+                civitai = item.get("civitai")
+                if isinstance(civitai, dict) and any(
+                    self._matches(word, search_term, search_lower, fuzzy=False)
+                    for word in iter_trigger_words(civitai)
                 ):
                     results.append(item)
                     continue

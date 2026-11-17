@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import posixpath
 import re
 from typing import Any, Dict, Iterable, Mapping, Sequence
 from urllib.parse import parse_qs, urlparse, urlunparse
@@ -338,14 +339,75 @@ def resolve_license_info(
     return payload, build_license_flags(payload)
 
 
+# Commercial permission bits, in the order ``_resolve_commercial_bits`` packs
+# them after ``_COMMERCIAL_SHIFT``. The names match CivitAI's API values so the
+# decoded payload renders through the exact same client-side code path.
+_COMMERCIAL_FLAG_VALUES: tuple[tuple[int, str], ...] = (
+    (1, "Image"),
+    (2, "RentCivit"),
+    (3, "Rent"),
+    (4, "Sell"),
+)
+
+
+def decode_license_flags(flags: Any) -> Dict[str, Any]:
+    """Decode a cached license bitfield back into a CivitAI license payload.
+
+    Inverse of :func:`build_license_flags`. Used when the authoritative
+    ``.metadata.json`` is unreachable (offline drive) but the model modal still
+    has to render the license icons: the bitfield survives in the persistent
+    cache, the original ``civitai.model`` section does not.
+    """
+
+    try:
+        value = int(flags)
+    except (TypeError, ValueError):
+        value = build_license_flags({})
+
+    return {
+        "allowNoCredit": bool(value & (1 << 0)),
+        "allowCommercialUse": [
+            name for bit, name in _COMMERCIAL_FLAG_VALUES if value & (1 << bit)
+        ],
+        "allowDerivatives": bool(value & (1 << 5)),
+        "allowDifferentLicense": bool(value & (1 << 6)),
+    }
+
+
+def _normalize_media_width(width: int | None) -> int | None:
+    if width is None:
+        return None
+    try:
+        return max(1, int(width))
+    except (TypeError, ValueError):
+        return 450
+
+
+def _media_rendition_params(media_type: str | None, width: int | None) -> str:
+    """Return the Civitai image-cacher params for a media rendition."""
+
+    is_video = (media_type or "").lower() == "video"
+    normalized_width = _normalize_media_width(width)
+    if normalized_width is None:
+        return "transcode=true,optimized=true" if is_video else "optimized=true"
+    if is_video:
+        return f"transcode=true,width={normalized_width},optimized=true"
+    return f"width={normalized_width},optimized=true"
+
+
 def rewrite_preview_url(
-    source_url: str | None, media_type: str | None = None
+    source_url: str | None,
+    media_type: str | None = None,
+    *,
+    width: int | None = 450,
 ) -> tuple[str | None, bool]:
     """Rewrite Civitai preview URLs to use optimized renditions.
 
     Args:
         source_url: Original preview URL from the Civitai API.
         media_type: Optional media type hint (e.g. ``"image"`` or ``"video"``).
+        width: Rendition width. ``None`` keeps the legacy width-less
+            ``optimized=true`` form.
 
     Returns:
         A tuple of the potentially rewritten URL and a flag indicating whether the
@@ -368,9 +430,7 @@ def rewrite_preview_url(
     if hostname == "civitai.com" or not hostname.endswith(".civitai.com"):
         return source_url, False
 
-    replacement = "/width=450,optimized=true"
-    if (media_type or "").lower() == "video":
-        replacement = "/transcode=true,width=450,optimized=true"
+    replacement = f"/{_media_rendition_params(media_type, width)}"
 
     if "/original=true" not in parsed.path:
         return source_url, False
@@ -383,8 +443,67 @@ def rewrite_preview_url(
     return rewritten, True
 
 
+def build_civitai_media_url(
+    source_url: str | None,
+    media_type: str | None = None,
+    *,
+    width: int | None = 450,
+    optimize: bool = True,
+) -> str | None:
+    """Build the image-cacher delivery URL for a Civitai media asset.
+
+    Unlike :func:`rewrite_preview_url`, this handles URLs that do not carry the
+    current ``/original=true`` params segment (older cached metadata, legacy
+    ``.../<uuid>`` URLs) and replaces an existing rendition segment instead of
+    appending a second one.  The filename is preserved: the image cacher uses it
+    to derive the output name, and dropping it makes the requested rendition
+    ambiguous.
+    """
+
+    if not source_url or not optimize:
+        return source_url
+
+    try:
+        parsed = urlparse(source_url)
+    except ValueError:
+        return source_url
+
+    hostname = parsed.hostname
+    if hostname is None:
+        return source_url
+    hostname = hostname.lower()
+    if hostname == "civitai.com" or not hostname.endswith(".civitai.com"):
+        return source_url
+
+    rewritten, changed = rewrite_preview_url(source_url, media_type, width=width)
+    if changed:
+        return rewritten
+
+    segments = [segment for segment in parsed.path.split("/") if segment]
+    if not segments:
+        return source_url
+
+    params = _media_rendition_params(media_type, width)
+    last = segments[-1]
+    if "=" in last:
+        # Legacy ``.../<uuid>/optimized=true`` form (no filename).
+        segments[-1] = params
+    elif len(segments) >= 2 and "=" in segments[-2]:
+        # The rendition segment is immediately before the filename.
+        segments[-2] = params
+    elif posixpath.splitext(last)[1]:
+        # ``.../<uuid>/<filename>``: insert the rendition before the filename.
+        segments.insert(len(segments) - 1, params)
+    else:
+        # ``.../<uuid>``: no filename to preserve.
+        segments.append(params)
+
+    return urlunparse(parsed._replace(path="/" + "/".join(segments)))
+
+
 __all__ = [
     "build_civitai_image_page_url",
+    "build_civitai_media_url",
     "build_license_flags",
     "extract_civitai_image_id",
     "extract_civitai_image_id_from_cdn_url",

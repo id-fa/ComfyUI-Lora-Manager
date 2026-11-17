@@ -262,7 +262,8 @@
                 "title": "配方标题",
                 "loraName": "LoRA 文件名",
                 "loraModel": "LoRA 模型名称",
-                "prompt": "提示词"
+                "prompt": "提示词",
+                "triggerWords": "触发词"
             }
         },
         "filter": {
@@ -384,10 +385,19 @@
             "copied": "设置路径已复制到剪贴板：{{path}}",
             "clipboardFallback": "设置路径：{{path}}"
         },
+        "comfyuiNodes": {
+            "title": "ComfyUI 节点设置",
+            "description": "与节点相关的设置位于 ComfyUI 设置中。",
+            "openButton": "打开 ComfyUI 设置",
+            "modelNameDisplayLink": "节点标签请在 ComfyUI 节点设置中单独配置",
+            "openSucceeded": "已打开 ComfyUI 设置。",
+            "openFailed": "无法打开 ComfyUI 设置，请先打开 ComfyUI。"
+        },
         "sections": {
             "contentFiltering": "内容过滤",
             "downloads": "下载",
             "videoSettings": "视频设置",
+            "cardPreview": "卡片预览",
             "layoutSettings": "布局设置",
             "licenseIcons": "许可协议图标",
             "misc": "其他",
@@ -409,9 +419,33 @@
         "nav": {
             "general": "通用",
             "interface": "界面",
+            "comfyuiNodes": "ComfyUI 节点",
             "library": "库",
             "organization": "整理",
+            "about": "关于",
             "modelPaths": "模型路径"
+        },
+        "about": {
+            "environmentTitle": "环境",
+            "environmentDescription": "LoRA Manager 与 ComfyUI 使用的版本。",
+            "copy": "复制",
+            "appVersion": "LoRA Manager",
+            "comfyuiVersion": "ComfyUI",
+            "frontendVersion": "ComfyUI 前端",
+            "pythonVersion": "Python",
+            "os": "操作系统",
+            "browser": "浏览器",
+            "hint": "报告问题时请附上这些信息。",
+            "unavailable": "不可用",
+            "copySuccess": "环境信息已复制",
+            "copyFailed": "复制环境信息失败",
+            "linksTitle": "支持与链接",
+            "links": {
+                "reportIssue": "报告问题",
+                "wiki": "文档 Wiki",
+                "github": "GitHub 仓库",
+                "discord": "加入 Discord"
+            }
         },
         "search": {
             "placeholder": "搜索设置...",
@@ -439,6 +473,12 @@
         "videoSettings": {
             "autoplayOnHover": "悬停时自动播放视频",
             "autoplayOnHoverHelp": "仅在悬停时播放视频预览"
+        },
+        "cardPreview": {
+            "cycleOnHover": "悬停时轮播示例图片",
+            "cycleOnHoverHelp": "悬停在卡片的预览图片上时，会轮播其示例图片。悬停在卡片的头部或底部区域不会触发轮播，因此操作按钮和悬浮提示仍可正常使用。所选预览图片本身不会改变。视频预览不受影响。",
+            "cycleInterval": "轮播间隔",
+            "cycleIntervalHelp": "悬停卡片时，示例图片切换的时间间隔。"
         },
         "autoOrganizeExclusions": {
             "label": "自动整理排除项",
@@ -612,10 +652,6 @@
             "cardBlurAmountHelp": "调整模型和配方卡片上页眉和页脚叠加层的模糊强度（0 = 无模糊，20 = 最大模糊）。"
         },
         "folderSettings": {
-            "activeLibrary": "活动库（已弃用）",
-            "activeLibraryHelp": "在已配置的库之间切换以更新默认文件夹。更改选择将重新加载页面。已弃用：多库支持将在即将发布的版本中移除。单个库内的多个文件夹根目录仍完全受支持。",
-            "loadingLibraries": "正在加载库...",
-            "noLibraries": "尚未配置库",
             "defaultLoraRoot": "LoRA 根目录",
             "defaultLoraRootHelp": "设置下载、导入和移动时的默认 LoRA 根目录",
             "defaultCheckpointRoot": "Checkpoint 根目录",
@@ -704,7 +740,16 @@
             "pathPlaceholder": "输入路径...",
             "go": "跳转",
             "emptyFolder": "没有子文件夹",
-            "loadError": "目录加载失败"
+            "loadError": "目录加载失败",
+            "newFolder": "新建文件夹",
+            "newFolderPlaceholder": "文件夹名称",
+            "create": "创建",
+            "cancel": "取消",
+            "createError": "创建文件夹失败",
+            "nameRequired": "请输入文件夹名称",
+            "nameInvalid": "文件夹名称包含无效字符",
+            "alreadyExists": "已存在同名文件夹",
+            "permissionDenied": "权限不足"
         },
         "pathValidation": {
             "valid": "路径有效",
@@ -716,6 +761,13 @@
         "priorityTags": {
             "title": "优先标签",
             "description": "为每种模型类型自定义标签优先级顺序 (例如: character, concept, style(toon|toon_style))",
+            "unsortedFallback": {
+                "label": "将没有匹配到优先标签的模型放入同一个文件夹",
+                "help": "没有匹配到优先标签的模型会放入同一个文件夹，而不是按 {first_tag} 创建文件夹。完全没有标签的模型不受影响。默认关闭；在重新整理模型之前，现有文件夹保持不变。",
+                "folderLabel": "文件夹名称",
+                "folderHelp": "没有匹配到优先标签时，用它替代 {first_tag}。在默认模板 {base_model}/{first_tag} 下，结果为 {base_model}/<文件夹名称>。留空则保持当前行为。",
+                "folderPlaceholder": "unsorted"
+            },
             "placeholder": "character, concept, style(toon|toon_style)",
             "helpLinkLabel": "打开优先标签帮助",
             "modelTypes": {
@@ -749,10 +801,12 @@
                 "customTemplate": "自定义模板"
             },
             "customTemplatePlaceholder": "输入自定义模板（如：{base_model}/{author}/{first_tag}）",
+            "workflowHint": "适用于工作流下载以及工作流页面上的自动整理。",
             "modelTypes": {
                 "lora": "LoRA",
                 "checkpoint": "Checkpoint",
-                "embedding": "Embedding"
+                "embedding": "Embedding",
+                "workflow": "工作流"
             },
             "baseModelPathMappings": "基础模型路径映射",
             "baseModelPathMappingsHelp": "为特定基础模型自定义文件夹名称（如“Flux.1 D”→“flux”）",
@@ -1769,6 +1823,54 @@
         }
     },
     "modals": {
+        "autoOrganizePreview": {
+            "title": "预览自动整理",
+            "scopeSelected": "所选模型",
+            "scopeAll": "所有模型",
+            "scope": "范围：{scope} · {count} 个模型",
+            "previewNotice": "仅供预览。尚未移动任何文件，也未清理任何目录。",
+            "emptyPreview": "此预览没有可用的模型。",
+            "alreadyOrganized": "所有模型都已在正确的位置。",
+            "loadingTitle": "正在计算预览...",
+            "loadingMessage": "不会更改任何文件。",
+            "previewFailed": "预览失败",
+            "retry": "重试",
+            "statWillMove": "待移动",
+            "statSkipped": "已跳过",
+            "statIssues": "问题",
+            "issuesWarning": "预计有 {count} 个模型会失败；其余模型仍会被处理。",
+            "detailsLabel": "预览详情",
+            "movesTab": "移动（{count}）",
+            "skippedTab": "已跳过（{count}）",
+            "issuesTab": "问题（{count}）",
+            "searchPlaceholder": "搜索模型或路径...",
+            "from": "从",
+            "to": "到",
+            "location": "位置",
+            "organizingWith": "整理方式：",
+            "flatStructureRule": "扁平结构（库根目录）",
+            "emptyMoves": "没有需要移动的模型。",
+            "emptySkipped": "没有模型会被跳过。",
+            "emptyIssues": "没有问题需要检查。",
+            "emptySearch": "没有与搜索匹配的结果。",
+            "replanNote": "执行时会根据模型库的最新状态重新计算，因此实际结果可能与此预览不同。",
+            "copyReport": "复制报告",
+            "refresh": "刷新预览",
+            "apply": "整理（{count}）",
+            "noMoves": "没有可应用的移动",
+            "pageStatus": "第 {from}–{to} 项，共 {total} 项",
+            "reasons": {
+                "already_organized": "已整理",
+                "no_file_path": "没有文件路径",
+                "outside_roots": "库根目录之外",
+                "missing_metadata": "缺少元数据",
+                "path_too_long": "目标路径过长",
+                "target_exists": "目标已存在",
+                "planned_collision": "计划移动冲突",
+                "move_failed": "移动失败",
+                "error": "错误"
+            }
+        },
         "exclude": {
             "confirm": "排除"
         },
@@ -2069,6 +2171,8 @@
                 "sendToWorkflow": "发送到 ComfyUI",
                 "sendToWorkflowText": "发送到 ComfyUI",
                 "copyHash": "复制哈希值",
+                "calculateHash": "计算哈希值",
+                "retryHash": "重试",
                 "copyCivitaiId": "复制 Civitai ID",
                 "civitaiIdCopied": "Civitai ID 已复制到剪贴板",
                 "deleteModelWithShortcut": "删除模型（Del）"
@@ -2095,6 +2199,10 @@
                 "baseModel": "基础模型",
                 "size": "大小",
                 "hashes": "哈希值",
+                "hashPending": "尚未计算",
+                "hashCalculating": "正在计算...",
+                "hashFailed": "计算失败",
+                "hashPendingHint": "此 SHA256 哈希值尚未计算。大型模型按需计算哈希，以保持扫描速度。",
                 "civitaiModelId": "模型 ID",
                 "civitaiVersionId": "版本 ID",
                 "unknown": "未知",
@@ -2105,7 +2213,35 @@
                 "aboutThisVersion": "关于此版本",
                 "baseModelSearchPlaceholder": "搜索基础模型...",
                 "baseModelSuggested": "推荐",
-                "baseModelNoMatch": "没有匹配的基础模型"
+                "baseModelNoMatch": "没有匹配的基础模型",
+                "creator": "创作者",
+                "creatorAdd": "添加创作者",
+                "creatorEdit": "编辑创作者",
+                "creatorSearchPlaceholder": "搜索创作者或输入新名称...",
+                "creatorLibraryHeader": "模型库中的创作者",
+                "creatorMatchingHeader": "匹配的创作者",
+                "creatorLibraryCount": "模型库中 {count} 个",
+                "creatorCurrent": "当前：{name}",
+                "creatorCreate": "创建“{name}”",
+                "creatorCreateAnnounce": "按回车键创建 {name}。",
+                "creatorNew": "新创作者",
+                "creatorNoMatch": "没有匹配“{name}”的现有创作者",
+                "creatorEmptyLibrary": "模型库中还没有创作者。输入名称以添加第一个。",
+                "creatorModelCount": "{count} 个模型",
+                "creatorModelCountOne": "{count} 个模型",
+                "creatorMatchCount": "{count} 个匹配",
+                "creatorMatchCountOne": "{count} 个匹配",
+                "creatorShowing": "显示 {shown}/{total} —— 继续输入以缩小范围",
+                "creatorRemove": "移除创作者",
+                "creatorManual": "手动",
+                "creatorManualHint": "手动添加。元数据刷新不会覆盖。",
+                "creatorSaved": "创作者已更新",
+                "creatorRemoved": "创作者已移除",
+                "creatorSaveFailed": "无法更新创作者，请重试。",
+                "creatorLoadFailed": "无法加载创作者。你仍可以输入新名称。",
+                "creatorTooLong": "创作者名称过长（最多 64 个字符）",
+                "creatorLoading": "正在加载创作者...",
+                "creatorKeyboardHint": "↑↓ 导航 · ↵ 选择 · esc 取消"
             },
             "notes": {
                 "saved": "备注保存成功",
@@ -2153,6 +2289,7 @@
             "description": {
                 "noDescription": "暂无模型描述",
                 "failedToLoad": "加载模型描述失败",
+                "offline": "描述与模型文件存储在一起，而该文件位于离线磁盘上。请重新连接磁盘以读取描述。",
                 "editTitle": "编辑模型描述",
                 "validation": {
                     "cannotBeEmpty": "描述不能为空"
@@ -2184,6 +2321,10 @@
                 "noDerivatives": "禁止分享合并作品",
                 "noReLicense": "需要相同权限",
                 "restrictionsLabel": "许可证限制"
+            },
+            "notices": {
+                "offline": "存放此模型的磁盘处于离线状态。当前显示缓存信息——重新连接磁盘之前，文件操作和编辑不可用。",
+                "partial": "无法读取模型元数据文件。当前显示缓存信息——描述、示例图片和创作者头像可能不可用。"
             },
             "loading": {
                 "exampleImages": "正在加载示例图片...",
@@ -2527,12 +2668,20 @@
         "title": "帮助与教程",
         "tabs": {
             "gettingStarted": "新手入门",
-            "updateVlogs": "更新日志",
+            "updates": "[TODO: Translate] Updates",
             "documentation": "文档",
             "shortcuts": "快捷键"
         },
         "gettingStarted": {
             "title": "LoRA 管理器新手入门",
+            "stepsTitle": "[TODO: Translate] First steps",
+            "steps": {
+                "configure": "[TODO: Translate] Configure your model folders and add a CivitAI API key if you plan to download models.",
+                "find": "[TODO: Translate] Find a model by browsing folders or searching names, tags, and trigger words.",
+                "send": "[TODO: Translate] Use Send to ComfyUI or copy LoRA syntax into a compatible LoRA Manager node.",
+                "refresh": "[TODO: Translate] Use Refresh after changing files outside LoRA Manager; rebuild the cache only for cache inconsistencies."
+            },
+            "readGuide": "[TODO: Translate] Open the Getting Started guide",
             "replayTutorial": "重播教程"
         },
         "shortcuts": {
@@ -2557,7 +2706,6 @@
                 "closeModal": "关闭弹窗 / 面板",
                 "openShortcuts": "打开本快捷键面板",
                 "refresh": "刷新模型列表",
-                "fetchMetadata": "从 CivitAI 获取元数据（仅模型页面）",
                 "downloadModel": "下载模型（仅模型页面）",
                 "toggleBulkMode": "切换批量模式",
                 "selectAll": "全选所有可见模型",
@@ -2579,17 +2727,26 @@
             "title": "最新更新",
             "watchOnYouTube": "在 YouTube 上观看",
             "playlistTitle": "LoRA 管理器更新播放列表",
-            "playlistDescription": "观看所有更新视频，了解最新功能和改进。"
+            "playlistDescription": "观看所有更新视频，了解最新功能和改进。",
+            "releaseNotes": "[TODO: Translate] Read release notes on GitHub"
         },
         "documentation": {
             "title": "文档",
-            "general": "通用",
+            "startSupport": "[TODO: Translate] Start & Support",
+            "workingWithAssets": "[TODO: Translate] Working with Assets",
+            "integrationConfiguration": "[TODO: Translate] Integration & Configuration",
+            "gettingStarted": "[TODO: Translate] Getting Started",
+            "faq": "[TODO: Translate] FAQ",
             "troubleshooting": "故障排查",
-            "modelManagement": "模型管理",
+            "modelLibrary": "[TODO: Translate] Model Library",
+            "downloadsOrganization": "[TODO: Translate] Downloading and Organizing Models",
             "recipes": "配方",
-            "settings": "设置与配置",
-            "extensions": "扩展",
-            "newBadge": "新"
+            "workflowLibrary": "[TODO: Translate] Workflow Library",
+            "comfyuiIntegration": "[TODO: Translate] ComfyUI Integration",
+            "configuration": "[TODO: Translate] Configuration",
+            "loraSyntax": "[TODO: Translate] LoRA Syntax and Duplicate Filenames",
+            "browserExtension": "[TODO: Translate] LM Civitai Extension",
+            "browseAll": "[TODO: Translate] Browse all documentation"
         },
         "newContentBadge": "新"
     },
@@ -2716,6 +2873,7 @@
             "downloadSkippedByBaseModel": "由于基础模型 {baseModel} 已被排除，已跳过下载",
             "autoOrganizeSuccess": "自动整理已成功完成，共 {count} 个 {type}",
             "autoOrganizePartialSuccess": "自动整理完成：已移动 {success} 个，{failures} 个失败，共 {total} 个模型",
+            "autoOrganizeProgressUnavailable": "自动整理完成：已移动 {success} 个，{failures} 个失败，共 {total} 个模型；实时进度不可用",
             "autoOrganizeFailed": "自动整理失败：{error}",
             "filenameTemplateSuccess": "文件名模板已成功应用，共 {count} 个 {type}",
             "filenameTemplatePartialSuccess": "文件名模板应用完成：已重命名 {success} 个，{failures} 个失败，共 {total} 个模型",
@@ -2894,8 +3052,6 @@
             "compactModeToggled": "紧凑模式 {state}",
             "settingSaveFailed": "保存设置失败：{message}",
             "displayDensitySet": "显示密度已设置为 {density}",
-            "libraryLoadFailed": "加载模型库失败：{message}",
-            "libraryActivateFailed": "激活模型库失败：{message}",
             "languageChangeFailed": "切换语言失败：{message}",
             "cacheCleared": "缓存文件已成功清除。下次操作将重建缓存。",
             "cacheClearFailed": "清除缓存失败：{error}",
@@ -3028,6 +3184,8 @@
             "refreshFailed": "{action} {type} 失败",
             "metadataRefreshed": "元数据刷新成功",
             "metadataRefreshFailed": "刷新元数据失败：{message}",
+            "hashCalculated": "SHA256 哈希值计算成功",
+            "hashCalculationFailed": "计算哈希值失败：{message}",
             "metadataUpdateComplete": "元数据更新完成",
             "operationCancelled": "操作已由用户取消",
             "operationCancelledPartial": "操作已取消。已处理 {success} 个项目。",

@@ -97,6 +97,9 @@ afterEach(() => {
 
 function renderControlsDom(pageKey) {
   document.body.dataset.page = pageKey;
+  const triggerWordChip = pageKey === 'loras'
+    ? '<div class="search-option-tag" data-option="triggerWords"></div>'
+    : '';
   document.body.innerHTML = `
     <div class="header-search">
       <div class="search-container">
@@ -112,6 +115,10 @@ function renderControlsDom(pageKey) {
     <div id="searchOptionsPanel" class="search-options-panel hidden">
       <button id="closeSearchOptions"></button>
       <div class="search-option-tag active" data-option="filename"></div>
+      <div class="search-option-tag active" data-option="modelname"></div>
+      <div class="search-option-tag active" data-option="tags"></div>
+      <div class="search-option-tag" data-option="creator"></div>
+      ${triggerWordChip}
     </div>
     <div id="filterPanel" class="filter-panel hidden">
       <input id="baseModelSearchInput" />
@@ -230,6 +237,48 @@ describe('SearchManager filtering scenarios', () => {
     expect(getCurrentPageState().filters.search).toBe('flux');
     expect(loadMoreWithVirtualScrollMock).toHaveBeenCalledWith(true, false);
     expect(loadMoreWithVirtualScrollMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('toggles the LoRA trigger-word search option into page state', async () => {
+    renderControlsDom('loras');
+    const stateModule = await import('../../../static/js/state/index.js');
+    stateModule.initPageState('loras');
+    const { getCurrentPageState } = stateModule;
+    const { SearchManager } = await import('../../../static/js/managers/SearchManager.js');
+
+    new SearchManager({ page: 'loras', searchDelay: 0 });
+
+    const triggerChip = document.querySelector('.search-option-tag[data-option="triggerWords"]');
+    expect(triggerChip).not.toBeNull();
+    expect(getCurrentPageState().searchOptions.triggerWords).toBe(false);
+
+    triggerChip.click();
+    expect(getCurrentPageState().searchOptions.triggerWords).toBe(true);
+    expect(loadMoreWithVirtualScrollMock).toHaveBeenCalledWith(true, false);
+
+    triggerChip.click();
+    expect(getCurrentPageState().searchOptions.triggerWords).toBe(false);
+  });
+
+  it('leaves trigger-word state untouched on pages without the option', async () => {
+    vi.useFakeTimers();
+
+    renderControlsDom('checkpoints');
+    const stateModule = await import('../../../static/js/state/index.js');
+    stateModule.initPageState('checkpoints');
+    const { getCurrentPageState } = stateModule;
+    const { SearchManager } = await import('../../../static/js/managers/SearchManager.js');
+
+    new SearchManager({ page: 'checkpoints', searchDelay: 0 });
+
+    expect(document.querySelector('.search-option-tag[data-option="triggerWords"]')).toBeNull();
+
+    const input = document.getElementById('searchInput');
+    input.value = 'flux';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await vi.runAllTimersAsync();
+
+    expect(getCurrentPageState().searchOptions.triggerWords).toBeUndefined();
   });
 
   it.each([
@@ -1303,17 +1352,23 @@ describe('PageControls action keyboard shortcuts', () => {
     expect(keydownHandlers.some((h) => h.source === 'pageControls-actions')).toBe(true);
   });
 
-  it('triggers refresh, fetch, and download via the R / F / D keys', async () => {
+  it('triggers refresh and download via the R / D keys', async () => {
     const controls = await setupLorasControls();
 
     expect(controls.handleActionShortcut(keydownEvent('r'))).toBe(true);
     expect(refreshModelsMock).toHaveBeenCalledWith(false);
 
-    expect(controls.handleActionShortcut(keydownEvent('f'))).toBe(true);
-    expect(fetchCivitaiMetadataMock).toHaveBeenCalledTimes(1);
-
     expect(controls.handleActionShortcut(keydownEvent('d'))).toBe(true);
     expect(downloadManagerMock.showDownloadModal).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves F to the browser so a missed Ctrl+F does not fetch metadata', async () => {
+    const controls = await setupLorasControls();
+
+    const event = keydownEvent('f');
+    expect(controls.handleActionShortcut(event)).toBe(false);
+    expect(event.defaultPrevented).toBe(false);
+    expect(fetchCivitaiMetadataMock).not.toHaveBeenCalled();
   });
 
   it('handles a real keydown dispatched on the document', async () => {
@@ -1326,22 +1381,21 @@ describe('PageControls action keyboard shortcuts', () => {
     expect(refreshModelsMock).toHaveBeenCalledWith(false);
   });
 
-  it('ignores R / F / D while typing in an input', async () => {
+  it('ignores R / D while typing in an input', async () => {
     const controls = await setupLorasControls();
 
     const input = document.getElementById('searchInput');
-    for (const key of ['r', 'f', 'd']) {
+    for (const key of ['r', 'd']) {
       const event = keydownEvent(key, { target: input });
       expect(controls.handleActionShortcut(event)).toBe(false);
       expect(event.defaultPrevented).toBe(false);
     }
 
     expect(refreshModelsMock).not.toHaveBeenCalled();
-    expect(fetchCivitaiMetadataMock).not.toHaveBeenCalled();
     expect(downloadManagerMock.showDownloadModal).not.toHaveBeenCalled();
   });
 
-  it('ignores R / F / D when combined with modifier keys', async () => {
+  it('ignores R / D when combined with modifier keys', async () => {
     const controls = await setupLorasControls();
 
     const event = keydownEvent('r', { ctrlKey: true });
@@ -1353,12 +1407,12 @@ describe('PageControls action keyboard shortcuts', () => {
   it('passes the event through when the action button does not exist', async () => {
     const controls = await setupLorasControls();
 
-    // Recipes page has no fetch/download buttons
-    document.querySelector('[data-action="fetch"]').closest('.control-group').remove();
+    // Recipes page has no download button
+    document.querySelector('[data-action="download"]').closest('.control-group').remove();
 
-    const event = keydownEvent('f');
+    const event = keydownEvent('d');
     expect(controls.handleActionShortcut(event)).toBe(false);
     expect(event.defaultPrevented).toBe(false);
-    expect(fetchCivitaiMetadataMock).not.toHaveBeenCalled();
+    expect(downloadManagerMock.showDownloadModal).not.toHaveBeenCalled();
   });
 });

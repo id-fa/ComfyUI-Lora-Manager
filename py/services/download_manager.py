@@ -48,7 +48,7 @@ from ..utils.preview_selection import resolve_mature_threshold, select_preview_m
 from ..utils.utils import calculate_filename_for_model, decode_percent_encoded_filename, fit_stem_to_path_budget, sanitize_folder_name
 from ..utils.exif_utils import ExifUtils
 from ..utils.metadata_manager import MetadataManager
-from ..utils.sidecar_paths import get_metadata_path, get_preview_dir
+from ..utils.sidecar_paths import get_metadata_path, get_preview_dir, get_preview_path
 from .service_registry import ServiceRegistry
 from .download_routing import (
     is_diffusion_model_download,
@@ -120,6 +120,44 @@ def _workflows_disabled_response() -> Dict[str, Any]:
             "Settings > Library before downloading workflow files."
         ),
         "reason": "workflows_disabled",
+    }
+
+
+def _is_generation_only_version(
+    version_info: Dict[str, Any], source: str | None = None
+) -> bool:
+    """True when CivitAI only permits on-site generation for this version.
+
+    ``usageControl`` is a creator-side setting ("Download" / "Generation" /
+    "InternalGeneration") and is independent of the viewer's paid access. A
+    Generation-Only version can never be downloaded — probing it only earns a
+    misleading 401/403 that the generic error path reports as an early-access
+    paywall. CivArchive has no equivalent field, so its source is exempt.
+    """
+    if source == "civarchive":
+        return False
+    usage_control = str(version_info.get("usageControl") or "").strip().lower()
+    if usage_control not in ("generation", "internalgeneration"):
+        return False
+    # The public model-version API does not expose the viewer's canDownload,
+    # but an authenticated response may; never override an explicit allowance
+    # (e.g. the creator downloading their own model).
+    return version_info.get("canDownload") is not True
+
+
+def _generation_only_response() -> Dict[str, Any]:
+    """Structured rejection for a Generation-Only version.
+
+    The machine-readable ``reason`` is consumed by the companion browser
+    extension, which localizes it; keep the value stable.
+    """
+    return {
+        "success": False,
+        "error": (
+            "This model version is Generation-Only on Civitai and cannot be "
+            "downloaded."
+        ),
+        "reason": "generation_only",
     }
 
 
@@ -501,6 +539,94 @@ class DownloadManager:
                 break
 
         return file_info
+
+    def _select_download_file(
+        self,
+        files: Any,
+        file_params: Dict[str, Any] | None,
+        model_type: str,
+    ) -> Optional[Dict[str, Any]]:
+        file_info = self._resolve_target_file(files, file_params) if file_params else None
+        if not file_info and model_type == "workflow":
+            file_info = self._select_workflow_download_file(files)
+        if file_info:
+            return file_info
+
+        candidates = [f for f in files or [] if isinstance(f, dict)]
+        return (
+            next(
+                (
+                    f for f in candidates
+                    if f.get("primary") and f.get("type") in MODEL_WEIGHT_FILE_TYPES
+                ),
+                None,
+            )
+            or next((f for f in candidates if f.get("type") in MODEL_WEIGHT_FILE_TYPES), None)
+            or next(
+                (
+                    f for f in candidates
+                    if f.get("primary") and f.get("type") not in NON_DOWNLOADABLE_PRIMARY_TYPES
+                ),
+                None,
+            )
+        )
+
+    async def resolve_download_target(
+        self,
+        *,
+        model_id: Optional[int],
+        model_version_id: Optional[int],
+        source: str | None = None,
+        file_params: Dict[str, Any] | None = None,
+    ) -> Dict[str, Any]:
+        metadata_provider = (
+            await get_metadata_provider("civarchive_api")
+            if source == "civarchive"
+            else await get_default_metadata_provider()
+        )
+        try:
+            version_info = await metadata_provider.get_model_version(
+                cast(int, model_id), cast(int, model_version_id)
+            )
+        except Exception:
+            if source != "civarchive":
+                raise
+            metadata_provider = await get_default_metadata_provider()
+            version_info = await metadata_provider.get_model_version(
+                cast(int, model_id), cast(int, model_version_id)
+            )
+        if not version_info:
+            raise ValueError("Failed to fetch model metadata")
+
+        resolved_version_id = model_version_id or version_info.get("id")
+        resolved_model_id = model_id or version_info.get("modelId") or (version_info.get("model") or {}).get("id")
+        model_type = str((version_info.get("model") or {}).get("type") or "").lower()
+        selection_type = "workflow" if model_type in WORKFLOW_CIVITAI_TYPES else "model"
+        file_info = self._select_download_file(
+            version_info.get("files") or [], file_params or None, selection_type
+        )
+        if not file_info or file_info.get("id") is None:
+            raise ValueError("No suitable file found in metadata")
+
+        file_metadata = file_info.get("metadata") or {}
+        resolved_file_params = {
+            **(file_params or {}),
+            "id": file_info["id"],
+            "fileId": file_info["id"],
+            "fileName": file_info.get("name") or "",
+            "type": file_info.get("type") or "Model",
+            "format": file_metadata.get("format"),
+            "size": file_metadata.get("size"),
+            "fp": file_metadata.get("fp"),
+            "isPrimary": bool(file_info.get("primary")),
+        }
+        return {
+            "model_id": int(resolved_model_id) if resolved_model_id is not None else None,
+            "model_version_id": int(resolved_version_id) if resolved_version_id is not None else None,
+            "model_name": (version_info.get("model") or {}).get("name") or "",
+            "version_name": version_info.get("name") or "",
+            "file_params": resolved_file_params,
+        }
 
     @staticmethod
     def _select_workflow_download_file(
@@ -1816,6 +1942,17 @@ class DownloadManager:
                     raise civarchive_rate_limit
                 return {"success": False, "error": "Failed to fetch model metadata"}
 
+            # A Generation-Only version cannot be downloaded at all. Refuse
+            # before any file selection / download work: the metadata fetch
+            # above already supplied usageControl, so this costs no extra
+            # CivitAI request and avoids a misleading 401/403 later.
+            if _is_generation_only_version(version_info, source=source):
+                logger.info(
+                    "Download refused: model version %s is Generation-Only on Civitai",
+                    version_info.get("id") or model_version_id,
+                )
+                return _generation_only_response()
+
             model_type_from_info = version_info.get("model", {}).get("type", "").lower()
 
             resolved_version_id = model_version_id
@@ -2177,6 +2314,8 @@ class DownloadManager:
                     elif model_type == "workflow":
                         # Workflows have no default-root setting: the first
                         # configured workflow root is the download target.
+                        # The workflow path template (Settings > Organization)
+                        # is applied below, like every other model type.
                         workflow_scanner = await ServiceRegistry.get_workflow_scanner()
                         workflow_roots = workflow_scanner.get_model_roots()
                         if not workflow_roots:
@@ -2198,7 +2337,9 @@ class DownloadManager:
                 return {"success": False, "error": "No save directory specified"}
             if relative_path:
                 base_save_dir = save_dir
-                save_dir = os.path.join(save_dir, relative_path)
+                # relative_path is posix-normalized ("SDXL 1.0/utility"), so
+                # normalize the joined directory back to native separators.
+                save_dir = os.path.normpath(os.path.join(save_dir, relative_path))
                 # Security: validate path containment after joining
                 resolved_dir = os.path.abspath(os.path.normpath(save_dir))
                 base_dir = os.path.abspath(os.path.normpath(base_save_dir))
@@ -2259,84 +2400,10 @@ class DownloadManager:
             if progress_callback:
                 await progress_callback(0)
 
-            # 2. Get file information
+            # 2. Get file information. Queue canonicalization uses this same
+            # selection logic, so the recorded file id is the file downloaded.
             files = version_info.get("files", [])
-            file_info = None
-
-            # If file_params is provided, reuse the file resolved right after
-            # the metadata fetch so the existence gate and this selection
-            # always agree on the target file (#1058).
-            if file_params is not None:
-                file_info = target_file
-                if not file_info:
-                    logger.debug(
-                        "[download] No match found via file_params — falling back to primary file lookup",
-                    )
-            else:
-                logger.debug(
-                    "[download] No file_params provided (null/None) — will use primary file lookup. "
-                    "model_version_id=%s, total_files=%d",
-                    model_version_id, len(files),
-                )
-
-            # Fallback to primary file if no match found
-            if not file_info and model_type == "workflow":
-                file_info = self._select_workflow_download_file(files)
-                if file_info:
-                    logger.debug(
-                        "[download] Workflow file selected: id=%s, name=%s",
-                        file_info.get("id"), file_info.get("name"),
-                    )
-
-            if not file_info:
-                logger.debug("[download] Looking for primary file as fallback")
-                # Prefer a weights-type file CivitAI marked primary; then any
-                # weights-type file (providers without primary flags, e.g.
-                # civarchive); then trust CivitAI's primary flag regardless of
-                # type — newer types like 'Enhancement LoRA' are valid primary
-                # files. Weights files are preferred over non-weights primary
-                # files so a Config/Archive primary never replaces a Model.
-                file_info = next(
-                    (
-                        f
-                        for f in files
-                        if f.get("primary") and f.get("type") in MODEL_WEIGHT_FILE_TYPES
-                    ),
-                    None,
-                )
-                if file_info:
-                    logger.debug(
-                        "[download] Fallback primary file selected (primary + weights): id=%s, name=%s",
-                        file_info.get("id"), file_info.get("name"),
-                    )
-                else:
-                    file_info = next(
-                        (f for f in files if f.get("type") in MODEL_WEIGHT_FILE_TYPES),
-                        None,
-                    )
-                    if file_info:
-                        logger.debug(
-                            "[download] Fallback primary file selected (weights type, no primary flag): id=%s, name=%s",
-                            file_info.get("id"), file_info.get("name"),
-                        )
-                    else:
-                        file_info = next(
-                            (
-                                f
-                                for f in files
-                                if f.get("primary")
-                                and f.get("type") not in NON_DOWNLOADABLE_PRIMARY_TYPES
-                            ),
-                            None,
-                        )
-                        if file_info:
-                            logger.debug(
-                                "[download] Fallback primary file selected (trusting CivitAI primary flag): id=%s, name=%s, type=%s",
-                                file_info.get("id"), file_info.get("name"), file_info.get("type"),
-                            )
-                        else:
-                            logger.debug("[download] No primary file found in fallback lookup")
-
+            file_info = self._select_download_file(files, file_params, model_type)
             if not file_info:
                 return {"success": False, "error": "No suitable file found in metadata"}
 
@@ -2918,10 +2985,7 @@ class DownloadManager:
 
                     if media_type == "video":
                         preview_ext = _extension_from_url(preview_url, ".mp4")
-                        preview_path = os.path.join(
-                            get_preview_dir(save_path),
-                            os.path.splitext(os.path.basename(save_path))[0] + preview_ext,
-                        )
+                        preview_path = get_preview_path(save_path, preview_ext)
                         rewritten_url, rewritten = rewrite_preview_url(
                             preview_url, media_type="video"
                         )
@@ -2964,10 +3028,7 @@ class DownloadManager:
                                     content, headers, fallback_url=preview_url
                                 )
                                 if preview_ext in SUPPORTED_MEDIA_EXTENSIONS["images"]:
-                                    preview_path = os.path.join(
-                                        get_preview_dir(save_path),
-                                        os.path.splitext(os.path.basename(save_path))[0] + preview_ext,
-                                    )
+                                    preview_path = get_preview_path(save_path, preview_ext)
                                     with open(preview_path, "wb") as preview_file:
                                         preview_file.write(content)
                                     preview_downloaded = True
@@ -2992,10 +3053,7 @@ class DownloadManager:
                                         temp_file_handle.write(
                                             content if isinstance(content, bytes) else content.encode("utf-8")
                                         )
-                                    preview_path = os.path.join(
-                                        get_preview_dir(save_path),
-                                        os.path.splitext(os.path.basename(save_path))[0] + ".webp",
-                                    )
+                                    preview_path = get_preview_path(save_path, ".webp")
 
                                     optimized_data, _ = ExifUtils.optimize_image(
                                         image_data=temp_path,
@@ -3514,11 +3572,7 @@ class DownloadManager:
         extension = os.path.splitext(preview_path)[1] or ".webp"
 
         targets = [
-            os.path.join(
-                get_preview_dir(entry.file_path),
-                os.path.splitext(os.path.basename(entry.file_path))[0] + extension,
-            )
-            for entry in entries
+            get_preview_path(entry.file_path, extension) for entry in entries
         ]
 
         if not targets:

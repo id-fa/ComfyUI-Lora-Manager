@@ -1,5 +1,12 @@
 import { app } from "../../scripts/app.js";
 import { lmUrl } from "./base_path.js";
+import { openComfyUISettingsDialog } from "./comfy_settings_dialog.js";
+import {
+    applyLmAccent,
+    LM_THEME_ACCENT_DEFAULT,
+    LM_THEME_ACCENT_SETTING_ID,
+    renderLmAccentSetting,
+} from "./lm_theme.js";
 
 // ============================================================================
 // Setting IDs and Defaults
@@ -45,6 +52,22 @@ const STRENGTH_STEP_DEFAULT = 0.05;
 
 const LORA_ACTIVE_FILTERS_AUTOCOMPLETE_SETTING_ID = "loramanager.lora_active_filters_autocomplete";
 const LORA_ACTIVE_FILTERS_AUTOCOMPLETE_DEFAULT = false;
+
+const OPEN_COMFYUI_SETTINGS_MESSAGE = "lm:open-comfy-settings";
+const OPEN_COMFYUI_SETTINGS_QUERY = "lm_open_settings";
+const COMFYUI_SETTINGS_CHANNEL = "lm:comfyui-settings";
+const DISCOVER_COMFYUI_SETTINGS_MESSAGE = "lm:discover-comfyui-settings";
+const COMFYUI_SETTINGS_AVAILABLE_MESSAGE = "lm:comfyui-settings-available";
+
+// Node widget rows keep their own label preference. It is a ComfyUI setting
+// because it changes how a node renders, and it is deliberately independent of
+// the LoRA Manager browser's `model_name_display`: one governs cards you read
+// while browsing, the other names what a graph will load. Default is the file
+// name, so existing behavior does not change.
+const NODE_LORA_NAME_DISPLAY_SETTING_ID = "loramanager.node_lora_name_display";
+const NODE_LORA_NAME_DISPLAY_OPTION_FILE_NAME = "File Name";
+const NODE_LORA_NAME_DISPLAY_OPTION_MODEL_NAME = "Model Name";
+const NODE_LORA_NAME_DISPLAY_DEFAULT = "file_name";
 
 // ============================================================================
 // Helper Functions
@@ -453,6 +476,57 @@ const getLoraActiveFiltersAutocompletePreference = (() => {
     };
 })();
 
+// Listeners fired when the node label preference changes, so open graphs can
+// relabel their rows without waiting for a reload.
+const nodeLoraNameDisplayListeners = new Set();
+
+/**
+ * Register a callback fired when the node LoRA label preference changes.
+ * Returns an unsubscribe function.
+ */
+export function onNodeLoraNameDisplayChanged(callback) {
+    nodeLoraNameDisplayListeners.add(callback);
+    return () => {
+        nodeLoraNameDisplayListeners.delete(callback);
+    };
+}
+
+const notifyNodeLoraNameDisplayChanged = () => {
+    for (const listener of nodeLoraNameDisplayListeners) {
+        try {
+            listener();
+        } catch (error) {
+            console.warn("LoRA Manager: node LoRA label listener failed", error);
+        }
+    }
+};
+
+const getNodeLoraNameDisplayPreference = (() => {
+    let settingsUnavailableLogged = false;
+
+    return () => {
+        const settingManager = app?.extensionManager?.setting;
+        if (!settingManager || typeof settingManager.get !== "function") {
+            if (!settingsUnavailableLogged) {
+                console.warn("LoRA Manager: settings API unavailable, labelling node LoRA rows with file names.");
+                settingsUnavailableLogged = true;
+            }
+            return NODE_LORA_NAME_DISPLAY_DEFAULT;
+        }
+
+        try {
+            const value = settingManager.get(NODE_LORA_NAME_DISPLAY_SETTING_ID);
+            return value === NODE_LORA_NAME_DISPLAY_OPTION_MODEL_NAME ? "model_name" : NODE_LORA_NAME_DISPLAY_DEFAULT;
+        } catch (error) {
+            if (!settingsUnavailableLogged) {
+                console.warn("LoRA Manager: unable to read node LoRA label setting, labelling rows with file names.", error);
+                settingsUnavailableLogged = true;
+            }
+            return NODE_LORA_NAME_DISPLAY_DEFAULT;
+        }
+    };
+})();
+
 // ============================================================================
 // Register Extension with All Settings
 // ============================================================================
@@ -460,6 +534,16 @@ const getLoraActiveFiltersAutocompletePreference = (() => {
 app.registerExtension({
     name: "LoraManager.Settings",
     settings: [
+        {
+            id: LM_THEME_ACCENT_SETTING_ID,
+            name: "Widget accent color",
+            // Custom renderer: preset swatches plus a free colour picker.
+            type: renderLmAccentSetting,
+            defaultValue: LM_THEME_ACCENT_DEFAULT,
+            tooltip: "Highlight color for LoRA Manager nodes, their popovers and the LoRA quick panel (selection, focus ring, badges, accent labels). Surfaces and text always follow the ComfyUI palette, so only the accent is adjustable here; a mid-tone color reads best both as a fill and as a background tint. This does not affect the LoRA Manager browser page.",
+            category: ["LoRA Manager", "Appearance", "Widget accent color"],
+            onChange: (value) => applyLmAccent(value),
+        },
         {
             id: TRIGGER_WORD_WHEEL_SENSITIVITY_ID,
             name: "Trigger Word Wheel Sensitivity",
@@ -578,6 +662,21 @@ app.registerExtension({
             tooltip: "Step size for adjusting LoRA strength via arrow buttons or keyboard (default: 0.05)",
             category: ["LoRA Manager", "LoRA Widget", "Strength Step"],
         },
+        {
+            id: NODE_LORA_NAME_DISPLAY_SETTING_ID,
+            name: "Node LoRA label",
+            type: "combo",
+            options: [
+                NODE_LORA_NAME_DISPLAY_OPTION_FILE_NAME,
+                NODE_LORA_NAME_DISPLAY_OPTION_MODEL_NAME,
+            ],
+            defaultValue: NODE_LORA_NAME_DISPLAY_OPTION_FILE_NAME,
+            tooltip: "Label LoRA rows on the LoRA Loader, Stacker, Create Hook LoRA, Pool, Randomizer and WanVideo Lora Select nodes with the on-disk file name or with the library model name. Model names shared by several files gain a distinguishing prefix.",
+            category: ["LoRA Manager", "LoRA Widget", "Node LoRA Label"],
+            onChange: () => {
+                notifyNodeLoraNameDisplayChanged();
+            },
+        },
     ],
     async setup() {
         await loadWorkflowOptions();
@@ -646,6 +745,56 @@ app.registerExtension({
             }
         };
 
+        window.addEventListener("message", (event) => {
+            if (event.origin !== window.location.origin || event.data?.type !== OPEN_COMFYUI_SETTINGS_MESSAGE) {
+                return;
+            }
+            void openComfyUISettingsDialog();
+        });
+
+        const tabId = window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+        let lastActive = Date.now();
+        window.addEventListener("focus", () => {
+            lastActive = Date.now();
+        });
+        document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState === "visible") {
+                lastActive = Date.now();
+            }
+        });
+
+        if (typeof window.BroadcastChannel === "function") {
+            try {
+                const channel = new window.BroadcastChannel(COMFYUI_SETTINGS_CHANNEL);
+                channel.addEventListener("message", (event) => {
+                    const data = event.data;
+                    if (data?.type === DISCOVER_COMFYUI_SETTINGS_MESSAGE) {
+                        channel.postMessage({
+                            type: COMFYUI_SETTINGS_AVAILABLE_MESSAGE,
+                            requestId: data.requestId,
+                            tabId,
+                            lastActive,
+                        });
+                    } else if (data?.type === OPEN_COMFYUI_SETTINGS_MESSAGE && data.targetTabId === tabId) {
+                        try {
+                            window.focus();
+                        } catch (_) {
+                        }
+                        void openComfyUISettingsDialog();
+                    }
+                });
+            } catch (error) {
+                console.warn("LoRA Manager: Existing-tab settings navigation is unavailable.", error);
+            }
+        }
+
+        const currentUrl = new URL(window.location.href);
+        if (currentUrl.searchParams.get(OPEN_COMFYUI_SETTINGS_QUERY) === "1") {
+            currentUrl.searchParams.delete(OPEN_COMFYUI_SETTINGS_QUERY);
+            window.history.replaceState(window.history.state, "", `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`);
+            void openComfyUISettingsDialog();
+        }
+
         patchCommand();
     },
 });
@@ -655,6 +804,11 @@ app.registerExtension({
 // ============================================================================
 
 export {
+    OPEN_COMFYUI_SETTINGS_MESSAGE,
+    OPEN_COMFYUI_SETTINGS_QUERY,
+    COMFYUI_SETTINGS_CHANNEL,
+    DISCOVER_COMFYUI_SETTINGS_MESSAGE,
+    COMFYUI_SETTINGS_AVAILABLE_MESSAGE,
     PROMPT_TAG_AUTOCOMPLETE_SETTING_ID,
     LORA_ACTIVE_FILTERS_AUTOCOMPLETE_SETTING_ID,
     getWheelSensitivity,
@@ -668,5 +822,6 @@ export {
     getNewTabTemplatePreference,
     getStrengthStepPreference,
     getLoraActiveFiltersAutocompletePreference,
+    getNodeLoraNameDisplayPreference,
     setLoraManagerSettingValue,
 };

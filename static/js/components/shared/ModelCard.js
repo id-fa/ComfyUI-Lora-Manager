@@ -13,6 +13,7 @@ import { showDeleteModal } from '../../utils/modalUtils.js';
 import { copyWorkflowToClipboard, sendWorkflowToComfy } from '../../utils/workflowActions.js';
 import { translate } from '../../utils/i18nHelpers.js';
 import { eventManager } from '../../utils/EventManager.js';
+import { attachCardPreviewCycler } from './CardPreviewCycler.js';
 
 // Helper function to get display name based on settings
 function getDisplayName(model) {
@@ -340,6 +341,7 @@ async function showModelModalFromCard(card, modelType) {
     // Create model metadata object
     const modelMeta = {
         sha256: card.dataset.sha256,
+        hash_status: card.dataset.hash_status || '',
         autov3: card.dataset.autov3 || '',
         preview_url: getCardPreviewUrl(card),
         file_path: card.dataset.filepath,
@@ -433,6 +435,7 @@ function showExampleAccessModal(card, modelType) {
             // Get the model data from card dataset (works for both lora and checkpoint)
             const modelMeta = {
                 sha256: card.dataset.sha256,
+                hash_status: card.dataset.hash_status || '',
                 autov3: card.dataset.autov3 || '',
                 preview_url: getCardPreviewUrl(card),
                 file_path: card.dataset.filepath,
@@ -490,6 +493,8 @@ export function createModelCard(model, modelType) {
     // below, which ignore internal card drags via MODEL_CARD_DRAG_MIME_TYPE.
     card.draggable = true;
     card.dataset.sha256 = model.sha256;
+    // "pending" marks a lazy-hash model whose SHA256 has not been computed yet.
+    card.dataset.hash_status = model.hash_status || 'completed';
     card.dataset.autov3 = model.autov3 || '';
     card.dataset.filepath = model.file_path;
     card.dataset.name = model.model_name;
@@ -796,6 +801,9 @@ export function createModelCard(model, modelType) {
     const videoElement = card.querySelector('video');
     if (videoElement) {
         configureModelCardVideo(videoElement, autoplayOnHover);
+    } else {
+        // Static image previews cycle through example images on hover.
+        attachCardPreviewCycler(card, model);
     }
 
     // Dropping an image/video onto the card replaces the model preview via the

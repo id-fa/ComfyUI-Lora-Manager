@@ -262,7 +262,8 @@
                 "title": "כותרת מתכון",
                 "loraName": "שם קובץ LoRA",
                 "loraModel": "שם מודל LoRA",
-                "prompt": "פרומפט"
+                "prompt": "פרומפט",
+                "triggerWords": "מילות טריגר"
             }
         },
         "filter": {
@@ -384,10 +385,19 @@
             "copied": "נתיב ההגדרות הועתק ללוח העריכה: {{path}}",
             "clipboardFallback": "נתיב ההגדרות: {{path}}"
         },
+        "comfyuiNodes": {
+            "title": "הגדרות צמתים של ComfyUI",
+            "description": "הגדרות הקשורות לצמתים זמינות בהגדרות ComfyUI.",
+            "openButton": "פתח את הגדרות ComfyUI",
+            "modelNameDisplayLink": "תוויות הצמתים מוגדרות בנפרד בהגדרות צמתים של ComfyUI",
+            "openSucceeded": "הגדרות ComfyUI נפתחו.",
+            "openFailed": "לא ניתן היה לפתוח את הגדרות ComfyUI. קודם פתח את ComfyUI."
+        },
         "sections": {
             "contentFiltering": "סינון תוכן",
             "downloads": "הורדות",
             "videoSettings": "הגדרות וידאו",
+            "cardPreview": "תצוגה מקדימה של כרטיסים",
             "layoutSettings": "הגדרות פריסה",
             "licenseIcons": "סמלי רישיון",
             "misc": "שונות",
@@ -409,9 +419,33 @@
         "nav": {
             "general": "כללי",
             "interface": "ממשק",
+            "comfyuiNodes": "צמתי ComfyUI",
             "library": "ספרייה",
             "organization": "ארגון",
+            "about": "אודות",
             "modelPaths": "נתיבי מודלים"
+        },
+        "about": {
+            "environmentTitle": "סביבה",
+            "environmentDescription": "הגרסאות שבהן משתמשים LoRA Manager ו-ComfyUI.",
+            "copy": "העתק",
+            "appVersion": "LoRA Manager",
+            "comfyuiVersion": "ComfyUI",
+            "frontendVersion": "ComfyUI Frontend",
+            "pythonVersion": "Python",
+            "os": "מערכת הפעלה",
+            "browser": "דפדפן",
+            "hint": "כלול את המידע הזה בעת דיווח על בעיה.",
+            "unavailable": "לא זמין",
+            "copySuccess": "פרטי הסביבה הועתקו",
+            "copyFailed": "העתקת פרטי הסביבה נכשלה",
+            "linksTitle": "תמיכה וקישורים",
+            "links": {
+                "reportIssue": "דווח על בעיה",
+                "wiki": "ויקי התיעוד",
+                "github": "מאגר GitHub",
+                "discord": "הצטרף לדיסקורד"
+            }
         },
         "search": {
             "placeholder": "חיפוש בהגדרות...",
@@ -439,6 +473,12 @@
         "videoSettings": {
             "autoplayOnHover": "נגן וידאו אוטומטית בריחוף",
             "autoplayOnHoverHelp": "נגן תצוגות מקדימות של וידאו רק בעת ריחוף מעליהן"
+        },
+        "cardPreview": {
+            "cycleOnHover": "עבור בין תמונות דוגמה בריחוף",
+            "cycleOnHoverHelp": "בריחוף מעל תמונת התצוגה המקדימה של כרטיס, תמונות הדוגמה שלו מוצגות בזו אחר זו. ריחוף מעל הכותרת העליונה או התחתונה של הכרטיס אינו מתחיל את המעבר, כך שכפתורי הפעולה וההסברים הקופצים נשארים שמישים. תמונת התצוגה המקדימה שנבחרה נשארת ללא שינוי. תצוגות מקדימות של וידאו אינן מושפעות.",
+            "cycleInterval": "מרווח החלפה",
+            "cycleIntervalHelp": "הזמן בין החלפת תמונות דוגמה בעת ריחוף מעל כרטיס."
         },
         "autoOrganizeExclusions": {
             "label": "יוצא דופן של ארגון אוטומטי",
@@ -612,10 +652,6 @@
             "cardBlurAmountHelp": "כוונן את עוצמת הטשטוש של שכבת-העל בכותרת ובכותרות תחתונה בכרטיסי מודל ומתכונים (0 = ללא טשטוש, 20 = טשטוש מקסימלי)."
         },
         "folderSettings": {
-            "activeLibrary": "ספרייה פעילה (מיושן)",
-            "activeLibraryHelp": "החלפה בין הספריות המוגדרות לעדכן את תיקיות ברירת המחדל. שינוי הבחירה ירענן את הדף. מיושן: התמיכה בריבוי ספריות תוסר בגרסה קרובה. מספר תיקיות שורש בתוך ספרייה אחת עדיין נתמך במלואו.",
-            "loadingLibraries": "טוען ספריות...",
-            "noLibraries": "לא הוגדרו ספריות",
             "defaultLoraRoot": "תיקיית שורש LoRA",
             "defaultLoraRootHelp": "הגדר את ספריית השורש המוגדרת כברירת מחדל של LoRA להורדות, ייבוא והעברות",
             "defaultCheckpointRoot": "תיקיית שורש Checkpoint",
@@ -704,7 +740,16 @@
             "pathPlaceholder": "הזן נתיב...",
             "go": "עבור",
             "emptyFolder": "אין תתי-תיקיות",
-            "loadError": "טעינת התיקייה נכשלה"
+            "loadError": "טעינת התיקייה נכשלה",
+            "newFolder": "תיקייה חדשה",
+            "newFolderPlaceholder": "שם תיקייה",
+            "create": "צור",
+            "cancel": "ביטול",
+            "createError": "יצירת התיקייה נכשלה",
+            "nameRequired": "הזן שם תיקייה",
+            "nameInvalid": "שם התיקייה מכיל תווים לא חוקיים",
+            "alreadyExists": "תיקייה בשם זה כבר קיימת",
+            "permissionDenied": "אין הרשאה"
         },
         "pathValidation": {
             "valid": "הנתיב תקין",
@@ -716,6 +761,13 @@
         "priorityTags": {
             "title": "תגיות עדיפות",
             "description": "התאם את סדר העדיפות של התגיות עבור כל סוג מודל (לדוגמה: character, concept, style(toon|toon_style))",
+            "unsortedFallback": {
+                "label": "שליחת מודלים ללא התאמה לתגית עדיפות לתיקייה אחת",
+                "help": "מודלים שאין להם התאמה לתגית עדיפות מועברים לתיקייה אחת במקום לתיקייה שנבנית מ-{first_tag}. מודלים ללא תגיות אינם מושפעים. כבוי כברירת מחדל; תיקיות קיימות אינן משתנות עד שהמודל יאורגן מחדש.",
+                "folderLabel": "שם התיקייה",
+                "folderHelp": "משמש במקום {first_tag} כשאין התאמה לתגית עדיפות. עם התבנית המוגדרת כברירת מחדל {base_model}/{first_tag} התוצאה היא {base_model} ואחריו שם התיקייה. השאר ריק כדי לשמור על ההתנהגות הנוכחית.",
+                "folderPlaceholder": "unsorted"
+            },
             "placeholder": "character, concept, style(toon|toon_style)",
             "helpLinkLabel": "פתח עזרה בנושא תגיות עדיפות",
             "modelTypes": {
@@ -749,10 +801,12 @@
                 "customTemplate": "תבנית מותאמת אישית"
             },
             "customTemplatePlaceholder": "הזן תבנית מותאמת אישית (למשל, {base_model}/{author}/{first_tag})",
+            "workflowHint": "חל על הורדות workflow ועל ארגון אוטומטי בדף Workflows.",
             "modelTypes": {
                 "lora": "LoRA",
                 "checkpoint": "Checkpoint",
-                "embedding": "Embedding"
+                "embedding": "Embedding",
+                "workflow": "Workflow"
             },
             "baseModelPathMappings": "מיפוי נתיבי מודל בסיס",
             "baseModelPathMappingsHelp": "התאם אישית שמות תיקיות עבור מודלי בסיס ספציפיים (למשל, \"Flux.1 D\" → \"flux\")",
@@ -1769,6 +1823,54 @@
         }
     },
     "modals": {
+        "autoOrganizePreview": {
+            "title": "תצוגה מקדימה של ארגון אוטומטי",
+            "scopeSelected": "מודלים נבחרים",
+            "scopeAll": "כל המודלים",
+            "scope": "היקף: {scope} · {count} מודלים",
+            "previewNotice": "תצוגה מקדימה בלבד. לא הועברו קבצים ולא נוקו תיקיות.",
+            "emptyPreview": "אין מודלים זמינים לתצוגה מקדימה זו.",
+            "alreadyOrganized": "כל המודלים כבר נמצאים במיקום הנכון.",
+            "loadingTitle": "מחשב תצוגה מקדימה...",
+            "loadingMessage": "לא מתבצע שום שינוי בקבצים.",
+            "previewFailed": "התצוגה המקדימה נכשלה",
+            "retry": "נסה שוב",
+            "statWillMove": "יועברו",
+            "statSkipped": "דולגו",
+            "statIssues": "בעיות",
+            "issuesWarning": "צפויים {count} מודלים להיכשל; שאר המודלים עדיין יעובדו.",
+            "detailsLabel": "פרטי התצוגה המקדימה",
+            "movesTab": "העברות ({count})",
+            "skippedTab": "דולגו ({count})",
+            "issuesTab": "בעיות ({count})",
+            "searchPlaceholder": "חפש מודל או נתיב...",
+            "from": "מקור",
+            "to": "יעד",
+            "location": "מיקום",
+            "organizingWith": "ארגון לפי:",
+            "flatStructureRule": "מבנה שטוח (שורש הספרייה)",
+            "emptyMoves": "אין מודלים שצריך להעביר.",
+            "emptySkipped": "לא ידולגו מודלים.",
+            "emptyIssues": "אין בעיות לבדיקה.",
+            "emptySearch": "אין תוצאות שמתאימות לחיפוש שלך.",
+            "replanNote": "ההרצה מחשבת מחדש לפי מצב הספרייה העדכני, לכן התוצאות בפועל עשויות להיות שונות מתצוגה מקדימה זו.",
+            "copyReport": "העתק דוח",
+            "refresh": "רענן תצוגה מקדימה",
+            "apply": "ארגן ({count})",
+            "noMoves": "אין העברות ליישום",
+            "pageStatus": "{from}–{to} מתוך {total}",
+            "reasons": {
+                "already_organized": "כבר מאורגן",
+                "no_file_path": "אין נתיב קובץ",
+                "outside_roots": "מחוץ לשורשי הספרייה",
+                "missing_metadata": "חסרים מטא-נתונים",
+                "path_too_long": "נתיב היעד ארוך מדי",
+                "target_exists": "היעד כבר קיים",
+                "planned_collision": "התנגשות בהעברות מתוכננות",
+                "move_failed": "ההעברה נכשלה",
+                "error": "שגיאה"
+            }
+        },
         "exclude": {
             "confirm": "החרג"
         },
@@ -2069,6 +2171,8 @@
                 "sendToWorkflow": "שלח ל-ComfyUI",
                 "sendToWorkflowText": "שלח ל-ComfyUI",
                 "copyHash": "העתק hash",
+                "calculateHash": "חשב hash",
+                "retryHash": "נסה שוב",
                 "copyCivitaiId": "העתק מזהה Civitai",
                 "civitaiIdCopied": "מזהה Civitai הועתק ללוח העריכה",
                 "deleteModelWithShortcut": "מחק מודל (Del)"
@@ -2095,6 +2199,10 @@
                 "baseModel": "מודל בסיס",
                 "size": "גודל",
                 "hashes": "hashes",
+                "hashPending": "טרם חושב",
+                "hashCalculating": "מחושב...",
+                "hashFailed": "החישוב נכשל",
+                "hashPendingHint": "ה-hash של SHA256 טרם חושב. במודלים גדולים ה-hash מחושב לפי דרישה כדי לשמור על סריקה מהירה.",
                 "civitaiModelId": "מזהה מודל",
                 "civitaiVersionId": "מזהה גרסה",
                 "unknown": "לא ידוע",
@@ -2105,7 +2213,35 @@
                 "aboutThisVersion": "אודות גרסה זו",
                 "baseModelSearchPlaceholder": "חפש מודל בסיס...",
                 "baseModelSuggested": "מוצע",
-                "baseModelNoMatch": "אין מודלי בסיס תואמים"
+                "baseModelNoMatch": "אין מודלי בסיס תואמים",
+                "creator": "יוצר",
+                "creatorAdd": "הוסף יוצר",
+                "creatorEdit": "ערוך יוצר",
+                "creatorSearchPlaceholder": "חפש יוצרים או הקלד שם חדש...",
+                "creatorLibraryHeader": "יוצרים בספרייה שלך",
+                "creatorMatchingHeader": "יוצרים מתאימים",
+                "creatorLibraryCount": "{count} בספרייה",
+                "creatorCurrent": "נוכחי: {name}",
+                "creatorCreate": "צור «{name}»",
+                "creatorCreateAnnounce": "לחץ Enter כדי ליצור את {name}.",
+                "creatorNew": "יוצר חדש",
+                "creatorNoMatch": "אין יוצר קיים שמתאים ל«{name}»",
+                "creatorEmptyLibrary": "עדיין אין יוצרים בספרייה שלך. הקלד שם כדי להוסיף את הראשון.",
+                "creatorModelCount": "{count} מודלים",
+                "creatorModelCountOne": "{count} מודל",
+                "creatorMatchCount": "{count} התאמות",
+                "creatorMatchCountOne": "{count} התאמה",
+                "creatorShowing": "מציג {shown} מתוך {total} — המשך להקליד כדי לצמצם",
+                "creatorRemove": "הסר יוצר",
+                "creatorManual": "ידני",
+                "creatorManualHint": "נוסף ידנית. רענון מטא-נתונים לא ידרוס אותו.",
+                "creatorSaved": "היוצר עודכן",
+                "creatorRemoved": "היוצר הוסר",
+                "creatorSaveFailed": "לא ניתן היה לעדכן את היוצר. נסה שוב.",
+                "creatorLoadFailed": "לא ניתן היה לטעון יוצרים. עדיין אפשר להקליד שם חדש.",
+                "creatorTooLong": "שם היוצר ארוך מדי (עד 64 תווים)",
+                "creatorLoading": "טוען יוצרים...",
+                "creatorKeyboardHint": "↑↓ ניווט · ↵ בחירה · esc ביטול"
             },
             "notes": {
                 "saved": "הערות נשמרו בהצלחה",
@@ -2153,6 +2289,7 @@
             "description": {
                 "noDescription": "אין תיאור מודל זמין",
                 "failedToLoad": "טעינת תיאור המודל נכשלה",
+                "offline": "התיאור נשמר יחד עם קובץ המודל, שנמצא בדיסק לא זמין. חבר מחדש את הדיסק כדי לקרוא אותו.",
                 "editTitle": "ערוך תיאור מודל",
                 "validation": {
                     "cannotBeEmpty": "התיאור לא יכול להיות ריק"
@@ -2184,6 +2321,10 @@
                 "noDerivatives": "אין שיתוף מיזוגים",
                 "noReLicense": "נדרשות אותן הרשאות",
                 "restrictionsLabel": "הגבלות רישיון"
+            },
+            "notices": {
+                "offline": "הדיסק שמכיל את המודל הזה אינו זמין. מוצג מידע שמור במטמון — פעולות קובץ ועריכות לא יהיו זמינות עד לחיבור מחדש.",
+                "partial": "לא ניתן היה לקרוא את קובץ מטא-הנתונים של המודל. מוצג מידע שמור במטמון — ייתכן שהתיאור, תמונות לדוגמה ותמונת הפרופיל של היוצר לא יהיו זמינים."
             },
             "loading": {
                 "exampleImages": "טוען תמונות דוגמה...",
@@ -2527,12 +2668,20 @@
         "title": "עזרה ומדריכים",
         "tabs": {
             "gettingStarted": "תחילת עבודה",
-            "updateVlogs": "בלוגי וידאו של עדכונים",
+            "updates": "[TODO: Translate] Updates",
             "documentation": "תיעוד",
             "shortcuts": "קיצורי דרך"
         },
         "gettingStarted": {
             "title": "תחילת עבודה עם מנהל LoRA",
+            "stepsTitle": "[TODO: Translate] First steps",
+            "steps": {
+                "configure": "[TODO: Translate] Configure your model folders and add a CivitAI API key if you plan to download models.",
+                "find": "[TODO: Translate] Find a model by browsing folders or searching names, tags, and trigger words.",
+                "send": "[TODO: Translate] Use Send to ComfyUI or copy LoRA syntax into a compatible LoRA Manager node.",
+                "refresh": "[TODO: Translate] Use Refresh after changing files outside LoRA Manager; rebuild the cache only for cache inconsistencies."
+            },
+            "readGuide": "[TODO: Translate] Open the Getting Started guide",
             "replayTutorial": "הפעל את המדריך מחדש"
         },
         "shortcuts": {
@@ -2557,7 +2706,6 @@
                 "closeModal": "סגור חלון / פאנל",
                 "openShortcuts": "פתח את פאנל קיצורי הדרך הזה",
                 "refresh": "רענן את רשימת המודלים",
-                "fetchMetadata": "אחזר מטא-נתונים מ-CivitAI (דפי מודלים בלבד)",
                 "downloadModel": "הורד מודל (דפי מודלים בלבד)",
                 "toggleBulkMode": "הפעל/כבה מצב בכמות גדולה",
                 "selectAll": "בחר את כל המודלים הגלויים",
@@ -2579,17 +2727,26 @@
             "title": "עדכונים אחרונים",
             "watchOnYouTube": "צפה ביוטיוב",
             "playlistTitle": "פלייליסט עדכוני מנהל LoRA",
-            "playlistDescription": "צפה בכל סרטוני העדכונים המציגים את התכונות והשיפורים האחרונים."
+            "playlistDescription": "צפה בכל סרטוני העדכונים המציגים את התכונות והשיפורים האחרונים.",
+            "releaseNotes": "[TODO: Translate] Read release notes on GitHub"
         },
         "documentation": {
             "title": "תיעוד",
-            "general": "כללי",
+            "startSupport": "[TODO: Translate] Start & Support",
+            "workingWithAssets": "[TODO: Translate] Working with Assets",
+            "integrationConfiguration": "[TODO: Translate] Integration & Configuration",
+            "gettingStarted": "[TODO: Translate] Getting Started",
+            "faq": "[TODO: Translate] FAQ",
             "troubleshooting": "פתרון בעיות",
-            "modelManagement": "ניהול מודלים",
+            "modelLibrary": "[TODO: Translate] Model Library",
+            "downloadsOrganization": "[TODO: Translate] Downloading and Organizing Models",
             "recipes": "מתכונים",
-            "settings": "הגדרות ותצורה",
-            "extensions": "הרחבות",
-            "newBadge": "חדש"
+            "workflowLibrary": "[TODO: Translate] Workflow Library",
+            "comfyuiIntegration": "[TODO: Translate] ComfyUI Integration",
+            "configuration": "[TODO: Translate] Configuration",
+            "loraSyntax": "[TODO: Translate] LoRA Syntax and Duplicate Filenames",
+            "browserExtension": "[TODO: Translate] LM Civitai Extension",
+            "browseAll": "[TODO: Translate] Browse all documentation"
         },
         "newContentBadge": "חדש"
     },
@@ -2716,6 +2873,7 @@
             "downloadSkippedByBaseModel": "ההורדה דולגה כי מודל הבסיס {baseModel} מוחרג",
             "autoOrganizeSuccess": "הארגון האוטומטי הושלם בהצלחה עבור {count} {type}",
             "autoOrganizePartialSuccess": "הארגון האוטומטי הושלם עם {success} שהועברו, {failures} שנכשלו מתוך {total} מודלים",
+            "autoOrganizeProgressUnavailable": "הארגון האוטומטי הושלם עם {success} שהועברו, {failures} שנכשלו מתוך {total} מודלים; התקדמות בזמן אמת לא הייתה זמינה",
             "autoOrganizeFailed": "הארגון האוטומטי נכשל: {error}",
             "filenameTemplateSuccess": "תבנית שם הקובץ הוחלה בהצלחה עבור {count} {type}",
             "filenameTemplatePartialSuccess": "החלת תבנית שם הקובץ הושלמה עם {success} ששונה שמם, {failures} שנכשלו מתוך {total} מודלים",
@@ -2894,8 +3052,6 @@
             "compactModeToggled": "מצב קומפקטי {state}",
             "settingSaveFailed": "שמירת ההגדרה נכשלה: {message}",
             "displayDensitySet": "צפיפות התצוגה הוגדרה ל-{density}",
-            "libraryLoadFailed": "לא ניתן היה לטעון את הספריות: {message}",
-            "libraryActivateFailed": "לא ניתן היה להפעיל את הספרייה: {message}",
             "languageChangeFailed": "שינוי השפה נכשל: {message}",
             "cacheCleared": "קבצי המטמון נוקו בהצלחה. המטמון ייבנה מחדש בפעולה הבאה.",
             "cacheClearFailed": "ניקוי המטמון נכשל: {error}",
@@ -3028,6 +3184,8 @@
             "refreshFailed": "{action} של {type}s נכשל",
             "metadataRefreshed": "המטא-נתונים רועננה בהצלחה",
             "metadataRefreshFailed": "רענון המטא-נתונים נכשל: {message}",
+            "hashCalculated": "ה-hash של SHA256 חושב בהצלחה",
+            "hashCalculationFailed": "חישוב ה-hash נכשל: {message}",
             "metadataUpdateComplete": "עדכון המטא-נתונים הושלם",
             "operationCancelled": "הפעולה בוטלה על ידי המשתמש",
             "operationCancelledPartial": "הפעולה בוטלה. {success} פריטים עובדו.",

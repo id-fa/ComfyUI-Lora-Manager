@@ -141,6 +141,122 @@ class TestSearchStrategyCivitaiIds:
         assert strategy.apply([item], "12345", HASH_ONLY_OPTIONS) == []
 
 
+class TestSearchStrategyTriggerWords:
+    """Trigger-word search matches declared words, whatever their provenance."""
+
+    OPTIONS = {
+        "filename": False,
+        "modelname": False,
+        "tags": False,
+        "creator": False,
+        "trigger_words": True,
+    }
+
+    def test_disabled_by_default(self, strategy):
+        item = make_item(civitai={"trainedWords": ["anime style"]})
+        assert strategy.apply([item], "anime", {}) == []
+
+    def test_matches_substring_case_insensitively(self, strategy):
+        item = make_item(civitai={"trainedWords": ["Anime Style", "1girl"]})
+        assert strategy.apply([item], "ANIME", self.OPTIONS) == [item]
+        assert strategy.apply([item], "style", self.OPTIONS) == [item]
+
+    def test_matches_multi_word_phrase(self, strategy):
+        item = make_item(civitai={"trainedWords": ["masterpiece, best quality"]})
+        assert strategy.apply([item], "best quality", self.OPTIONS) == [item]
+        assert strategy.apply([item], "masterpiece", self.OPTIONS) == [item]
+
+    def test_non_matching_word_is_ignored(self, strategy):
+        item = make_item(civitai={"trainedWords": ["anime style"]})
+        assert strategy.apply([item], "cyberpunk", self.OPTIONS) == []
+
+    @pytest.mark.parametrize("civitai", [None, {}, {"trainedWords": None}])
+    def test_missing_trigger_words_do_not_match(self, strategy, civitai):
+        item = make_item(civitai=civitai)
+        assert strategy.apply([item], "anime", self.OPTIONS) == []
+
+    def test_string_trained_words_are_treated_as_one_word(self, strategy):
+        # Older sidecars may store a single string instead of a list; iterating
+        # it per character would make the multi-character query miss.
+        item = make_item(civitai={"trainedWords": "anime style"})
+        assert strategy.apply([item], "anime", self.OPTIONS) == [item]
+        assert strategy.apply([item], "nime st", self.OPTIONS) == [item]
+
+    def test_non_string_entries_are_skipped(self, strategy):
+        item = make_item(civitai={"trainedWords": [None, 42, "anime style"]})
+        assert strategy.apply([item], "anime", self.OPTIONS) == [item]
+        assert strategy.apply([item], "42", self.OPTIONS) == []
+
+    def test_ai_enriched_huggingface_model_matches(self, strategy):
+        # AI enrichment writes civitai.trainedWords for non-CivitAI sources too.
+        item = make_item(
+            from_civitai=False,
+            source_platform="huggingface",
+            civitai={"trainedWords": ["my style"]},
+        )
+        assert strategy.apply([item], "my style", self.OPTIONS) == [item]
+
+    def test_fuzzy_mode_stays_substring_only(self, strategy):
+        item = make_item(civitai={"trainedWords": ["anime style"]})
+        # A typo is not worth running the fuzzy matcher over every trigger word.
+        assert strategy.apply([item], "animee", self.OPTIONS, fuzzy=True) == []
+        assert strategy.apply([item], "anime", self.OPTIONS, fuzzy=True) == [item]
+
+
+class TestSearchStrategyFileNames:
+    """Filenames pasted from the file manager work despite the extension."""
+
+    OPTIONS = {
+        "filename": True,
+        "modelname": False,
+        "tags": False,
+        "creator": False,
+    }
+
+    def test_pasted_safetensors_filename_matches_stored_stem(self, strategy):
+        item = make_item(file_name="my_lora_v1", model_name="My LoRA")
+        assert strategy.apply([item], "my_lora_v1.safetensors", self.OPTIONS) == [item]
+
+    @pytest.mark.parametrize(
+        "extension",
+        [".safetensors", ".ckpt", ".pt", ".pth", ".bin", ".sft", ".gguf"],
+    )
+    def test_recognized_model_extensions_are_stripped(self, strategy, extension):
+        item = make_item(file_name="my_lora_v1")
+        assert strategy.apply([item], f"my_lora_v1{extension}", self.OPTIONS) == [item]
+
+    def test_extension_case_is_ignored(self, strategy):
+        item = make_item(file_name="my_lora_v1")
+        assert strategy.apply([item], "my_lora_v1.SafeTensors", self.OPTIONS) == [item]
+
+    def test_query_without_extension_still_matches(self, strategy):
+        item = make_item(file_name="my_lora_v1")
+        assert strategy.apply([item], "my_lora_v1", self.OPTIONS) == [item]
+
+    def test_pasted_filename_with_spaces_matches(self, strategy):
+        # Regression for the reported search: a filename copied from the file
+        # manager keeps its spaces and its .safetensors suffix.
+        item = make_item(
+            file_name="12 [CharacterAnima Base] Helen Parr Style-Crisisbeat"
+        )
+        query = "12 [CharacterAnima Base] Helen Parr Style-Crisisbeat.safetensors"
+        assert strategy.apply([item], query, self.OPTIONS) == [item]
+
+    def test_version_dot_is_not_treated_as_an_extension(self, strategy):
+        item = make_item(file_name="style_v1.5")
+        assert strategy.apply([item], "v1.5", self.OPTIONS) == [item]
+
+    def test_extension_only_query_does_not_match_everything(self, strategy):
+        items = [make_item(file_name="one"), make_item(file_name="two")]
+        assert strategy.apply(items, ".safetensors", self.OPTIONS) == []
+
+    def test_surrounding_whitespace_is_ignored(self, strategy):
+        item = make_item(file_name="my_lora_v1")
+        assert strategy.apply([item], "  my_lora_v1.safetensors  ", self.OPTIONS) == [
+            item
+        ]
+
+
 class TestFormatResponseAutov3:
     """format_response should pass the autov3 field through unchanged."""
 

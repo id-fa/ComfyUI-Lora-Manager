@@ -1579,7 +1579,7 @@ to { transform: rotate(360deg);
   transform: translateY(4px);
 }
 
-.lora-randomizer-widget[data-v-a93241f8] {
+.lora-randomizer-widget[data-v-54f2f3a9] {
   padding: 6px;
   /* Let the node surface show through; only inner controls are painted. */
   background: transparent;
@@ -2123,14 +2123,14 @@ to { transform: rotate(360deg);
   padding: 20px 0;
 }
 
-.autocomplete-text-widget[data-v-a0c1830b] {
+.autocomplete-text-widget[data-v-ba49c841] {
   background: transparent;
   height: 100%;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
 }
-.input-wrapper[data-v-a0c1830b] {
+.input-wrapper[data-v-ba49c841] {
   position: relative;
   flex: 1;
   display: flex;
@@ -2140,7 +2140,7 @@ to { transform: rotate(360deg);
 /* Theme tokens (--lm-*) come from the widget container, which ComfyUI's
    renderer switches between the canvas widget palette and the Vue node
    widget palette. Text size matches ComfyUI's own textarea in both modes. */
-.text-input[data-v-a0c1830b] {
+.text-input[data-v-ba49c841] {
   flex: 1;
   width: 100%;
   background-color: var(--lm-surface);
@@ -2160,18 +2160,18 @@ to { transform: rotate(360deg);
 
 /* Vue DOM mode: same surface/foreground as the built-in WidgetTextarea,
    only the box metrics differ. */
-.text-input.vue-dom-mode[data-v-a0c1830b] {
+.text-input.vue-dom-mode[data-v-ba49c841] {
   padding: 8px 12px 30px 12px;  /* Reserve bottom space for clear button */
   margin: 0 0 4px;
   border-radius: 6px;  /* matches ComfyUI's rounded-md textarea */
   font-family: inherit;
 }
-.text-input[data-v-a0c1830b]:focus {
+.text-input[data-v-ba49c841]:focus {
   outline: none;
 }
 
 /* Clear button styles */
-.clear-button[data-v-a0c1830b] {
+.clear-button[data-v-ba49c841] {
   position: absolute;
   right: calc(6px + var(--lm-vscrollbar-width, 0px));
   bottom: 6px;  /* Changed from top to bottom */
@@ -2194,28 +2194,28 @@ to { transform: rotate(360deg);
 }
 
 /* Show clear button when hovering over input wrapper */
-.input-wrapper:hover .clear-button[data-v-a0c1830b] {
+.input-wrapper:hover .clear-button[data-v-ba49c841] {
   opacity: 0.7;
   pointer-events: auto;
 }
-.clear-button[data-v-a0c1830b]:hover {
+.clear-button[data-v-ba49c841]:hover {
   opacity: 1;
   background: var(--lm-danger-soft);
   color: var(--lm-danger-text);
 }
-.clear-button svg[data-v-a0c1830b] {
+.clear-button svg[data-v-ba49c841] {
   width: 12px;
   height: 12px;
 }
 
 /* Vue DOM mode adjustments for clear button */
-.text-input.vue-dom-mode ~ .clear-button[data-v-a0c1830b] {
+.text-input.vue-dom-mode ~ .clear-button[data-v-ba49c841] {
   right: calc(8px + var(--lm-vscrollbar-width, 0px));
   bottom: 10px;  /* Changed from top to bottom, adjusted for Vue DOM padding */
   width: 20px;
   height: 20px;
 }
-.text-input.vue-dom-mode ~ .clear-button svg[data-v-a0c1830b] {
+.text-input.vue-dom-mode ~ .clear-button svg[data-v-ba49c841] {
   width: 14px;
   height: 14px;
 }
@@ -13490,6 +13490,10 @@ function useLoraRandomizerState(widget) {
       nextSeed.value = Math.floor(Math.random() * 2147483647);
     }
   };
+  const resetSeeds = () => {
+    executionSeed.value = null;
+    nextSeed.value = null;
+  };
   const restoreFromConfig = (config) => {
     isRestoring = true;
     try {
@@ -13620,7 +13624,8 @@ function useLoraRandomizerState(widget) {
     rollLoras,
     useLastUsed,
     generateNewSeed,
-    initializeNextSeed
+    initializeNextSeed,
+    resetSeeds
   };
 }
 const _sfc_main$6 = /* @__PURE__ */ defineComponent({
@@ -13650,6 +13655,11 @@ const _sfc_main$6 = /* @__PURE__ */ defineComponent({
         (lora, i2) => lora.name === sortedB[i2].name && lora.strength === sortedB[i2].strength && lora.clipStrength === sortedB[i2].clipStrength
       );
     };
+    const resetSeedChain = () => {
+      state.resetSeeds();
+      delete props.widget[HAS_EXECUTED];
+      props.widget.value = state.buildConfig();
+    };
     const handleGenerateFixed = async () => {
       var _a2, _b, _c;
       try {
@@ -13662,6 +13672,7 @@ const _sfc_main$6 = /* @__PURE__ */ defineComponent({
           currentLoras.value = randomLoras;
         }
         state.rollMode.value = "fixed";
+        resetSeedChain();
       } catch (error) {
         console.error("[LoraRandomizerWidget] Error generating fixed LoRAs:", error);
         alert("Failed to generate LoRAs: " + error.message);
@@ -13679,6 +13690,7 @@ const _sfc_main$6 = /* @__PURE__ */ defineComponent({
           currentLoras.value = randomLoras;
         }
         state.rollMode.value = "always";
+        resetSeedChain();
       } catch (error) {
         console.error("[LoraRandomizerWidget] Error generating random LoRAs:", error);
         alert("Failed to generate LoRAs: " + error.message);
@@ -13694,6 +13706,7 @@ const _sfc_main$6 = /* @__PURE__ */ defineComponent({
           currentLoras.value = lastUsedLoras;
         }
         state.rollMode.value = "fixed";
+        resetSeedChain();
       }
     };
     const onWheel = (event) => {
@@ -13861,7 +13874,7 @@ const _sfc_main$6 = /* @__PURE__ */ defineComponent({
     };
   }
 });
-const LoraRandomizerWidget = /* @__PURE__ */ _export_sfc(_sfc_main$6, [["__scopeId", "data-v-a93241f8"]]);
+const LoraRandomizerWidget = /* @__PURE__ */ _export_sfc(_sfc_main$6, [["__scopeId", "data-v-54f2f3a9"]]);
 const _hoisted_1$4 = { class: "cycler-settings" };
 const _hoisted_2$4 = { class: "setting-section progress-section" };
 const _hoisted_3$3 = { class: "progress-label" };
@@ -15220,7 +15233,7 @@ const _sfc_main$1 = /* @__PURE__ */ defineComponent({
     useAutocomplete(
       textareaRef,
       props.modelType ?? "loras",
-      { showPreview: props.showPreview ?? true }
+      { showPreview: props.showPreview ?? true, node: props.node }
     );
     const updateHasTextState = () => {
       hasText.value = textareaRef.value ? textareaRef.value.value.length > 0 : false;
@@ -15397,7 +15410,7 @@ const _sfc_main$1 = /* @__PURE__ */ defineComponent({
     };
   }
 });
-const AutocompleteTextWidget = /* @__PURE__ */ _export_sfc(_sfc_main$1, [["__scopeId", "data-v-a0c1830b"]]);
+const AutocompleteTextWidget = /* @__PURE__ */ _export_sfc(_sfc_main$1, [["__scopeId", "data-v-ba49c841"]]);
 const _hoisted_1 = { class: "lora-info-tabs" };
 const _hoisted_2 = { class: "tab-content notes-tab" };
 const _hoisted_3 = { class: "info-field" };
@@ -15738,6 +15751,13 @@ function createVueWidgetCleanup(vueApp, onCleanup) {
     onCleanup == null ? void 0 : onCleanup();
   };
 }
+function getComfyUIBasePath() {
+  const { pathname } = window.location;
+  return pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+}
+function lmUrl(path) {
+  return `${getComfyUIBasePath()}${path}`;
+}
 let _loraSyntaxFormatCache = null;
 let _loraSyntaxFormatRefreshPromise = null;
 async function _fetchLoraSyntaxFormat() {
@@ -15852,12 +15872,18 @@ function stripAutocompleteMetadataFromPromptResult(result) {
   }
   return result;
 }
-function getComfyUIBasePath() {
-  const { pathname } = window.location;
-  return pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+const registryState = globalThis.__lmLoraNodeAdapterRegistry ?? {
+  adaptersByClass: /* @__PURE__ */ new Map(),
+  changeListeners: /* @__PURE__ */ new Set()
+};
+globalThis.__lmLoraNodeAdapterRegistry = registryState;
+const { adaptersByClass, changeListeners } = registryState;
+function getNodeClass(nodeOrClass) {
+  return typeof nodeOrClass === "string" ? nodeOrClass : nodeOrClass == null ? void 0 : nodeOrClass.comfyClass;
 }
-function lmUrl(path) {
-  return `${getComfyUIBasePath()}${path}`;
+function getLoraNodeAdapter(nodeOrClass) {
+  const nodeClass = getNodeClass(nodeOrClass);
+  return nodeClass ? adaptersByClass.get(nodeClass) ?? null : null;
 }
 const ROOT_GRAPH_ID = "root";
 const LORA_PROVIDER_NODE_TYPES$1 = [
@@ -16005,38 +16031,65 @@ function getConnectedInputLoraChainNodes(node) {
       continue;
     }
     const sourceNode = (_b = (_a2 = node.graph) == null ? void 0 : _a2.getNodeById) == null ? void 0 : _b.call(_a2, link.origin_id);
-    if (sourceNode && isLoraChainNode(sourceNode.comfyClass)) {
+    if (sourceNode && (isLoraChainNode(sourceNode.comfyClass) || getLoraNodeAdapter(sourceNode))) {
       connectedNodes.push(sourceNode);
     }
   }
   return connectedNodes;
 }
 function getConnectedTriggerToggleNodes(node) {
-  var _a2, _b, _c;
-  const connectedNodes = [];
-  if (!(node == null ? void 0 : node.outputs)) {
-    return connectedNodes;
-  }
-  for (const output of node.outputs) {
-    if (!((_a2 = output == null ? void 0 : output.links) == null ? void 0 : _a2.length)) {
-      continue;
+  const connectedNodes = /* @__PURE__ */ new Set();
+  const visited = /* @__PURE__ */ new Set();
+  function visit(currentNode) {
+    var _a2, _b;
+    if (!currentNode || visited.has(currentNode)) {
+      return;
     }
-    for (const linkId of output.links) {
-      const link = getLinkFromGraph(node.graph, linkId);
-      if (!link) {
-        continue;
-      }
-      const targetNode = (_c = (_b = node.graph) == null ? void 0 : _b.getNodeById) == null ? void 0 : _c.call(_b, link.target_id);
-      if (targetNode && targetNode.comfyClass === "TriggerWord Toggle (LoraManager)") {
-        connectedNodes.push(targetNode);
+    visited.add(currentNode);
+    for (const output of currentNode.outputs ?? []) {
+      for (const linkId of (output == null ? void 0 : output.links) ?? []) {
+        const link = getLinkFromGraph(currentNode.graph, linkId);
+        if (!link) {
+          continue;
+        }
+        const targetNode = (_b = (_a2 = currentNode.graph) == null ? void 0 : _a2.getNodeById) == null ? void 0 : _b.call(_a2, link.target_id);
+        if ((targetNode == null ? void 0 : targetNode.comfyClass) === "TriggerWord Toggle (LoraManager)") {
+          connectedNodes.add(targetNode);
+        } else if ((targetNode == null ? void 0 : targetNode.comfyClass) === "LoRA Trigger Words (LoraManager)") {
+          visit(targetNode);
+        }
       }
     }
   }
-  return connectedNodes;
+  visit(node);
+  return Array.from(connectedNodes);
 }
 function getActiveLorasFromNode(node) {
   var _a2, _b;
   const activeLoraNames = /* @__PURE__ */ new Set();
+  const adapter = getLoraNodeAdapter(node);
+  if (adapter == null ? void 0 : adapter.getActiveLoraNames) {
+    try {
+      const names = adapter.getActiveLoraNames(node);
+      if (names == null) {
+        return activeLoraNames;
+      }
+      if (typeof names === "string" || typeof (names == null ? void 0 : names[Symbol.iterator]) !== "function") {
+        throw new TypeError("getActiveLoraNames must return an iterable of names");
+      }
+      for (const name of names) {
+        if (typeof name === "string" && name) {
+          activeLoraNames.add(name);
+        }
+      }
+    } catch (error) {
+      console.error(
+        `LoRA Manager: adapter ${adapter.id} failed to read active LoRAs`,
+        error
+      );
+    }
+    return activeLoraNames;
+  }
   if (node.comfyClass === "Lora Cycler (LoraManager)") {
     const cyclerWidget = (_a2 = node.widgets) == null ? void 0 : _a2.find((w2) => w2.name === "cycler_config");
     if ((_b = cyclerWidget == null ? void 0 : cyclerWidget.value) == null ? void 0 : _b.current_lora_filename) {
@@ -16295,6 +16348,7 @@ const LORA_INFO_WIDGET_MIN_WIDTH = 300;
 const LORA_INFO_WIDGET_MIN_HEIGHT = 200;
 const AUTOCOMPLETE_TEXT_WIDGET_MIN_HEIGHT = 60;
 const AUTOCOMPLETE_TEXT_WIDGET_MAX_HEIGHT = 100;
+const AUTOCOMPLETE_TEXT_WIDGET_CANVAS_GAP = 8;
 const AUTOCOMPLETE_TEXT_MIN_WIDTH_DEFAULT = 400;
 const AUTOCOMPLETE_TEXT_MIN_HEIGHT_DEFAULT = 300;
 const AUTOCOMPLETE_METADATA_VERSION = 1;
@@ -16730,8 +16784,9 @@ function applyAutocompleteTextLayoutFix(widget, _container, isVueMode) {
     widget.computeLayoutSize = void 0;
     widget.computeSize = (width) => [width ?? 200, AUTOCOMPLETE_TEXT_WIDGET_MAX_HEIGHT - 4];
   } else {
-    delete widget.computeLayoutSize;
-    delete widget.computeSize;
+    const layoutHeight = AUTOCOMPLETE_TEXT_WIDGET_MIN_HEIGHT + AUTOCOMPLETE_TEXT_WIDGET_CANVAS_GAP;
+    widget.computeLayoutSize = void 0;
+    widget.computeSize = (width) => [width ?? 200, layoutHeight - 4];
   }
 }
 const initVueDomModeListener = () => {

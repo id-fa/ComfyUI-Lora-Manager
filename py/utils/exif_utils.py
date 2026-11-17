@@ -4,7 +4,7 @@ import logging
 import os
 import struct
 from io import BytesIO
-from typing import Any, Optional, Tuple, cast
+from typing import Any, Optional, Tuple, Union, cast
 
 import piexif  # pyright: ignore[reportMissingTypeStubs]
 from PIL import Image, PngImagePlugin
@@ -162,17 +162,23 @@ class ExifUtils:
         return str(value)
 
     @staticmethod
-    def load_structured_metadata(image_path: str) -> dict[str, Optional[str]]:
+    def load_structured_metadata(
+        image_path: Union[str, bytes]
+    ) -> dict[str, Optional[str]]:
         """Public wrapper for the structured-metadata reader.
 
-        Returns a dict with ``parameters``/``prompt``/``workflow``/``comment``
-        keys (values may be None). May raise on unreadable images; callers
-        that treat metadata as optional should catch exceptions.
+        Accepts a filesystem path or the image's raw bytes (used for image
+        members read out of an archive without writing them to disk). Returns
+        a dict with ``parameters``/``prompt``/``workflow``/``comment`` keys
+        (values may be None). May raise on unreadable images; callers that
+        treat metadata as optional should catch exceptions.
         """
         return ExifUtils._load_structured_metadata(image_path)
 
     @staticmethod
-    def _load_structured_metadata(image_path: str) -> dict[str, Optional[str]]:
+    def _load_structured_metadata(
+        image_path: Union[str, bytes]
+    ) -> dict[str, Optional[str]]:
         metadata: dict[str, Optional[str]] = {
             "parameters": None,
             "prompt": None,
@@ -180,13 +186,19 @@ class ExifUtils:
             "comment": None,
         }
 
-        ext = os.path.splitext(image_path)[1].lower()
-        if ext in ('.avif', '.jxl'):
-            brotli_meta = ExifUtils._extract_isobmff_brotli(image_path)
-            if brotli_meta:
-                return brotli_meta
+        is_path = isinstance(image_path, (str, os.PathLike))
+        if is_path:
+            path = os.fspath(image_path)
+            ext = os.path.splitext(path)[1].lower()
+            if ext in ('.avif', '.jxl'):
+                brotli_meta = ExifUtils._extract_isobmff_brotli(path)
+                if brotli_meta:
+                    return brotli_meta
+            source: Any = path
+        else:
+            source = BytesIO(image_path)
 
-        with Image.open(image_path) as img:
+        with Image.open(source) as img:
             # PNG text chunks may legally follow IDAT. Pillow reads those only
             # when loading the image, so inspecting info immediately after open
             # can incorrectly report a metadata-free image.
@@ -203,9 +215,10 @@ class ExifUtils:
 
             if img.format not in ["JPEG", "TIFF", "WEBP"]:
                 exif = img.getexif()
-                if exif and piexif.ExifIFD.UserComment in exif:
+                exif_ifd = exif.get_ifd(piexif.ImageIFD.ExifTag)
+                if piexif.ExifIFD.UserComment in exif_ifd:
                     metadata["comment"] = ExifUtils._decode_user_comment(
-                        exif[piexif.ExifIFD.UserComment]
+                        exif_ifd[piexif.ExifIFD.UserComment]
                     )
 
             # ComfyUI's WebP exporter stores JSON in EXIF Make/Model with
@@ -641,12 +654,12 @@ class ExifUtils:
         """Return ``(width, height)`` for an image, or ``None`` if unavailable.
 
         Video containers (``.mp4``/``.webm``/``.avi``) and formats PIL cannot
-        read (``.avif``/``.jxl``) return ``None`` before PIL is invoked.
-        Missing or corrupt files return ``None``. Never raises.
+        read (``.jxl``) return ``None`` before PIL is invoked. Missing or
+        corrupt files return ``None``. Never raises.
         """
         try:
             ext = os.path.splitext(image_path)[1].lower()
-            if ext in ('.mp4', '.webm', '.avi', '.avif', '.jxl'):
+            if ext in ('.mp4', '.webm', '.avi', '.jxl'):
                 return None
             stat = os.stat(image_path)
             return _get_image_dimensions_cached(

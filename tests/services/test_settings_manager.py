@@ -89,7 +89,9 @@ def test_initial_save_persists_minimal_template(tmp_path, monkeypatch):
     assert persisted["_note"] == "template note"
     assert "libraries" not in persisted
     assert persisted["folder_paths"]["loras"] == ["/loras"]
-    assert manager.get_libraries()["default"]["folder_paths"]["loras"] == ["/loras"]
+    assert manager.get("folder_paths")["loras"] == ["/loras"]
+    assert "libraries" not in manager.settings
+    assert "active_library" not in manager.settings
 
 
 def test_existing_folder_paths_seed_default_library(tmp_path, monkeypatch):
@@ -121,50 +123,62 @@ def test_existing_folder_paths_seed_default_library(tmp_path, monkeypatch):
     assert stored_paths["unet"] == [str(diffusion_dir), str(unet_dir)]
     assert stored_paths["embeddings"] == [str(embedding_dir)]
 
-    libraries = manager.get_libraries()
-    assert "default" in libraries
-    assert libraries["default"]["folder_paths"]["loras"] == [str(lora_dir)]
-    assert libraries["default"]["folder_paths"]["checkpoints"] == [str(checkpoint_dir)]
-    assert libraries["default"]["folder_paths"]["unet"] == [
-        str(diffusion_dir),
-        str(unet_dir),
-    ]
-    assert libraries["default"]["folder_paths"]["embeddings"] == [str(embedding_dir)]
+    assert "libraries" not in manager.settings
+    assert "active_library" not in manager.settings
 
     assert manager.get_startup_messages() == []
 
 
-def test_multi_library_configuration_triggers_deprecation_warning(
-    tmp_path, monkeypatch, caplog
-):
+def test_multi_library_configuration_is_consolidated(tmp_path, monkeypatch):
     initial = {
         "libraries": {
-            "default": {"folder_paths": {"loras": ["/loras-a"]}},
-            "archive": {"folder_paths": {"loras": ["/loras-b"]}},
+            "default": {
+                "folder_paths": {"loras": ["/loras-a"]},
+                "extra_folder_paths": {"loras": ["/extra-a"]},
+                "default_lora_root": "/loras-a",
+                "workflow_path": "/workflows-a",
+                "recipes_path": "/recipes-a",
+            },
+            "archive": {
+                "folder_paths": {
+                    "loras": ["/loras-b", "/loras-a"],
+                    "checkpoints": ["/checkpoints-b"],
+                },
+                "extra_folder_paths": {"loras": ["/extra-b"]},
+                "default_lora_root": "/loras-b",
+                "workflow_path": "/workflows-b",
+                "recipes_path": "/recipes-b",
+            },
         },
         "active_library": "default",
     }
 
-    with caplog.at_level(logging.WARNING, logger="py.services.settings_manager"):
-        manager = _create_manager_with_settings(tmp_path, monkeypatch, initial)
+    manager = _create_manager_with_settings(tmp_path, monkeypatch, initial)
 
-    assert any(
-        "Multi-library support is deprecated" in record.getMessage()
-        for record in caplog.records
-    )
-    deprecation = [
+    assert "libraries" not in manager.settings
+    assert "active_library" not in manager.settings
+    assert manager.get("folder_paths") == {
+        "loras": ["/loras-a", "/loras-b"],
+        "checkpoints": ["/checkpoints-b"],
+    }
+    assert manager.get("extra_folder_paths") == {
+        "loras": ["/extra-a", "/extra-b"]
+    }
+    assert manager.get("default_lora_root") == "/loras-a"
+    assert manager.get("workflow_path") == _normalized_workflow_path("/workflows-a")
+    assert manager.get("recipes_path") == "/recipes-a"
+    migration = [
         message
         for message in manager.get_startup_messages()
-        if message["code"] == "multi-library-deprecated"
+        if message["code"] == "multi-library-consolidated"
     ]
-    assert len(deprecation) == 1
-    assert deprecation[0]["severity"] == "warning"
-    assert deprecation[0]["dismissible"] is True
-    assert "archive" in deprecation[0]["message"]
+    assert len(migration) == 1
+    assert migration[0]["severity"] == "info"
+    assert "archive" in migration[0]["message"]
 
 
-def test_single_library_configuration_has_no_deprecation_warning(
-    tmp_path, monkeypatch, caplog
+def test_single_library_configuration_has_no_consolidation_message(
+    tmp_path, monkeypatch
 ):
     initial = {
         "libraries": {
@@ -173,17 +187,106 @@ def test_single_library_configuration_has_no_deprecation_warning(
         "active_library": "default",
     }
 
-    with caplog.at_level(logging.WARNING, logger="py.services.settings_manager"):
-        manager = _create_manager_with_settings(tmp_path, monkeypatch, initial)
+    manager = _create_manager_with_settings(tmp_path, monkeypatch, initial)
 
     assert not any(
-        "Multi-library support is deprecated" in record.getMessage()
-        for record in caplog.records
-    )
-    assert not any(
-        message["code"] == "multi-library-deprecated"
+        message["code"] == "multi-library-consolidated"
         for message in manager.get_startup_messages()
     )
+
+
+def test_multi_library_consolidation_is_persisted(tmp_path, monkeypatch):
+    settings_path = tmp_path / "settings.json"
+    settings_path.write_text(
+        json.dumps(
+            {
+                "libraries": {
+                    "default": {"folder_paths": {"loras": ["/loras-a"]}},
+                    "archive": {"folder_paths": {"loras": ["/loras-b"]}},
+                },
+                "active_library": "default",
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "py.services.settings_manager.ensure_settings_file",
+        lambda logger=None: str(settings_path),
+    )
+
+    first = SettingsManager()
+    stored = json.loads(settings_path.read_text(encoding="utf-8"))
+    assert "libraries" not in stored
+    assert "active_library" not in stored
+    assert stored["folder_paths"]["loras"] == ["/loras-a", "/loras-b"]
+
+    second = SettingsManager()
+    assert second.get("folder_paths")["loras"] == ["/loras-a", "/loras-b"]
+    assert not any(
+        message["code"] == "multi-library-consolidated"
+        for message in second.get_startup_messages()
+    )
+    assert "libraries" not in first.settings
+    assert "active_library" not in first.settings
+
+
+def test_single_library_registry_is_removed_and_caches_migrated(
+    tmp_path, monkeypatch
+):
+    settings_path = tmp_path / "settings.json"
+    extra_folder_paths = {
+        "loras": ["/extra-loras"],
+        "checkpoints": ["/extra-checkpoints"],
+    }
+    settings_path.write_text(
+        json.dumps(
+            {
+                "libraries": {
+                    "comfyui": {
+                        "folder_paths": {"loras": ["/loras"]},
+                        "extra_folder_paths": extra_folder_paths,
+                        "default_lora_root": "/loras",
+                    }
+                },
+                "active_library": "comfyui",
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "py.services.settings_manager.ensure_settings_file",
+        lambda logger=None: str(settings_path),
+    )
+    monkeypatch.setattr(
+        "py.utils.cache_paths.get_settings_dir",
+        lambda create=True: str(tmp_path),
+    )
+    for subdir in ("model", "model_update", "recipe"):
+        cache = tmp_path / "cache" / subdir / "comfyui.sqlite"
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text(subdir, encoding="utf-8")
+
+    manager = SettingsManager()
+
+    stored = json.loads(settings_path.read_text(encoding="utf-8"))
+    assert "libraries" not in stored
+    assert "active_library" not in stored
+    assert stored["folder_paths"] == {"loras": ["/loras"]}
+    assert stored["extra_folder_paths"] == extra_folder_paths
+    assert stored["default_lora_root"] == "/loras"
+    for subdir in ("model", "model_update", "recipe"):
+        assert (tmp_path / "cache" / subdir / "default.sqlite").read_text(
+            encoding="utf-8"
+        ) == subdir
+        assert not (tmp_path / "cache" / subdir / "comfyui.sqlite").exists()
+    assert manager.get("folder_paths") == {"loras": ["/loras"]}
+    assert manager.get("extra_folder_paths") == extra_folder_paths
+
+    restarted = SettingsManager()
+
+    stored = json.loads(settings_path.read_text(encoding="utf-8"))
+    assert restarted.get("extra_folder_paths") == extra_folder_paths
+    assert stored["extra_folder_paths"] == extra_folder_paths
 
 
 def test_environment_variable_overrides_settings(tmp_path, monkeypatch):
@@ -412,6 +515,19 @@ def test_download_path_template_defaults_flat_for_other(manager):
     assert manager.get_download_path_template("other") == "{base_model}"
 
 
+def test_download_path_template_defaults_to_base_model_for_workflow(manager):
+    """Workflow downloads and Auto-Organize share this template. Local
+    workflows rarely carry CivitAI tags, so the default stops at the base
+    model instead of adding a "no tags" folder."""
+    manager.settings["download_path_templates"] = {}
+
+    assert manager.get_download_path_template("workflow") == "{base_model}"
+
+    # An explicit user configuration still wins.
+    manager.settings["download_path_templates"] = {"workflow": "{first_tag}"}
+    assert manager.get_download_path_template("workflow") == "{first_tag}"
+
+
 def test_download_path_template_unknown_type_is_flat(manager):
     manager.settings["download_path_templates"] = {}
 
@@ -437,6 +553,74 @@ def test_resolve_priority_tag_prefers_configured_priority(manager):
 def test_resolve_priority_tag_falls_back_to_first_usable_tag(manager):
     assert (
         manager.resolve_priority_tag_for_model(["portrait", "anime-ish"], "lora")
+        == "portrait"
+    )
+
+
+def test_unsorted_fallback_replaces_first_tag(manager):
+    """With the toggle on, an unclassified-but-tagged model goes to the configured name."""
+    manager.settings["unsorted_fallback_enabled"] = True
+    manager.settings["unsorted_fallback_folder"] = "unsorted"
+
+    assert (
+        manager.resolve_priority_tag_for_model(["portrait", "anime-ish"], "lora")
+        == "unsorted"
+    )
+
+
+def test_unsorted_fallback_is_off_by_default(manager):
+    """Default installs keep the documented first-tag behaviour exactly."""
+    assert manager.get("unsorted_fallback_enabled") is False
+    assert (
+        manager.resolve_priority_tag_for_model(["portrait", "anime-ish"], "lora")
+        == "portrait"
+    )
+
+
+def test_unsorted_fallback_does_not_override_a_priority_match(manager):
+    """A canonical hit wins regardless of the toggle."""
+    manager.settings["unsorted_fallback_enabled"] = True
+    manager.settings["unsorted_fallback_folder"] = "unsorted"
+
+    assert (
+        manager.resolve_priority_tag_for_model(["anime", "character"], "lora")
+        == "character"
+    )
+
+
+def test_unsorted_fallback_leaves_untaggable_lists_alone(manager):
+    """Empty, meta-only and unusable-only lists must keep returning "" — the
+    no-tags handling downstream is not this setting's business."""
+    manager.settings["unsorted_fallback_enabled"] = True
+    manager.settings["unsorted_fallback_folder"] = "unsorted"
+
+    assert manager.resolve_priority_tag_for_model([], "lora") == ""
+    assert manager.resolve_priority_tag_for_model([KEYWORD_DUMP_TAG], "lora") == ""
+    assert manager.resolve_priority_tag_for_model(["x" * 51], "lora") == ""
+    assert manager.resolve_priority_tag_for_model([None, 42], "lora") == ""
+
+
+def test_unsorted_fallback_ignored_when_folder_name_is_blank(manager):
+    """A blank configured name must not produce an empty path segment; fall back."""
+    manager.settings["unsorted_fallback_enabled"] = True
+    manager.settings["unsorted_fallback_folder"] = "   "
+
+    assert (
+        manager.resolve_priority_tag_for_model(["portrait", "anime-ish"], "lora")
+        == "portrait"
+    )
+
+
+def test_unsorted_fallback_can_be_skipped_per_call(manager):
+    """Filename templates pass use_unsorted_fallback=False so a folder setting
+    never silently renames files."""
+    manager.settings["unsorted_fallback_enabled"] = True
+    manager.settings["unsorted_fallback_folder"] = "unsorted"
+
+    assert (
+        manager.resolve_priority_tag_for_model(
+            ["portrait", "anime-ish"], "lora", use_unsorted_fallback=False
+        )
         == "portrait"
     )
 
@@ -761,13 +945,9 @@ def test_uses_portable_settings_file_when_enabled(tmp_path, monkeypatch):
     assert not user_dir.exists()
 
 
-def test_migrate_creates_default_library(manager):
-    libraries = manager.get_libraries()
-    assert "default" in libraries
-    assert manager.get_active_library_name() == "default"
-    assert libraries["default"].get("folder_paths", {}) == manager.settings.get(
-        "folder_paths", {}
-    )
+def test_default_settings_stay_flat(manager):
+    assert "libraries" not in manager.settings
+    assert "active_library" not in manager.settings
 
 
 def test_migrate_sanitizes_legacy_libraries(tmp_path, monkeypatch):
@@ -779,15 +959,13 @@ def test_migrate_sanitizes_legacy_libraries(tmp_path, monkeypatch):
 
     manager = _create_manager_with_settings(tmp_path, monkeypatch, initial)
 
-    libraries = manager.get_libraries()
-    assert set(libraries.keys()) == {"legacy"}
-    payload = libraries["legacy"]
-    assert payload["folder_paths"] == {}
-    assert payload["default_lora_root"] == ""
-    assert payload["default_checkpoint_root"] == ""
-    assert payload["default_embedding_root"] == ""
-    assert payload["recipes_path"] == ""
-    assert manager.get_active_library_name() == "legacy"
+    assert "libraries" not in manager.settings
+    assert "active_library" not in manager.settings
+    assert manager.get("folder_paths") == {"loras": ["/old"]}
+    assert manager.get("default_lora_root") == "/old"
+    assert manager.get("default_checkpoint_root") == ""
+    assert manager.get("default_embedding_root") == ""
+    assert manager.get("recipes_path") == ""
 
 
 def test_active_library_syncs_top_level_settings(tmp_path, monkeypatch):
@@ -819,21 +997,12 @@ def test_active_library_syncs_top_level_settings(tmp_path, monkeypatch):
 
     manager = _create_manager_with_settings(tmp_path, monkeypatch, initial)
 
-    assert manager.get_active_library_name() == "studio"
-    assert manager.get("folder_paths")["loras"] == ["/studio"]
+    assert "libraries" not in manager.settings
+    assert "active_library" not in manager.settings
+    assert manager.get("folder_paths")["loras"] == ["/studio", "/loras"]
     assert manager.get("default_lora_root") == "/studio"
     assert manager.get("default_checkpoint_root") == "/studio_ckpt"
     assert manager.get("default_embedding_root") == "/studio_embed"
-    assert manager.get("recipes_path") == "/studio/custom-recipes"
-
-    # Drift the top-level values again and ensure activate_library repairs them
-    manager.settings["folder_paths"] = {"loras": ["/loras"]}
-    manager.settings["default_lora_root"] = "/loras"
-    manager.settings["recipes_path"] = "/loras/recipes"
-    manager.activate_library("studio")
-
-    assert manager.get("folder_paths")["loras"] == ["/studio"]
-    assert manager.get("default_lora_root") == "/studio"
     assert manager.get("recipes_path") == "/studio/custom-recipes"
 
 
@@ -870,33 +1039,39 @@ def test_refresh_environment_variables_updates_stored_value(tmp_path, monkeypatc
     assert calls[-1] == "refreshed"
 
 
-def test_upsert_library_creates_entry_and_activates(manager, tmp_path):
+def test_set_folder_paths_updates_flat_settings(manager, tmp_path):
     lora_dir = tmp_path / "loras"
     lora_dir.mkdir()
 
-    manager.upsert_library(
-        "studio",
-        folder_paths={"loras": [str(lora_dir)]},
-        activate=True,
-    )
+    manager.set("folder_paths", {"loras": [str(lora_dir)]})
 
-    assert manager.get_active_library_name() == "studio"
-    libraries = manager.get_libraries()
-    stored_paths = libraries["studio"]["folder_paths"]["loras"]
+    stored_paths = manager.get("folder_paths")["loras"]
     normalized_stored_paths = [p.replace(os.sep, "/") for p in stored_paths]
     assert str(lora_dir).replace(os.sep, "/") in normalized_stored_paths
+    assert "libraries" not in manager.settings
 
 
-def test_set_recipes_path_updates_active_library_entry(manager, tmp_path):
+def test_effective_recipes_dir_falls_back_to_config_lora_roots(
+    manager, tmp_path, monkeypatch
+):
+    from py.config import config
+
+    lora_root = tmp_path / "config_loras"
+    monkeypatch.setattr(config, "loras_roots", [str(lora_root)])
+    manager.settings["folder_paths"] = {}
+
+    assert manager._get_effective_recipes_dir("") == os.path.abspath(
+        os.path.join(str(lora_root), "recipes")
+    )
+
+
+def test_set_recipes_path_updates_flat_settings(manager, tmp_path):
     recipes_dir = tmp_path / "custom" / "recipes"
 
     manager.set("recipes_path", str(recipes_dir))
 
     assert manager.get("recipes_path") == str(recipes_dir.resolve())
-    assert (
-        manager.get_libraries()["default"]["recipes_path"]
-        == str(recipes_dir.resolve())
-    )
+    assert "libraries" not in manager.settings
 
 
 def test_set_recipes_path_migrates_existing_recipe_files(manager, tmp_path):
@@ -1117,22 +1292,12 @@ def test_extra_folder_paths_stored_separately(manager, tmp_path):
     lora_dir.mkdir()
     extra_dir.mkdir()
 
-    manager.upsert_library(
-        "test_library",
-        folder_paths={"loras": [str(lora_dir)]},
-        extra_folder_paths={"loras": [str(extra_dir)]},
-        activate=True,
-    )
+    manager.set("folder_paths", {"loras": [str(lora_dir)]})
+    manager.update_extra_folder_paths({"loras": [str(extra_dir)]})
 
-    libraries = manager.get_libraries()
-    lib = libraries["test_library"]
-
-    # Verify folder_paths contains main path
-    assert str(lora_dir) in lib["folder_paths"]["loras"]
-    # Verify extra_folder_paths contains extra path
-    assert str(extra_dir) in lib["extra_folder_paths"]["loras"]
-    # Verify they are separate
-    assert str(extra_dir) not in lib["folder_paths"]["loras"]
+    assert str(lora_dir) in manager.get("folder_paths")["loras"]
+    assert str(extra_dir) in manager.get("extra_folder_paths")["loras"]
+    assert str(extra_dir) not in manager.get("folder_paths")["loras"]
 
 
 def test_get_extra_folder_paths(manager, tmp_path):
@@ -1145,66 +1310,6 @@ def test_get_extra_folder_paths(manager, tmp_path):
     assert str(extra_dir) in extra_paths.get("loras", [])
 
 
-def test_library_switch_preserves_extra_paths(manager, tmp_path):
-    """Test that switching libraries preserves each library's extra paths."""
-    lora_dir1 = tmp_path / "lib1_loras"
-    extra_dir1 = tmp_path / "lib1_extra"
-    lora_dir2 = tmp_path / "lib2_loras"
-    extra_dir2 = tmp_path / "lib2_extra"
-
-    for directory in (lora_dir1, extra_dir1, lora_dir2, extra_dir2):
-        directory.mkdir()
-
-    manager.create_library(
-        "library1",
-        folder_paths={"loras": [str(lora_dir1)]},
-        extra_folder_paths={"loras": [str(extra_dir1)]},
-        activate=True,
-    )
-
-    manager.create_library(
-        "library2",
-        folder_paths={"loras": [str(lora_dir2)]},
-        extra_folder_paths={"loras": [str(extra_dir2)]},
-    )
-
-    assert manager.get_active_library_name() == "library1"
-    lib1 = manager.get_active_library()
-    assert str(lora_dir1) in lib1["folder_paths"]["loras"]
-    assert str(extra_dir1) in lib1["extra_folder_paths"]["loras"]
-
-    manager.activate_library("library2")
-
-    assert manager.get_active_library_name() == "library2"
-    lib2 = manager.get_active_library()
-    assert str(lora_dir2) in lib2["folder_paths"]["loras"]
-    assert str(extra_dir2) in lib2["extra_folder_paths"]["loras"]
-
-
-def test_extra_paths_validation_no_overlap_with_other_libraries(manager, tmp_path):
-    """Test that extra paths cannot overlap with other libraries' paths."""
-    lora_dir1 = tmp_path / "lib1_loras"
-    lora_dir1.mkdir()
-
-    manager.create_library(
-        "library1",
-        folder_paths={"loras": [str(lora_dir1)]},
-        activate=True,
-    )
-
-    extra_dir = tmp_path / "extra_loras"
-    extra_dir.mkdir()
-
-    manager.create_library(
-        "library2",
-        folder_paths={"loras": [str(extra_dir)]},
-        activate=True,
-    )
-
-    with pytest.raises(ValueError, match="already assigned to library"):
-        manager.update_extra_folder_paths({"loras": [str(lora_dir1)]})
-
-
 def test_extra_paths_validation_no_overlap_with_active_primary_lora_root(
     manager, tmp_path
 ):
@@ -1214,14 +1319,10 @@ def test_extra_paths_validation_no_overlap_with_active_primary_lora_root(
     lora_link = tmp_path / "loras_link"
     lora_link.symlink_to(real_lora_dir, target_is_directory=True)
 
-    manager.create_library(
-        "library1",
-        folder_paths={"loras": [str(lora_link)]},
-        activate=True,
-    )
+    manager.set("folder_paths", {"loras": [str(lora_link)]})
 
     with pytest.raises(
-        ValueError, match="overlap with the active library's primary LoRA roots"
+        ValueError, match="overlap with the primary LoRA roots"
     ):
         manager.update_extra_folder_paths({"loras": [str(real_lora_dir)]})
 
@@ -1235,11 +1336,7 @@ def test_extra_paths_validation_no_overlap_with_active_primary_lora_root_case_in
     lora_link = tmp_path / "loras_link"
     lora_link.symlink_to(real_lora_dir, target_is_directory=True)
 
-    manager.create_library(
-        "library1",
-        folder_paths={"loras": [str(lora_link)]},
-        activate=True,
-    )
+    manager.set("folder_paths", {"loras": [str(lora_link)]})
 
     original_exists = settings_manager_module.os.path.exists
     original_realpath = settings_manager_module.os.path.realpath
@@ -1267,7 +1364,7 @@ def test_extra_paths_validation_no_overlap_with_active_primary_lora_root_case_in
     )
 
     with pytest.raises(
-        ValueError, match="overlap with the active library's primary LoRA roots"
+        ValueError, match="overlap with the primary LoRA roots"
     ):
         manager.update_extra_folder_paths({"loras": [str(real_lora_dir).upper()]})
 
@@ -1280,11 +1377,7 @@ def test_extra_paths_validation_allows_missing_non_overlapping_lora_root(
     lora_dir.mkdir()
     missing_extra = tmp_path / "missing_loras"
 
-    manager.create_library(
-        "library1",
-        folder_paths={"loras": [str(lora_dir)]},
-        activate=True,
-    )
+    manager.set("folder_paths", {"loras": [str(lora_dir)]})
 
     manager.update_extra_folder_paths({"loras": [str(missing_extra)]})
 
@@ -1303,33 +1396,12 @@ def test_extra_paths_validation_rejects_primary_root_first_level_symlink_target(
     link_dir = lora_dir / "link"
     link_dir.symlink_to(external_dir, target_is_directory=True)
 
-    manager.create_library(
-        "library1",
-        folder_paths={"loras": [str(lora_dir)]},
-        activate=True,
-    )
+    manager.set("folder_paths", {"loras": [str(lora_dir)]})
 
     with pytest.raises(
-        ValueError, match="overlap with the active library's primary LoRA roots"
+        ValueError, match="overlap with the primary LoRA roots"
     ):
         manager.update_extra_folder_paths({"loras": [str(external_dir)]})
-
-
-def test_delete_library_switches_active(manager, tmp_path):
-    other_dir = tmp_path / "other"
-    other_dir.mkdir()
-
-    manager.create_library(
-        "other",
-        folder_paths={"loras": [str(other_dir)]},
-        activate=True,
-    )
-
-    assert manager.get_active_library_name() == "other"
-
-    manager.delete_library("other")
-
-    assert manager.get_active_library_name() == "default"
 
 
 def test_download_skip_base_models_are_normalized(manager):
@@ -1503,13 +1575,11 @@ def test_auto_set_default_other_roots_uses_extra_folder_paths(manager):
     assert manager.get("default_other_roots")["vae"] == "/extra-vae"
 
 
-def test_set_default_other_roots_syncs_active_library(manager):
+def test_set_default_other_roots_updates_flat_settings(manager):
     manager.set("default_other_roots", {"vae": "/vae"})
 
-    libraries = manager.get_libraries()
-    active = manager.get_active_library_name()
-    assert libraries[active]["default_other_roots"] == {"vae": "/vae"}
     assert manager.get("default_other_roots") == {"vae": "/vae"}
+    assert "libraries" not in manager.settings
 
 
 def test_set_default_other_roots_rejects_illegal_sub_type(manager):
@@ -1522,37 +1592,13 @@ def test_set_default_other_roots_normalizes_values(manager):
     assert manager.get("default_other_roots") == {"vae": "/vae"}
 
 
-def test_upsert_library_passthrough_default_other_roots(manager, tmp_path):
-    manager.upsert_library(
-        "studio",
-        folder_paths={"loras": ["/studio/loras"], "vae": ["/studio/vae"]},
-        default_other_roots={"vae": "/studio/vae"},
-        activate=True,
-    )
+def test_folder_path_update_preserves_default_other_roots(manager):
+    manager.set("folder_paths", {"loras": ["/studio/loras"], "vae": ["/studio/vae"]})
+    manager.set("default_other_roots", {"vae": "/studio/vae"})
 
-    libraries = manager.get_libraries()
-    assert libraries["studio"]["default_other_roots"] == {"vae": "/studio/vae"}
+    manager.set("folder_paths", {"loras": ["/studio/loras"]})
+
     assert manager.get("default_other_roots") == {"vae": "/studio/vae"}
-
-    # Omitting the argument preserves the stored value
-    manager.upsert_library("studio", folder_paths={"loras": ["/studio/loras"]})
-    libraries = manager.get_libraries()
-    assert libraries["studio"]["default_other_roots"] == {"vae": "/studio/vae"}
-
-
-def test_library_switch_restores_default_other_roots(manager):
-    manager.set("default_other_roots", {"vae": "/default-vae"})
-    manager.create_library(
-        "studio",
-        folder_paths={"loras": ["/studio/loras"]},
-        default_other_roots={"vae": "/studio-vae"},
-    )
-
-    manager.activate_library("studio")
-    assert manager.get("default_other_roots") == {"vae": "/studio-vae"}
-
-    manager.activate_library("default")
-    assert manager.get("default_other_roots") == {"vae": "/default-vae"}
 
 
 def test_migrate_sanitizes_legacy_libraries_includes_other_roots(tmp_path, monkeypatch):
@@ -1564,8 +1610,8 @@ def test_migrate_sanitizes_legacy_libraries_includes_other_roots(tmp_path, monke
 
     manager = _create_manager_with_settings(tmp_path, monkeypatch, initial)
 
-    payload = manager.get_libraries()["legacy"]
-    assert payload["default_other_roots"] == {}
+    assert manager.get("default_other_roots") == {}
+    assert "libraries" not in manager.settings
 
 
 def _configure_lora_roots(manager, *roots):
@@ -1900,7 +1946,7 @@ def test_get_workflow_path_defaults_to_empty(manager):
     assert manager.get_workflow_path() == ""
 
 
-def test_set_workflow_path_stores_single_path_and_syncs_library(manager):
+def test_set_workflow_path_stores_single_path(manager):
     _configure_lora_roots(manager, "/loras-main")
 
     manager.set("workflow_path", " /workflows ")
@@ -1908,9 +1954,7 @@ def test_set_workflow_path_stores_single_path_and_syncs_library(manager):
     assert manager.get_workflow_path() == _normalized_workflow_path("/workflows")
     # Core folder_paths stay untouched: workflow_path is its own setting.
     assert manager.settings["folder_paths"] == {"loras": ["/loras-main"]}
-    active = manager.get_active_library()
-    assert active.get("workflow_path") == _normalized_workflow_path("/workflows")
-    assert "workflows" not in active.get("folder_paths", {})
+    assert "workflows" not in manager.settings["folder_paths"]
 
 
 def test_set_workflow_path_empty_clears_setting(manager):
@@ -1919,20 +1963,7 @@ def test_set_workflow_path_empty_clears_setting(manager):
     manager.set("workflow_path", "")
 
     assert manager.get_workflow_path() == ""
-    assert manager.get_active_library().get("workflow_path") == ""
-
-
-def test_workflow_path_syncs_on_library_switch(manager):
-    manager.set("workflow_path", "/workflows")
-    manager.settings["libraries"]["other"] = {
-        **manager.get_active_library(),
-        "workflow_path": "/other-workflows",
-    }
-    manager.settings["active_library"] = "other"
-
-    manager._sync_active_library_to_root(save=False)
-
-    assert manager.get_workflow_path() == _normalized_workflow_path("/other-workflows")
+    assert manager.get("workflow_path") == ""
 
 
 def test_legacy_workflow_paths_migrate_to_scalar_setting(manager, tmp_path):
@@ -1940,13 +1971,10 @@ def test_legacy_workflow_paths_migrate_to_scalar_setting(manager, tmp_path):
     existing.mkdir()
     missing = tmp_path / "missing-workflows"
 
-    active_name = manager.get_active_library_name()
-    library = manager.settings["libraries"][active_name]
-    library["folder_paths"] = {
+    manager.settings["folder_paths"] = {
         "loras": ["/loras-main"],
         "workflows": [str(missing), str(existing)],
     }
-    manager.settings["folder_paths"] = dict(library["folder_paths"])
     manager.settings["workflow_path"] = ""
 
     manager._migrate_legacy_workflow_paths()
@@ -1955,42 +1983,31 @@ def test_legacy_workflow_paths_migrate_to_scalar_setting(manager, tmp_path):
     assert manager.get_workflow_path() == str(existing)
     assert manager.settings["workflow_path"] == str(existing)
     assert "workflows" not in manager.settings["folder_paths"]
-    assert "workflows" not in manager.get_active_library()["folder_paths"]
     assert "loras" in manager.settings["folder_paths"]
 
 
 def test_legacy_extra_workflow_paths_migrate_to_scalar_setting(manager):
-    active_name = manager.get_active_library_name()
-    library = manager.settings["libraries"][active_name]
-    library["extra_folder_paths"] = {"workflows": ["/extra-workflows"]}
-    library["folder_paths"] = {"loras": ["/loras-main"]}
+    manager.settings["extra_folder_paths"] = {"workflows": ["/extra-workflows"]}
+    manager.settings["folder_paths"] = {"loras": ["/loras-main"]}
     manager.settings["workflow_path"] = ""
 
     manager._migrate_legacy_workflow_paths()
 
     assert manager.get_workflow_path() == _normalized_workflow_path("/extra-workflows")
-    assert "workflows" not in manager.get_active_library()["extra_folder_paths"]
+    assert "workflows" not in manager.get("extra_folder_paths")
 
 
 def test_existing_workflow_path_wins_over_legacy_lists(manager):
-    active_name = manager.get_active_library_name()
-    library = manager.settings["libraries"][active_name]
-    library["workflow_path"] = "/new-workflows"
-    library["folder_paths"] = {"workflows": ["/old-workflows"]}
     manager.settings["workflow_path"] = "/new-workflows"
+    manager.settings["folder_paths"] = {"workflows": ["/old-workflows"]}
 
     manager._migrate_legacy_workflow_paths()
 
     assert manager.get_workflow_path() == _normalized_workflow_path("/new-workflows")
-    assert "workflows" not in manager.get_active_library()["folder_paths"]
+    assert "workflows" not in manager.get("folder_paths")
 
 
-def test_top_level_legacy_workflow_path_migrates_into_active_library(manager):
-    active_name = manager.get_active_library_name()
-    manager.settings["libraries"][active_name]["folder_paths"] = {
-        "loras": ["/loras-main"]
-    }
-    manager.settings["libraries"][active_name]["workflow_path"] = ""
+def test_top_level_legacy_workflow_path_migrates(manager):
     manager.settings["folder_paths"] = {
         "loras": ["/loras-main"],
         "workflows": ["/top-level-workflows"],
@@ -2001,8 +2018,7 @@ def test_top_level_legacy_workflow_path_migrates_into_active_library(manager):
 
     expected = _normalized_workflow_path("/top-level-workflows")
     assert manager.get_workflow_path() == expected
-    # Mirrored into the library so the next startup's sync keeps it.
-    assert manager.get_active_library()["workflow_path"] == expected
+    assert manager.get("workflow_path") == expected
 
 
 def test_settings_load_migrates_legacy_workflow_folder(tmp_path, monkeypatch):

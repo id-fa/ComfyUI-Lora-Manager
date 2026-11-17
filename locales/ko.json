@@ -262,7 +262,8 @@
                 "title": "레시피 제목",
                 "loraName": "LoRA 파일명",
                 "loraModel": "LoRA 모델명",
-                "prompt": "프롬프트"
+                "prompt": "프롬프트",
+                "triggerWords": "트리거 단어"
             }
         },
         "filter": {
@@ -384,10 +385,19 @@
             "copied": "설정 경로가 클립보드에 복사되었습니다: {{path}}",
             "clipboardFallback": "설정 경로: {{path}}"
         },
+        "comfyuiNodes": {
+            "title": "ComfyUI 노드 설정",
+            "description": "노드 관련 설정은 ComfyUI 설정에서 사용할 수 있습니다.",
+            "openButton": "ComfyUI 설정 열기",
+            "modelNameDisplayLink": "노드 레이블은 ComfyUI 노드 설정에서 별도로 구성됩니다",
+            "openSucceeded": "ComfyUI 설정을 열었습니다.",
+            "openFailed": "ComfyUI 설정을 열 수 없습니다. 먼저 ComfyUI를 열어 주세요."
+        },
         "sections": {
             "contentFiltering": "콘텐츠 필터링",
             "downloads": "다운로드",
             "videoSettings": "비디오 설정",
+            "cardPreview": "카드 미리보기",
             "layoutSettings": "레이아웃 설정",
             "licenseIcons": "라이선스 아이콘",
             "misc": "기타",
@@ -409,9 +419,33 @@
         "nav": {
             "general": "일반",
             "interface": "인터페이스",
+            "comfyuiNodes": "ComfyUI 노드",
             "library": "라이브러리",
             "organization": "정리",
+            "about": "정보",
             "modelPaths": "모델 경로"
+        },
+        "about": {
+            "environmentTitle": "환경",
+            "environmentDescription": "LoRA Manager와 ComfyUI에서 사용하는 버전입니다.",
+            "copy": "복사",
+            "appVersion": "LoRA Manager",
+            "comfyuiVersion": "ComfyUI",
+            "frontendVersion": "ComfyUI 프런트엔드",
+            "pythonVersion": "Python",
+            "os": "OS",
+            "browser": "브라우저",
+            "hint": "문제를 보고할 때 이 정보를 포함해 주세요.",
+            "unavailable": "사용 불가",
+            "copySuccess": "환경 정보가 복사되었습니다",
+            "copyFailed": "환경 정보를 복사하지 못했습니다",
+            "linksTitle": "지원 및 링크",
+            "links": {
+                "reportIssue": "문제 보고",
+                "wiki": "문서 Wiki",
+                "github": "GitHub 리포지토리",
+                "discord": "Discord 참여"
+            }
         },
         "search": {
             "placeholder": "설정 검색...",
@@ -439,6 +473,12 @@
         "videoSettings": {
             "autoplayOnHover": "호버 시 비디오 자동 재생",
             "autoplayOnHoverHelp": "마우스를 올렸을 때만 비디오 미리보기를 재생합니다"
+        },
+        "cardPreview": {
+            "cycleOnHover": "호버 시 예시 이미지 전환",
+            "cycleOnHoverHelp": "카드의 미리보기 이미지에 마우스를 올리면 예시 이미지가 차례로 전환됩니다. 카드의 헤더나 푸터에 마우스를 올려도 전환이 시작되지 않으므로 작업 버튼과 툴팁을 그대로 사용할 수 있습니다. 선택한 미리보기 이미지 자체는 바뀌지 않습니다. 비디오 미리보기는 영향을 받지 않습니다.",
+            "cycleInterval": "전환 간격",
+            "cycleIntervalHelp": "카드에 마우스를 올려 둔 동안 예시 이미지가 전환되는 간격입니다."
         },
         "autoOrganizeExclusions": {
             "label": "자동 정리 제외 항목",
@@ -612,10 +652,6 @@
             "cardBlurAmountHelp": "모델 및 레시피 카드의 헤더와 푸터 오버레이 흐림 강도를 조정합니다 (0 = 흐림 없음, 20 = 최대 흐림)."
         },
         "folderSettings": {
-            "activeLibrary": "활성 라이브러리 (사용 중단 예정)",
-            "activeLibraryHelp": "구성된 라이브러리를 전환하여 기본 폴더를 업데이트합니다. 선택을 변경하면 페이지가 다시 로드됩니다. 사용 중단 예정: 다중 라이브러리 지원은 향후 릴리스에서 제거됩니다. 단일 라이브러리 내의 여러 폴더 루트는 계속 완전히 지원됩니다.",
-            "loadingLibraries": "라이브러리를 불러오는 중...",
-            "noLibraries": "구성된 라이브러리가 없습니다",
             "defaultLoraRoot": "LoRA 루트",
             "defaultLoraRootHelp": "다운로드, 가져오기 및 이동을 위한 기본 LoRA 루트 디렉토리를 설정합니다",
             "defaultCheckpointRoot": "Checkpoint 루트",
@@ -704,7 +740,16 @@
             "pathPlaceholder": "경로 입력...",
             "go": "이동",
             "emptyFolder": "하위 폴더 없음",
-            "loadError": "디렉터리를 불러오지 못했습니다"
+            "loadError": "디렉터리를 불러오지 못했습니다",
+            "newFolder": "새 폴더",
+            "newFolderPlaceholder": "폴더 이름",
+            "create": "만들기",
+            "cancel": "취소",
+            "createError": "폴더 생성 실패",
+            "nameRequired": "폴더 이름을 입력하세요",
+            "nameInvalid": "폴더 이름에 잘못된 문자가 포함되어 있습니다",
+            "alreadyExists": "같은 이름의 폴더가 이미 있습니다",
+            "permissionDenied": "권한이 없습니다"
         },
         "pathValidation": {
             "valid": "유효한 경로입니다",
@@ -716,6 +761,13 @@
         "priorityTags": {
             "title": "우선순위 태그",
             "description": "모델 유형별 태그 우선순위를 사용자 지정합니다(예: character, concept, style(toon|toon_style)).",
+            "unsortedFallback": {
+                "label": "우선순위 태그와 일치하지 않는 모델을 한 폴더에 모으기",
+                "help": "우선순위 태그와 일치하지 않는 모델은 {first_tag}에서 폴더를 만드는 대신 한 폴더에 저장됩니다. 태그가 없는 모델은 영향을 받지 않습니다. 기본값은 꺼짐이며, 모델을 다시 정리하기 전까지 기존 폴더는 변경되지 않습니다.",
+                "folderLabel": "폴더 이름",
+                "folderHelp": "우선순위 태그와 일치하지 않을 때 {first_tag} 대신 사용됩니다. 기본 템플릿 {base_model}/{first_tag}에서는 결과가 {base_model}/<폴더 이름>이 됩니다. 비워 두면 현재 동작을 유지합니다.",
+                "folderPlaceholder": "unsorted"
+            },
             "placeholder": "character, concept, style(toon|toon_style)",
             "helpLinkLabel": "우선순위 태그 도움말 열기",
             "modelTypes": {
@@ -749,10 +801,12 @@
                 "customTemplate": "사용자 정의 템플릿"
             },
             "customTemplatePlaceholder": "사용자 정의 템플릿 입력 (예: {base_model}/{author}/{first_tag})",
+            "workflowHint": "워크플로 다운로드와 워크플로 페이지의 자동 정리에 적용됩니다.",
             "modelTypes": {
                 "lora": "LoRA",
                 "checkpoint": "Checkpoint",
-                "embedding": "Embedding"
+                "embedding": "Embedding",
+                "workflow": "워크플로"
             },
             "baseModelPathMappings": "베이스 모델 경로 매핑",
             "baseModelPathMappingsHelp": "특정 베이스 모델의 폴더 이름을 사용자 정의합니다 (예: \"Flux.1 D\" → \"flux\")",
@@ -1769,6 +1823,54 @@
         }
     },
     "modals": {
+        "autoOrganizePreview": {
+            "title": "자동 정리 미리보기",
+            "scopeSelected": "선택한 모델",
+            "scopeAll": "모든 모델",
+            "scope": "범위: {scope} · 모델 {count}개",
+            "previewNotice": "미리보기 전용입니다. 파일이 이동되지 않았고 빈 폴더도 정리되지 않았습니다.",
+            "emptyPreview": "이 미리보기에 사용할 수 있는 모델이 없습니다.",
+            "alreadyOrganized": "모든 모델이 이미 올바른 위치에 있습니다.",
+            "loadingTitle": "미리보기를 계산하는 중...",
+            "loadingMessage": "변경되는 파일은 없습니다.",
+            "previewFailed": "미리보기 실패",
+            "retry": "다시 시도",
+            "statWillMove": "이동 예정",
+            "statSkipped": "건너뜀",
+            "statIssues": "문제",
+            "issuesWarning": "모델 {count}개는 실패할 것으로 예상되며, 나머지 모델은 계속 처리됩니다.",
+            "detailsLabel": "미리보기 상세 정보",
+            "movesTab": "이동 ({count})",
+            "skippedTab": "건너뜀 ({count})",
+            "issuesTab": "문제 ({count})",
+            "searchPlaceholder": "모델 또는 경로 검색...",
+            "from": "원본",
+            "to": "대상",
+            "location": "위치",
+            "organizingWith": "정리 기준:",
+            "flatStructureRule": "플랫 구조 (라이브러리 루트)",
+            "emptyMoves": "이동할 모델이 없습니다.",
+            "emptySkipped": "건너뛸 모델이 없습니다.",
+            "emptyIssues": "확인할 문제가 없습니다.",
+            "emptySearch": "검색과 일치하는 결과가 없습니다.",
+            "replanNote": "실행 시 최신 라이브러리 상태를 기준으로 다시 계산되므로 실제 결과는 이 미리보기와 다를 수 있습니다.",
+            "copyReport": "보고서 복사",
+            "refresh": "미리보기 새로고침",
+            "apply": "정리 ({count})",
+            "noMoves": "적용할 이동 없음",
+            "pageStatus": "전체 {total}개 중 {from}–{to}번째",
+            "reasons": {
+                "already_organized": "이미 정리됨",
+                "no_file_path": "파일 경로 없음",
+                "outside_roots": "라이브러리 루트 밖",
+                "missing_metadata": "메타데이터 없음",
+                "path_too_long": "대상 경로가 너무 김",
+                "target_exists": "대상이 이미 존재",
+                "planned_collision": "이동 계획 충돌",
+                "move_failed": "이동 실패",
+                "error": "오류"
+            }
+        },
         "exclude": {
             "confirm": "제외"
         },
@@ -2069,6 +2171,8 @@
                 "sendToWorkflow": "ComfyUI로 보내기",
                 "sendToWorkflowText": "ComfyUI로 보내기",
                 "copyHash": "해시 복사",
+                "calculateHash": "해시 계산",
+                "retryHash": "다시 시도",
                 "copyCivitaiId": "Civitai ID 복사",
                 "civitaiIdCopied": "Civitai ID가 클립보드에 복사되었습니다",
                 "deleteModelWithShortcut": "모델 삭제(Del)"
@@ -2095,6 +2199,10 @@
                 "baseModel": "베이스 모델",
                 "size": "크기",
                 "hashes": "해시",
+                "hashPending": "아직 계산되지 않음",
+                "hashCalculating": "계산 중...",
+                "hashFailed": "계산 실패",
+                "hashPendingHint": "이 SHA256 해시는 아직 계산되지 않았습니다. 대형 모델은 스캔 속도를 유지하기 위해 필요할 때 해시를 계산합니다.",
                 "civitaiModelId": "모델 ID",
                 "civitaiVersionId": "버전 ID",
                 "unknown": "알 수 없음",
@@ -2105,7 +2213,35 @@
                 "aboutThisVersion": "이 버전에 대해",
                 "baseModelSearchPlaceholder": "베이스 모델 검색...",
                 "baseModelSuggested": "추천",
-                "baseModelNoMatch": "일치하는 베이스 모델 없음"
+                "baseModelNoMatch": "일치하는 베이스 모델 없음",
+                "creator": "제작자",
+                "creatorAdd": "제작자 추가",
+                "creatorEdit": "제작자 편집",
+                "creatorSearchPlaceholder": "제작자를 검색하거나 새 이름 입력...",
+                "creatorLibraryHeader": "라이브러리의 제작자",
+                "creatorMatchingHeader": "일치하는 제작자",
+                "creatorLibraryCount": "라이브러리에 {count}개",
+                "creatorCurrent": "현재: {name}",
+                "creatorCreate": "'{name}' 만들기",
+                "creatorCreateAnnounce": "Enter 키를 눌러 '{name}' 제작자를 만드세요.",
+                "creatorNew": "새 제작자",
+                "creatorNoMatch": "'{name}'에 해당하는 기존 제작자가 없습니다",
+                "creatorEmptyLibrary": "라이브러리에 아직 제작자가 없습니다. 이름을 입력하여 첫 제작자를 추가하세요.",
+                "creatorModelCount": "모델 {count}개",
+                "creatorModelCountOne": "모델 {count}개",
+                "creatorMatchCount": "{count}개 일치",
+                "creatorMatchCountOne": "{count}개 일치",
+                "creatorShowing": "{shown}/{total}개 표시 —— 계속 입력하여 범위를 좁히기",
+                "creatorRemove": "제작자 제거",
+                "creatorManual": "수동",
+                "creatorManualHint": "수동으로 추가됨. 메타데이터 새로 고침으로 덮어쓰지 않습니다.",
+                "creatorSaved": "제작자 업데이트됨",
+                "creatorRemoved": "제작자 제거됨",
+                "creatorSaveFailed": "제작자를 업데이트할 수 없습니다. 다시 시도하세요.",
+                "creatorLoadFailed": "제작자를 불러오지 못했습니다. 새 이름을 직접 입력할 수 있습니다.",
+                "creatorTooLong": "제작자 이름이 너무 깁니다(최대 64자)",
+                "creatorLoading": "제작자 불러오는 중...",
+                "creatorKeyboardHint": "↑↓ 이동 · ↵ 선택 · esc 취소"
             },
             "notes": {
                 "saved": "메모가 성공적으로 저장됨",
@@ -2153,6 +2289,7 @@
             "description": {
                 "noDescription": "사용 가능한 모델 설명이 없습니다",
                 "failedToLoad": "모델 설명 로딩 실패",
+                "offline": "설명은 모델 파일과 함께 저장되어 있으며, 해당 파일은 오프라인 디스크에 있습니다. 디스크를 다시 연결하여 읽어 주세요.",
                 "editTitle": "모델 설명 편집",
                 "validation": {
                     "cannotBeEmpty": "설명은 비어있을 수 없습니다"
@@ -2184,6 +2321,10 @@
                 "noDerivatives": "공유 병합 불가",
                 "noReLicense": "동일한 권한 필요",
                 "restrictionsLabel": "라이선스 제한"
+            },
+            "notices": {
+                "offline": "이 모델이 있는 디스크가 오프라인입니다. 캐시된 정보를 표시하고 있습니다——다시 연결할 때까지 파일 작업과 편집을 사용할 수 없습니다.",
+                "partial": "모델 메타데이터 파일을 읽을 수 없습니다. 캐시된 정보를 표시하고 있습니다——설명, 예시 이미지, 제작자 아바타를 사용하지 못할 수 있습니다."
             },
             "loading": {
                 "exampleImages": "예시 이미지 로딩 중...",
@@ -2527,12 +2668,20 @@
         "title": "도움말 & 튜토리얼",
         "tabs": {
             "gettingStarted": "시작하기",
-            "updateVlogs": "업데이트 영상",
+            "updates": "[TODO: Translate] Updates",
             "documentation": "문서",
             "shortcuts": "단축키"
         },
         "gettingStarted": {
             "title": "LoRA Manager 시작하기",
+            "stepsTitle": "[TODO: Translate] First steps",
+            "steps": {
+                "configure": "[TODO: Translate] Configure your model folders and add a CivitAI API key if you plan to download models.",
+                "find": "[TODO: Translate] Find a model by browsing folders or searching names, tags, and trigger words.",
+                "send": "[TODO: Translate] Use Send to ComfyUI or copy LoRA syntax into a compatible LoRA Manager node.",
+                "refresh": "[TODO: Translate] Use Refresh after changing files outside LoRA Manager; rebuild the cache only for cache inconsistencies."
+            },
+            "readGuide": "[TODO: Translate] Open the Getting Started guide",
             "replayTutorial": "튜토리얼 다시 보기"
         },
         "shortcuts": {
@@ -2557,7 +2706,6 @@
                 "closeModal": "모달 / 패널 닫기",
                 "openShortcuts": "이 단축키 패널 열기",
                 "refresh": "모델 목록 새로고침",
-                "fetchMetadata": "CivitAI에서 메타데이터 가져오기 (모델 페이지만)",
                 "downloadModel": "모델 다운로드 (모델 페이지만)",
                 "toggleBulkMode": "일괄 모드 전환",
                 "selectAll": "표시된 모든 모델 선택",
@@ -2579,17 +2727,26 @@
             "title": "최신 업데이트",
             "watchOnYouTube": "YouTube에서 보기",
             "playlistTitle": "LoRA Manager 업데이트 재생목록",
-            "playlistDescription": "최신 기능과 개선사항을 보여주는 모든 업데이트 비디오를 시청하세요."
+            "playlistDescription": "최신 기능과 개선사항을 보여주는 모든 업데이트 비디오를 시청하세요.",
+            "releaseNotes": "[TODO: Translate] Read release notes on GitHub"
         },
         "documentation": {
             "title": "문서",
-            "general": "일반",
+            "startSupport": "[TODO: Translate] Start & Support",
+            "workingWithAssets": "[TODO: Translate] Working with Assets",
+            "integrationConfiguration": "[TODO: Translate] Integration & Configuration",
+            "gettingStarted": "[TODO: Translate] Getting Started",
+            "faq": "[TODO: Translate] FAQ",
             "troubleshooting": "문제 해결",
-            "modelManagement": "모델 관리",
+            "modelLibrary": "[TODO: Translate] Model Library",
+            "downloadsOrganization": "[TODO: Translate] Downloading and Organizing Models",
             "recipes": "레시피",
-            "settings": "설정 & 구성",
-            "extensions": "확장",
-            "newBadge": "신규"
+            "workflowLibrary": "[TODO: Translate] Workflow Library",
+            "comfyuiIntegration": "[TODO: Translate] ComfyUI Integration",
+            "configuration": "[TODO: Translate] Configuration",
+            "loraSyntax": "[TODO: Translate] LoRA Syntax and Duplicate Filenames",
+            "browserExtension": "[TODO: Translate] LM Civitai Extension",
+            "browseAll": "[TODO: Translate] Browse all documentation"
         },
         "newContentBadge": "신규"
     },
@@ -2716,6 +2873,7 @@
             "downloadSkippedByBaseModel": "베이스 모델 {baseModel}이(가) 제외되어 다운로드를 건너뛰었습니다",
             "autoOrganizeSuccess": "{count}개의 {type}에 대해 자동 정리가 성공적으로 완료되었습니다",
             "autoOrganizePartialSuccess": "자동 정리 완료: 전체 {total}개 중 {success}개 이동, {failures}개 실패",
+            "autoOrganizeProgressUnavailable": "자동 정리 완료: 전체 {total}개 중 {success}개 이동, {failures}개 실패. 실시간 진행률을 사용할 수 없었습니다",
             "autoOrganizeFailed": "자동 정리 실패: {error}",
             "filenameTemplateSuccess": "{count}개의 {type}에 파일명 템플릿이 성공적으로 적용되었습니다",
             "filenameTemplatePartialSuccess": "파일명 템플릿 적용 완료: 전체 {total}개 중 {success}개 이름 변경, {failures}개 실패",
@@ -2894,8 +3052,6 @@
             "compactModeToggled": "컴팩트 모드 {state}",
             "settingSaveFailed": "설정 저장 실패: {message}",
             "displayDensitySet": "표시 밀도가 {density}로 설정되었습니다",
-            "libraryLoadFailed": "라이브러리를 불러오지 못했습니다: {message}",
-            "libraryActivateFailed": "라이브러리를 활성화하지 못했습니다: {message}",
             "languageChangeFailed": "언어 변경 실패: {message}",
             "cacheCleared": "캐시 파일이 성공적으로 지워졌습니다. 다음 작업 시 캐시가 재구축됩니다.",
             "cacheClearFailed": "캐시 지우기 실패: {error}",
@@ -3028,6 +3184,8 @@
             "refreshFailed": "{type} {action} 실패",
             "metadataRefreshed": "메타데이터가 성공적으로 새로고침되었습니다",
             "metadataRefreshFailed": "메타데이터 새로고침 실패: {message}",
+            "hashCalculated": "SHA256 해시가 계산되었습니다",
+            "hashCalculationFailed": "해시 계산 실패: {message}",
             "metadataUpdateComplete": "메타데이터 업데이트 완료",
             "operationCancelled": "사용자에 의해 작업이 취소되었습니다",
             "operationCancelledPartial": "작업이 취소되었습니다. {success}개 항목이 처리되었습니다.",

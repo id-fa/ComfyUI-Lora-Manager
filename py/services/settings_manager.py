@@ -83,6 +83,8 @@ CORE_USER_SETTING_KEYS: Tuple[str, ...] = (
     "folder_paths",
 )
 
+RUNTIME_ONLY_SETTING_KEYS = frozenset({"libraries", "active_library"})
+
 # Threshold for aggressive cleanup: if file contains this many default keys, clean it up
 DEFAULT_KEYS_CLEANUP_THRESHOLD = 10
 
@@ -147,10 +149,28 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "example_images_local_root": "",
     "example_images_open_uri_template": "",
     "optimize_example_images": True,
+    # Example-media downloads are one CDN request per image/video. Serial
+    # requests spend most of their wall time waiting on round-trips, so a
+    # small bounded pool plus a shared 429 cooldown is the throughput lever.
+    # Widths follow the Civitai image-cacher's common-size ladder; videos are
+    # capped lower because a video rendition is orders of magnitude larger.
+    "example_images_download_concurrency": 6,
+    # AIMD may probe one slot at a time above the base limit when the CDN
+    # keeps accepting requests; a 429 halves back below the base.
+    "example_images_download_max_concurrency": 8,
+    # Number of models whose preparation/collection may overlap. Media
+    # requests are still bounded by the shared download limiter above; this
+    # only prevents the slots from draining at every model boundary.
+    "example_images_model_concurrency": 2,
+    "example_images_max_width": 800,
+    "example_images_video_max_width": 450,
+    "example_images_rate_limit_cooldown": 30,
     "auto_download_example_images": False,
     "blur_mature_content": True,
     "mature_blur_level": "R",
     "autoplay_on_hover": False,
+    "card_preview_cycle": True,
+    "card_preview_cycle_interval": 2,
     "display_density": "default",
     "recipes_layout": "grid",
     "card_info_display": "always",
@@ -158,6 +178,12 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "include_trigger_words": False,
     "compact_mode": False,
     "priority_tags": DEFAULT_PRIORITY_TAG_CONFIG.copy(),
+    # When enabled, a model with usable tags but no priority-tag match is filed
+    # under a single configured name instead of a folder built from its first
+    # tag. Off by default: the first-tag fallback is documented behaviour and
+    # existing layouts must not move under users.
+    "unsorted_fallback_enabled": False,
+    "unsorted_fallback_folder": "unsorted",
     "model_name_display": "model_name",
     "lora_syntax_format": "legacy",
     # Remap legacy 28-block Anima LoRA keys onto the block layout of the
@@ -223,7 +249,7 @@ class SettingsManager:
         self.settings = self._load_settings()
         self._migrate_setting_keys()
         self._ensure_default_settings()
-        self._migrate_to_library_registry()
+        self._migrate_legacy_libraries()
         self._migrate_legacy_workflow_paths()
         self._migrate_download_path_template()
         self._auto_set_default_roots()
@@ -402,20 +428,6 @@ class SettingsManager:
 
         merged.setdefault("language", "en")
         merged.setdefault("folder_paths", {})
-        library_name = merged.get("active_library") or "default"
-        merged["libraries"] = {
-            library_name: self._build_library_payload(
-                folder_paths=merged.get("folder_paths", {}),
-                default_lora_root=merged.get("default_lora_root"),
-                default_checkpoint_root=merged.get("default_checkpoint_root"),
-                default_unet_root=merged.get("default_unet_root"),
-                default_embedding_root=merged.get("default_embedding_root"),
-                default_other_roots=merged.get("default_other_roots"),
-                workflow_path=merged.get("workflow_path"),
-                recipes_path=merged.get("recipes_path"),
-            )
-        }
-        merged["active_library"] = library_name
         return merged
 
     def _ensure_default_settings(self) -> None:
@@ -516,8 +528,8 @@ class SettingsManager:
             self._save_settings()
         # Note: inserted_defaults no longer triggers save - defaults stay in memory only
 
-    def _migrate_to_library_registry(self) -> None:
-        """Ensure settings include the multi-library registry structure."""
+    def _migrate_legacy_libraries(self) -> None:
+        """Move the legacy library registry into the flat settings schema."""
         libraries = self.settings.get("libraries")
         active_name = self.settings.get("active_library")
         initial_bootstrap = self._bootstrap_reason == "missing"
@@ -528,85 +540,31 @@ class SettingsManager:
             normalized_top_level_paths = self._normalize_folder_paths(
                 raw_top_level_paths
             )
-            if normalized_top_level_paths != raw_top_level_paths:
-                self.settings["folder_paths"] = copy.deepcopy(
-                    normalized_top_level_paths
-                )
-
-        top_level_has_paths = self._has_configured_paths(normalized_top_level_paths)
-
-        needs_library_bootstrap = not isinstance(libraries, dict) or not libraries
-
-        if (
-            not needs_library_bootstrap
-            and top_level_has_paths
-            and isinstance(libraries, Mapping)
-            and len(libraries) == 1
-        ):
-            only_library_payload = next(iter(libraries.values()))
-            if isinstance(only_library_payload, Mapping):
-                folder_payload = only_library_payload.get("folder_paths")
-                if not self._has_configured_paths(folder_payload):
-                    needs_library_bootstrap = True
-
-        if needs_library_bootstrap:
-            library_name = active_name or "default"
-            library_payload = self._build_library_payload(
-                folder_paths=normalized_top_level_paths,
-                default_lora_root=self.settings.get("default_lora_root", ""),
-                default_checkpoint_root=self.settings.get(
-                    "default_checkpoint_root", ""
-                ),
-                default_unet_root=self.settings.get("default_unet_root", ""),
-                default_embedding_root=self.settings.get("default_embedding_root", ""),
-                default_other_roots=self.settings.get("default_other_roots"),
-                workflow_path=self.settings.get("workflow_path", ""),
-                recipes_path=self.settings.get("recipes_path", ""),
-            )
-            libraries = {library_name: library_payload}
-            self.settings["libraries"] = libraries
-            self.settings["active_library"] = library_name
-            self._sync_active_library_to_root(save=False)
-            if not initial_bootstrap and not self._preserve_disk_template:
-                self._save_settings()
-            return
-
-        seed_library_name: Optional[str] = None
-        if top_level_has_paths and isinstance(libraries, dict):
-            target_name: Optional[str] = None
-            if active_name and active_name in libraries:
-                target_name = active_name
-            elif len(libraries) == 1:
-                target_name = next(iter(libraries.keys()))
-
-            if target_name:
-                candidate_payload = libraries.get(target_name)
-                if isinstance(
-                    candidate_payload, Mapping
-                ) and not self._has_configured_paths(
-                    candidate_payload.get("folder_paths")
-                ):
-                    seed_library_name = target_name
+            self.settings["folder_paths"] = copy.deepcopy(normalized_top_level_paths)
 
         if not isinstance(libraries, dict) or not libraries:
+            self.settings.pop("libraries", None)
+            self.settings.pop("active_library", None)
             return
 
+        top_level_has_paths = self._has_configured_paths(normalized_top_level_paths)
+        if not active_name or active_name not in libraries:
+            active_name = next(iter(libraries.keys()))
+
         sanitized_libraries: Dict[str, Dict[str, Any]] = {}
-        changed = False
         for name, data in libraries.items():
             if not isinstance(data, dict):
                 data = {}
-                changed = True
 
             candidate_folder_paths = data.get("folder_paths")
             if (
-                seed_library_name == name
-                and not self._has_configured_paths(candidate_folder_paths)
+                name == active_name
                 and top_level_has_paths
+                and not self._has_configured_paths(candidate_folder_paths)
             ):
                 candidate_folder_paths = normalized_top_level_paths
 
-            payload = self._build_library_payload(
+            sanitized_libraries[name] = self._build_library_payload(
                 folder_paths=candidate_folder_paths,
                 default_lora_root=data.get("default_lora_root"),
                 default_checkpoint_root=data.get("default_checkpoint_root"),
@@ -618,53 +576,67 @@ class SettingsManager:
                 metadata=data.get("metadata"),
                 base=data,
             )
-            sanitized_libraries[name] = payload
-            if payload is not data:
-                changed = True
 
-        if changed:
-            self.settings["libraries"] = sanitized_libraries
+        if len(sanitized_libraries) > 1:
+            self._consolidate_libraries(active_name, sanitized_libraries)
+        else:
+            self._restore_legacy_library_settings(
+                sanitized_libraries[active_name], active_name
+            )
 
-        if not active_name or active_name not in sanitized_libraries:
-            changed = True
-            if sanitized_libraries:
-                self.settings["active_library"] = next(iter(sanitized_libraries.keys()))
-            else:
-                self.settings["active_library"] = "default"
-
-        self._sync_active_library_to_root(save=changed and not initial_bootstrap)
-        if changed and initial_bootstrap:
+        self.settings.pop("libraries", None)
+        self.settings.pop("active_library", None)
+        if initial_bootstrap:
             self._needs_initial_save = True
+        elif not self._preserve_disk_template:
+            self._save_settings()
 
-        self._warn_if_multi_library()
+    def _consolidate_libraries(
+        self, active_name: str, libraries: Mapping[str, Dict[str, Any]]
+    ) -> None:
+        """Merge legacy library paths into the active single-library settings."""
+        ordered_names = [active_name]
+        ordered_names.extend(name for name in libraries if name != active_name)
+        merged = copy.deepcopy(libraries[active_name])
 
-    def _warn_if_multi_library(self) -> None:
-        """Surface a deprecation notice when more than one library is configured."""
-        libraries = self.settings.get("libraries", {})
-        if not isinstance(libraries, Mapping) or len(libraries) <= 1:
-            return
+        for mapping_key in ("folder_paths", "extra_folder_paths"):
+            combined: Dict[str, List[str]] = {}
+            seen: Dict[str, Set[str]] = {}
+            for name in ordered_names:
+                paths = self._normalize_folder_paths(
+                    libraries[name].get(mapping_key, {})
+                )
+                for key, values in paths.items():
+                    target = combined.setdefault(key, [])
+                    key_seen = seen.setdefault(key, set())
+                    for value in values:
+                        identity = os.path.normcase(os.path.normpath(value))
+                        if identity in key_seen:
+                            continue
+                        key_seen.add(identity)
+                        target.append(value)
+            merged[mapping_key] = combined
+
+        merged["updated_at"] = self._current_timestamp()
+        self._restore_legacy_library_settings(merged, active_name)
 
         names = ", ".join(sorted(str(name) for name in libraries))
-        logger.warning(
-            "Multi-library support is deprecated and will be removed in an "
-            "upcoming release. Detected %d libraries in settings.json (%s). "
-            "Multiple folder roots within a single library remain fully "
-            "supported; please consolidate your libraries into one.",
+        logger.info(
+            "Consolidated %d legacy libraries into '%s': %s",
             len(libraries),
+            active_name,
             names,
         )
         self._add_startup_message(
-            code="multi-library-deprecated",
-            title="Multi-library support is deprecated",
+            code="multi-library-consolidated",
+            title="Libraries consolidated",
             message=(
-                f"This installation has {len(libraries)} libraries configured in "
-                f"settings.json ({names}). Multi-library support is deprecated and "
-                "will be removed in an upcoming release; at that point all "
-                "libraries' folder paths will be merged into a single library. "
-                "Multiple folder roots within a single library remain fully "
-                "supported, so consider consolidating into one library now."
+                f"Multi-library support has been removed. Folder paths from "
+                f"{len(libraries)} libraries ({names}) were merged into "
+                f"'{active_name}'. Its default download, workflow, and recipe "
+                "folders were kept."
             ),
-            severity="warning",
+            severity="info",
             actions=self._default_settings_actions(),
             dismissible=True,
         )
@@ -675,8 +647,7 @@ class SettingsManager:
         Workflow management briefly stored workflow folders as a
         ``folder_paths`` list (plus a never-exposed
         ``extra_folder_paths.workflows``). The setting is now a single
-        ``workflow_path`` string; migrate each library payload and the active
-        top-level snapshot so an upgrade keeps the configured folder.
+        ``workflow_path`` string; migrate it without dropping the configured folder.
         """
         changed = False
 
@@ -726,34 +697,7 @@ class SettingsManager:
                     )
             return current or None
 
-        libraries = self.settings.get("libraries")
-        if isinstance(libraries, Mapping):
-            for library in libraries.values():
-                if isinstance(library, dict):
-                    migrate_container(library)
-
-        top_level_path = migrate_container(self.settings)
-        active_path = self._normalize_workflow_path(
-            self.get_active_library().get("workflow_path", "")
-        )
-        resolved = active_path or top_level_path or ""
-        if resolved and self.settings.get("workflow_path") != resolved:
-            self.settings["workflow_path"] = resolved
-            changed = True
-
-        # Keep the active library payload in sync so a later
-        # _sync_active_library_to_root() does not wipe a top-level-only
-        # migration on the next start.
-        if resolved:
-            libraries = self.settings.get("libraries")
-            if isinstance(libraries, dict):
-                active_library = libraries.get(self.get_active_library_name())
-                if isinstance(active_library, dict) and not self._normalize_workflow_path(
-                    active_library.get("workflow_path", "")
-                ):
-                    active_library["workflow_path"] = resolved
-                    changed = True
-
+        resolved = migrate_container(self.settings) or ""
         if changed:
             logger.info(
                 "Migrated legacy workflow folder configuration to workflow_path: %s",
@@ -761,41 +705,43 @@ class SettingsManager:
             )
             self._save_settings()
 
-    def _sync_active_library_to_root(self, *, save: bool = False) -> None:
-        """Update top-level folder path settings to mirror the active library."""
-        libraries = self.settings.get("libraries", {})
-        active_name = self.settings.get("active_library")
-        if not libraries:
+    def _migrate_legacy_cache_namespace(self, library_name: str) -> None:
+        original = self._original_disk_payload or {}
+        if not any(key in original for key in RUNTIME_ONLY_SETTING_KEYS):
             return
 
-        if active_name not in libraries:
-            active_name = next(iter(libraries.keys()))
-            self.settings["active_library"] = active_name
+        from ..utils.cache_paths import CacheType, migrate_library_cache_to_default
 
-        active_library = libraries.get(active_name, {})
-        folder_paths = copy.deepcopy(active_library.get("folder_paths", {}))
-        self.settings["folder_paths"] = folder_paths
+        for cache_type in (
+            CacheType.MODEL,
+            CacheType.MODEL_UPDATE,
+            CacheType.RECIPE,
+        ):
+            migrate_library_cache_to_default(cache_type, library_name)
+
+    def _restore_legacy_library_settings(
+        self, library: Mapping[str, Any], library_name: str
+    ) -> None:
+        self._migrate_legacy_cache_namespace(library_name)
+        self.settings["folder_paths"] = copy.deepcopy(library.get("folder_paths", {}))
         self.settings["extra_folder_paths"] = copy.deepcopy(
-            active_library.get("extra_folder_paths", {})
+            library.get("extra_folder_paths", {})
         )
-        self.settings["default_lora_root"] = active_library.get("default_lora_root", "")
-        self.settings["default_checkpoint_root"] = active_library.get(
+        self.settings["default_lora_root"] = library.get("default_lora_root", "")
+        self.settings["default_checkpoint_root"] = library.get(
             "default_checkpoint_root", ""
         )
-        self.settings["default_unet_root"] = active_library.get("default_unet_root", "")
-        self.settings["default_embedding_root"] = active_library.get(
+        self.settings["default_unet_root"] = library.get("default_unet_root", "")
+        self.settings["default_embedding_root"] = library.get(
             "default_embedding_root", ""
         )
         self.settings["default_other_roots"] = self._normalize_default_other_roots(
-            active_library.get("default_other_roots", {})
+            library.get("default_other_roots", {})
         )
         self.settings["workflow_path"] = self._normalize_workflow_path(
-            active_library.get("workflow_path", "")
+            library.get("workflow_path", "")
         )
-        self.settings["recipes_path"] = active_library.get("recipes_path", "")
-
-        if save:
-            self._save_settings()
+        self.settings["recipes_path"] = library.get("recipes_path", "")
 
     def _current_timestamp(self) -> str:
         return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
@@ -1042,55 +988,9 @@ class SettingsManager:
             result.add(os.path.normcase(stripped))
         return result
 
-    def _validate_folder_paths(
-        self,
-        library_name: str,
-        folder_paths: Mapping[str, Any],
-    ) -> None:
-        """Ensure folder paths do not overlap with other libraries.
-
-        Also detects checkpoints ↔ unet path overlap within the same library
-        (including via symlink resolution), which is a configuration error since
-        these model types must use separate physical folders.
-        """
-        libraries = self.settings.get("libraries", {})
-        normalized_new: Dict[str, Dict[str, str]] = {}
-        for key, values in folder_paths.items():
-            path_map: Dict[str, str] = {}
-            for value in values:
-                if not isinstance(value, str):
-                    continue
-                stripped = value.strip()
-                if not stripped:
-                    continue
-                normalized_value = os.path.normcase(os.path.normpath(stripped))
-                path_map[normalized_value] = stripped
-            if path_map:
-                normalized_new[key] = path_map
-
-        if not normalized_new:
-            return
-
-        for other_name, other in libraries.items():
-            if other_name == library_name:
-                continue
-            other_paths = other.get("folder_paths", {})
-            for key, new_paths in normalized_new.items():
-                existing = {
-                    os.path.normcase(os.path.normpath(path))
-                    for path in other_paths.get(key, [])
-                    if isinstance(path, str) and path
-                }
-                overlap = existing.intersection(new_paths.keys())
-                if overlap:
-                    collisions = ", ".join(
-                        sorted(new_paths[value] for value in overlap)
-                    )
-                    raise ValueError(
-                        f"Folder path(s) {collisions} already assigned to library '{other_name}'"
-                    )
-
-        # Checkpoints ↔ unet overlap within the same library
+    def _validate_folder_paths(self, folder_paths: Mapping[str, Any]) -> None:
+        """Reject overlapping checkpoints and unet roots, including symlinks."""
+        # Checkpoints and unet models must use separate physical folders.
         ckpt_paths = folder_paths.get("checkpoints", []) or []
         unet_paths = folder_paths.get("unet", []) or []
         if ckpt_paths and unet_paths:
@@ -1105,91 +1005,6 @@ class SettingsManager:
                     f"These model types must use separate physical folders. "
                     f"Please remove one of the conflicting entries."
                 )
-
-    def _update_active_library_entry(
-        self,
-        *,
-        folder_paths: Optional[Mapping[str, Iterable[str]]] = None,
-        extra_folder_paths: Optional[Mapping[str, Iterable[str]]] = None,
-        default_lora_root: Optional[str] = None,
-        default_checkpoint_root: Optional[str] = None,
-        default_unet_root: Optional[str] = None,
-        default_embedding_root: Optional[str] = None,
-        default_other_roots: Optional[Mapping[str, str]] = None,
-        workflow_path: Optional[str] = None,
-        recipes_path: Optional[str] = None,
-    ) -> bool:
-        libraries = self.settings.get("libraries", {})
-        active_name = self.settings.get("active_library")
-        if not active_name or active_name not in libraries:
-            return False
-
-        library = libraries[active_name]
-        changed = False
-
-        if folder_paths is not None:
-            normalized_paths = self._normalize_folder_paths(folder_paths)
-            if library.get("folder_paths") != normalized_paths:
-                library["folder_paths"] = normalized_paths
-                changed = True
-
-        if extra_folder_paths is not None:
-            normalized_extra_paths = self._normalize_folder_paths(extra_folder_paths)
-            if library.get("extra_folder_paths") != normalized_extra_paths:
-                library["extra_folder_paths"] = normalized_extra_paths
-                changed = True
-
-        if (
-            default_lora_root is not None
-            and library.get("default_lora_root") != default_lora_root
-        ):
-            library["default_lora_root"] = default_lora_root
-            changed = True
-
-        if (
-            default_checkpoint_root is not None
-            and library.get("default_checkpoint_root") != default_checkpoint_root
-        ):
-            library["default_checkpoint_root"] = default_checkpoint_root
-            changed = True
-
-        if (
-            default_unet_root is not None
-            and library.get("default_unet_root") != default_unet_root
-        ):
-            library["default_unet_root"] = default_unet_root
-            changed = True
-
-        if (
-            default_embedding_root is not None
-            and library.get("default_embedding_root") != default_embedding_root
-        ):
-            library["default_embedding_root"] = default_embedding_root
-            changed = True
-
-        if default_other_roots is not None:
-            normalized_other_roots = self._normalize_default_other_roots(
-                default_other_roots
-            )
-            if library.get("default_other_roots") != normalized_other_roots:
-                library["default_other_roots"] = normalized_other_roots
-                changed = True
-
-        if workflow_path is not None:
-            normalized_workflow_path = self._normalize_workflow_path(workflow_path)
-            if library.get("workflow_path") != normalized_workflow_path:
-                library["workflow_path"] = normalized_workflow_path
-                changed = True
-
-        if recipes_path is not None and library.get("recipes_path") != recipes_path:
-            library["recipes_path"] = recipes_path
-            changed = True
-
-        if changed:
-            library.setdefault("created_at", self._current_timestamp())
-            library["updated_at"] = self._current_timestamp()
-
-        return changed
 
     def _migrate_setting_keys(self) -> None:
         """Migrate legacy camelCase setting keys to snake_case"""
@@ -1322,13 +1137,6 @@ class SettingsManager:
 
         if updated:
             self.settings["default_other_roots"] = other_roots
-            self._update_active_library_entry(
-                default_lora_root=self.settings.get("default_lora_root"),
-                default_checkpoint_root=self.settings.get("default_checkpoint_root"),
-                default_unet_root=self.settings.get("default_unet_root"),
-                default_embedding_root=self.settings.get("default_embedding_root"),
-                default_other_roots=other_roots,
-            )
             if self._bootstrap_reason == "missing":
                 self._needs_initial_save = True
             else:
@@ -1543,19 +1351,6 @@ class SettingsManager:
         defaults.setdefault("extra_folder_paths", {})
         defaults["auto_organize_exclusions"] = []
         defaults["metadata_refresh_skip_paths"] = []
-
-        library_name = defaults.get("active_library") or "default"
-        default_library = self._build_library_payload(
-            folder_paths=defaults.get("folder_paths", {}),
-            extra_folder_paths=defaults.get("extra_folder_paths", {}),
-            default_lora_root=defaults.get("default_lora_root"),
-            default_checkpoint_root=defaults.get("default_checkpoint_root"),
-            default_unet_root=defaults.get("default_unet_root"),
-            default_embedding_root=defaults.get("default_embedding_root"),
-            recipes_path=defaults.get("recipes_path"),
-        )
-        defaults["libraries"] = {library_name: default_library}
-        defaults["active_library"] = library_name
         return defaults
 
     def _normalize_priority_tag_config(self, value: Any) -> Dict[str, str]:
@@ -1822,11 +1617,7 @@ class SettingsManager:
         return normalized
 
     def get_extra_folder_paths(self) -> Dict[str, List[str]]:
-        """Get extra folder paths for the active library.
-
-        These paths are only used by LoRA Manager and not shared with ComfyUI.
-        Returns a dictionary with keys like 'loras', 'checkpoints', 'embeddings', 'unet'.
-        """
+        """Get LoRA-Manager-only roots that are not shared with ComfyUI."""
         extra_paths = self.settings.get("extra_folder_paths", {})
         if not isinstance(extra_paths, dict):
             return {}
@@ -1836,17 +1627,11 @@ class SettingsManager:
         self,
         extra_folder_paths: Mapping[str, Iterable[str]],
     ) -> None:
-        """Update extra folder paths for the active library.
+        """Update LoRA-Manager-only roots after validating path overlaps."""
+        self._validate_folder_paths(extra_folder_paths)
 
-        These paths are only used by LoRA Manager and not shared with ComfyUI.
-        Validates that extra paths don't overlap with other libraries' paths.
-        """
-        active_name = self.get_active_library_name()
-        self._validate_folder_paths(active_name, extra_folder_paths)
-
-        active_library = self.get_active_library()
-        active_folder_paths = active_library.get("folder_paths", {})
-        active_lora_paths = active_folder_paths.get("loras", []) or []
+        folder_paths = self.settings.get("folder_paths", {})
+        active_lora_paths = folder_paths.get("loras", []) or []
         requested_extra_lora_paths = extra_folder_paths.get("loras", []) or []
 
         primary_real_paths = set()
@@ -1909,14 +1694,13 @@ class SettingsManager:
             collisions = ", ".join(sorted(set(overlapping_paths)))
             # Settings writes should reject new conflicting configuration instead of tolerating it.
             raise ValueError(
-                f"Extra LoRA path(s) {collisions} overlap with the active library's primary LoRA roots"
+                f"Extra LoRA path(s) {collisions} overlap with the primary LoRA roots"
             )
 
         normalized_paths = self._normalize_folder_paths(extra_folder_paths)
         self.settings["extra_folder_paths"] = normalized_paths
-        self._update_active_library_entry(extra_folder_paths=normalized_paths)
         self._save_settings()
-        logger.info("Updated extra folder paths for library '%s'", active_name)
+        logger.info("Updated extra folder paths")
 
     def get_startup_messages(self) -> List[Dict[str, Any]]:
         return [message.copy() for message in self._startup_messages]
@@ -1927,8 +1711,22 @@ class SettingsManager:
         return parse_priority_tag_string(raw_config)
 
     def resolve_priority_tag_for_model(
-        self, tags: Sequence[str] | Iterable[str], model_type: str
+        self,
+        tags: Sequence[str] | Iterable[str],
+        model_type: str,
+        *,
+        use_unsorted_fallback: bool = True,
     ) -> str:
+        """Priority tag for a model, else the first usable tag, else "".
+
+        ``use_unsorted_fallback`` substitutes the configured folder name at the
+        single point where the loop below would have returned a usable tag. It
+        deliberately does **not** run before the loop: an empty, meta-only or
+        unusable-only tag list must keep returning "" so callers' existing
+        "no tags" handling is untouched. Filename templates call this with
+        ``use_unsorted_fallback=False`` because a folder fallback should not
+        silently rename files.
+        """
         entries = self.get_priority_tag_entries(model_type)
         resolved = resolve_priority_tag(tags, entries)
         if resolved:
@@ -1942,6 +1740,10 @@ class SettingsManager:
             if is_civitai_meta_tag(tag):
                 continue
             if is_usable_path_tag(tag):
+                if use_unsorted_fallback and self.get("unsorted_fallback_enabled"):
+                    configured = self.get("unsorted_fallback_folder") or ""
+                    if isinstance(configured, str) and configured.strip():
+                        return configured.strip()
                 return tag.strip()
         return ""
 
@@ -2015,7 +1817,7 @@ class SettingsManager:
             )
 
     def _get_effective_recipes_dir(self, recipes_path: Optional[str] = None) -> str:
-        """Resolve the effective recipes directory for the active library."""
+        """Resolve the effective recipes directory."""
         normalized_custom = self._normalize_recipes_path_value(
             self.settings.get("recipes_path", "")
             if recipes_path is None
@@ -2040,6 +1842,8 @@ class SettingsManager:
         if configured_lora_roots:
             lora_root = sorted(configured_lora_roots, key=str.casefold)[0]
             return os.path.abspath(os.path.join(lora_root, "recipes"))
+
+        from ..config import config  # Local import to avoid circular dependency
 
         config_lora_roots = [
             path
@@ -2190,6 +1994,22 @@ class SettingsManager:
             except OSError:
                 pass
 
+    def update_folder_settings(
+        self,
+        folder_paths: Mapping[str, Iterable[str]],
+        *,
+        default_lora_root: str,
+        default_checkpoint_root: str,
+        default_embedding_root: str,
+    ) -> None:
+        normalized_paths = self._normalize_folder_paths(folder_paths)
+        self._validate_folder_paths(normalized_paths)
+        self.settings["folder_paths"] = normalized_paths
+        self.settings["default_lora_root"] = default_lora_root
+        self.settings["default_checkpoint_root"] = default_checkpoint_root
+        self.settings["default_embedding_root"] = default_embedding_root
+        self._save_settings()
+
     def set(self, key: str, value: Any) -> None:
         """Set setting value and save"""
         if key == "auto_organize_exclusions":
@@ -2202,6 +2022,11 @@ class SettingsManager:
             value = self.normalize_download_root_rules(value)
         elif key == "mature_blur_level":
             value = self.normalize_mature_blur_level(value)
+        elif key in ("folder_paths", "extra_folder_paths") and isinstance(
+            value, Mapping
+        ):
+            value = self._normalize_folder_paths(value)
+            self._validate_folder_paths(value)
         elif key == "default_other_roots":
             value = self._normalize_default_other_roots(value, strict=True)
         elif key == "enabled_other_sub_types":
@@ -2229,33 +2054,11 @@ class SettingsManager:
         if key == "use_portable_settings" and isinstance(value, bool):
             portable_switch_pending = True
             self._prepare_portable_switch(value)
-        if key == "folder_paths" and isinstance(value, Mapping):
-            active_name = self.get_active_library_name()
-            self._validate_folder_paths(active_name, value)
-            self._update_active_library_entry(folder_paths=value)  # pyright: ignore[reportArgumentType]
-        elif key == "extra_folder_paths" and isinstance(value, Mapping):
-            active_name = self.get_active_library_name()
-            self._validate_folder_paths(active_name, value)
-            self._update_active_library_entry(extra_folder_paths=value)  # pyright: ignore[reportArgumentType]
-        elif key == "default_lora_root":
-            self._update_active_library_entry(default_lora_root=str(value))
-        elif key == "default_checkpoint_root":
-            self._update_active_library_entry(default_checkpoint_root=str(value))
-        elif key == "default_unet_root":
-            self._update_active_library_entry(default_unet_root=str(value))
-        elif key == "default_embedding_root":
-            self._update_active_library_entry(default_embedding_root=str(value))
-        elif key == "default_other_roots":
-            self._update_active_library_entry(default_other_roots=value)
-        elif key == "workflow_path":
-            self._update_active_library_entry(workflow_path=str(value))
-        elif key == "recipes_path":
-            self._update_active_library_entry(recipes_path=str(value))
-        elif key == "model_name_display":
+        if key == "model_name_display":
             self._notify_model_name_display_change(value)
         self._save_settings()
         if key == "recipes_path":
-            self._notify_library_change(self.get_active_library_name())
+            self._notify_path_settings_changed()
         if key in ("sidecar_storage_mode", "sidecar_storage_path"):
             self._refresh_sidecar_storage_config()
         if key in ("enable_other_models", "enabled_other_sub_types"):
@@ -2514,7 +2317,8 @@ class SettingsManager:
 
             if self._seed_template:
                 for key, value in self._seed_template.items():
-                    minimal.setdefault(key, copy.deepcopy(value))
+                    if key not in RUNTIME_ONLY_SETTING_KEYS:
+                        minimal.setdefault(key, copy.deepcopy(value))
 
             return minimal
 
@@ -2523,6 +2327,8 @@ class SettingsManager:
         minimal = {}
 
         for key, value in self.settings.items():
+            if key in RUNTIME_ONLY_SETTING_KEYS:
+                continue
             default_value = defaults.get(key)
 
             # Core settings are always saved (even if equal to default)
@@ -2540,229 +2346,16 @@ class SettingsManager:
 
         return minimal
 
-    def get_libraries(self) -> Dict[str, Dict[str, Any]]:
-        """Return a copy of the registered libraries."""
-        libraries = self.settings.get("libraries", {})
-        return copy.deepcopy(libraries)
-
-    def get_active_library_name(self) -> str:
-        """Return the currently active library name."""
-        libraries = self.settings.get("libraries", {})
-        active_name = self.settings.get("active_library")
-        if active_name and active_name in libraries:
-            return active_name
-        if libraries:
-            return next(iter(libraries.keys()))
-        return "default"
-
-    def get_active_library(self) -> Dict[str, Any]:
-        """Return a copy of the active library configuration."""
-        libraries = self.settings.get("libraries", {})
-        active_name = self.get_active_library_name()
-        return copy.deepcopy(libraries.get(active_name, {}))
-
-    def activate_library(self, library_name: str) -> None:
-        """Activate a library by name and refresh dependent services."""
-        libraries = self.settings.get("libraries", {})
-        if library_name not in libraries:
-            raise KeyError(f"Library '{library_name}' does not exist")
-
-        current_active = self.get_active_library_name()
-        if current_active == library_name:
-            # Ensure root settings stay in sync even if already active
-            self._sync_active_library_to_root(save=False)
-            self._save_settings()
-            self._notify_library_change(library_name)
-            return
-
-        self.settings["active_library"] = library_name
-        self._sync_active_library_to_root(save=False)
-        self._save_settings()
-        self._notify_library_change(library_name)
-
-    def upsert_library(
-        self,
-        library_name: str,
-        *,
-        folder_paths: Optional[Mapping[str, Iterable[str]]] = None,
-        extra_folder_paths: Optional[Mapping[str, Iterable[str]]] = None,
-        default_lora_root: Optional[str] = None,
-        default_checkpoint_root: Optional[str] = None,
-        default_unet_root: Optional[str] = None,
-        default_embedding_root: Optional[str] = None,
-        default_other_roots: Optional[Mapping[str, str]] = None,
-        workflow_path: Optional[str] = None,
-        recipes_path: Optional[str] = None,
-        metadata: Optional[Mapping[str, Any]] = None,
-        activate: bool = False,
-    ) -> Dict[str, Any]:
-        """Create or update a library definition."""
-
-        name = library_name.strip()
-        if not name:
-            raise ValueError("Library name cannot be empty")
-
-        if folder_paths is not None:
-            self._validate_folder_paths(name, folder_paths)
-
-        if extra_folder_paths is not None:
-            self._validate_folder_paths(name, extra_folder_paths)
-
-        libraries = self.settings.setdefault("libraries", {})
-        existing = libraries.get(name, {})
-
-        payload = self._build_library_payload(
-            folder_paths=folder_paths
-            if folder_paths is not None
-            else existing.get("folder_paths"),
-            extra_folder_paths=extra_folder_paths
-            if extra_folder_paths is not None
-            else existing.get("extra_folder_paths"),
-            default_lora_root=default_lora_root
-            if default_lora_root is not None
-            else existing.get("default_lora_root"),
-            default_checkpoint_root=(
-                default_checkpoint_root
-                if default_checkpoint_root is not None
-                else existing.get("default_checkpoint_root")
-            ),
-            default_unet_root=(
-                default_unet_root
-                if default_unet_root is not None
-                else existing.get("default_unet_root")
-            ),
-            default_embedding_root=(
-                default_embedding_root
-                if default_embedding_root is not None
-                else existing.get("default_embedding_root")
-            ),
-            default_other_roots=(
-                default_other_roots
-                if default_other_roots is not None
-                else existing.get("default_other_roots")
-            ),
-            workflow_path=(
-                workflow_path
-                if workflow_path is not None
-                else existing.get("workflow_path")
-            ),
-            recipes_path=(
-                recipes_path
-                if recipes_path is not None
-                else existing.get("recipes_path")
-            ),
-            metadata=metadata if metadata is not None else existing.get("metadata"),
-            base=existing,
-        )
-
-        libraries[name] = payload
-
-        if activate or not self.settings.get("active_library"):
-            self.settings["active_library"] = name
-
-        self._sync_active_library_to_root(save=False)
-        self._save_settings()
-
-        if self.settings.get("active_library") == name:
-            self._notify_library_change(name)
-
-        return payload
-
-    def create_library(
-        self,
-        library_name: str,
-        *,
-        folder_paths: Mapping[str, Iterable[str]],
-        extra_folder_paths: Optional[Mapping[str, Iterable[str]]] = None,
-        default_lora_root: str = "",
-        default_checkpoint_root: str = "",
-        default_unet_root: str = "",
-        default_embedding_root: str = "",
-        default_other_roots: Optional[Mapping[str, str]] = None,
-        workflow_path: str = "",
-        recipes_path: str = "",
-        metadata: Optional[Mapping[str, Any]] = None,
-        activate: bool = False,
-    ) -> Dict[str, Any]:
-        """Create a new library entry."""
-
-        libraries = self.settings.get("libraries", {})
-        if library_name in libraries:
-            raise ValueError(f"Library '{library_name}' already exists")
-
-        return self.upsert_library(
-            library_name,
-            folder_paths=folder_paths,
-            extra_folder_paths=extra_folder_paths,
-            default_lora_root=default_lora_root,
-            default_checkpoint_root=default_checkpoint_root,
-            default_unet_root=default_unet_root,
-            default_embedding_root=default_embedding_root,
-            default_other_roots=default_other_roots,
-            workflow_path=workflow_path,
-            recipes_path=recipes_path,
-            metadata=metadata,
-            activate=activate,
-        )
-
-    def rename_library(self, old_name: str, new_name: str) -> None:
-        """Rename an existing library."""
-
-        libraries = self.settings.get("libraries", {})
-        if old_name not in libraries:
-            raise KeyError(f"Library '{old_name}' does not exist")
-        new_name_stripped = new_name.strip()
-        if not new_name_stripped:
-            raise ValueError("New library name cannot be empty")
-        if new_name_stripped in libraries:
-            raise ValueError(f"Library '{new_name_stripped}' already exists")
-
-        libraries[new_name_stripped] = libraries.pop(old_name)
-        if self.settings.get("active_library") == old_name:
-            self.settings["active_library"] = new_name_stripped
-            active_name = new_name_stripped
-        else:
-            active_name = self.settings.get("active_library")
-
-        self._sync_active_library_to_root(save=False)
-        self._save_settings()
-
-        if active_name == new_name_stripped:
-            self._notify_library_change(new_name_stripped)
-
-    def delete_library(self, library_name: str) -> None:
-        """Remove a library definition."""
-
-        libraries = self.settings.get("libraries", {})
-        if library_name not in libraries:
-            raise KeyError(f"Library '{library_name}' does not exist")
-        if len(libraries) == 1:
-            raise ValueError("At least one library must remain")
-
-        was_active = self.settings.get("active_library") == library_name
-        libraries.pop(library_name)
-
-        if was_active:
-            new_active = next(iter(libraries.keys()))
-            self.settings["active_library"] = new_active
-        self._sync_active_library_to_root(save=False)
-        self._save_settings()
-
-        if was_active:
-            self._notify_library_change(self.settings["active_library"])
-
-    def _notify_library_change(self, library_name: str) -> None:
-        """Notify dependent services that the active library changed."""
-        libraries = self.settings.get("libraries", {})
-        library_config = libraries.get(library_name, {})
-        library_snapshot = copy.deepcopy(library_config)
+    def _notify_path_settings_changed(self) -> None:
+        """Apply updated path settings and refresh dependent services."""
+        settings_snapshot = copy.deepcopy(self.settings)
 
         try:
             from ..config import config  # Local import to avoid circular dependency
 
-            config.apply_library_settings(library_snapshot)
+            config.apply_library_settings(settings_snapshot)
         except Exception as exc:  # pragma: no cover - defensive logging
-            logger.debug("Failed to apply library settings to config: %s", exc)
+            logger.debug("Failed to apply path settings to config: %s", exc)
 
         try:
             from .service_registry import ServiceRegistry  # pyright: ignore[reportImportCycles]
@@ -2783,19 +2376,19 @@ class SettingsManager:
                         Exception
                     ) as service_exc:  # pragma: no cover - defensive logging
                         logger.debug(
-                            "Service %s failed to handle library change: %s",
+                            "Service %s failed to handle path settings change: %s",
                             service_name,
                             service_exc,
                         )
         except Exception as exc:  # pragma: no cover - defensive logging
-            logger.debug("Failed to notify services about library change: %s", exc)
+            logger.debug("Failed to notify services about path settings change: %s", exc)
 
     def get_download_path_template(self, model_type: str) -> str:
         """Get download path template for specific model type
 
         Args:
             model_type: The type of model ('lora', 'checkpoint', 'embedding',
-                'other')
+                'workflow', 'other')
 
         Returns:
             Template string for the model type. Falls back to the per-type

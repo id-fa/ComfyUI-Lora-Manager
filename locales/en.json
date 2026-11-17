@@ -262,7 +262,8 @@
         "title": "Recipe Title",
         "loraName": "LoRA Filename",
         "loraModel": "LoRA Model Name",
-        "prompt": "Prompt"
+        "prompt": "Prompt",
+        "triggerWords": "Trigger Words"
       }
     },
     "filter": {
@@ -384,10 +385,19 @@
       "copied": "Settings path copied to clipboard: {{path}}",
       "clipboardFallback": "Settings path: {{path}}"
     },
+    "comfyuiNodes": {
+      "title": "ComfyUI Node Settings",
+      "description": "Node-related settings are available in ComfyUI Settings.",
+      "openButton": "Open ComfyUI Settings",
+      "modelNameDisplayLink": "Node labels are configured separately in ComfyUI Node Settings",
+      "openSucceeded": "ComfyUI Settings opened.",
+      "openFailed": "Could not open ComfyUI Settings. Please open ComfyUI first."
+    },
     "sections": {
       "contentFiltering": "Content Filtering",
       "downloads": "Downloads",
       "videoSettings": "Video Settings",
+      "cardPreview": "Card Preview",
       "layoutSettings": "Layout Settings",
       "licenseIcons": "License Icons",
       "misc": "Miscellaneous",
@@ -409,9 +419,33 @@
     "nav": {
       "general": "General",
       "interface": "Interface",
+      "comfyuiNodes": "ComfyUI Nodes",
       "library": "Library",
       "organization": "Organization",
+      "about": "About",
       "modelPaths": "Model Paths"
+    },
+    "about": {
+      "environmentTitle": "Environment",
+      "environmentDescription": "Versions used by LoRA Manager and ComfyUI.",
+      "copy": "Copy",
+      "appVersion": "LoRA Manager",
+      "comfyuiVersion": "ComfyUI",
+      "frontendVersion": "ComfyUI Frontend",
+      "pythonVersion": "Python",
+      "os": "OS",
+      "browser": "Browser",
+      "hint": "Include this information when reporting an issue.",
+      "unavailable": "Unavailable",
+      "copySuccess": "Environment info copied",
+      "copyFailed": "Failed to copy environment info",
+      "linksTitle": "Support & Links",
+      "links": {
+        "reportIssue": "Report an Issue",
+        "wiki": "Documentation Wiki",
+        "github": "GitHub Repository",
+        "discord": "Join Discord"
+      }
     },
     "search": {
       "placeholder": "Search settings...",
@@ -439,6 +473,12 @@
     "videoSettings": {
       "autoplayOnHover": "Autoplay Videos on Hover",
       "autoplayOnHoverHelp": "Only play video previews when hovering over them"
+    },
+    "cardPreview": {
+      "cycleOnHover": "Cycle Example Images on Hover",
+      "cycleOnHoverHelp": "When hovering a card's preview image, cycle through its example images. Hovering the card header or footer does not start cycling, so action buttons and tooltips stay usable. The selected preview image itself stays unchanged. Video previews are not affected.",
+      "cycleInterval": "Cycle Interval",
+      "cycleIntervalHelp": "Time between example image switches while hovering a card."
     },
     "autoOrganizeExclusions": {
       "label": "Auto-organize exclusions",
@@ -612,10 +652,6 @@
       "cardBlurAmountHelp": "Adjust the blur intensity of the header and footer overlays on model and recipe cards (0 = no blur, 20 = maximum blur)."
     },
     "folderSettings": {
-      "activeLibrary": "Active Library (Deprecated)",
-      "activeLibraryHelp": "Switch between configured libraries to update default folders. Changing the selection reloads the page. Deprecated: multi-library support will be removed in an upcoming release. Multiple folder roots within a single library remain fully supported.",
-      "loadingLibraries": "Loading libraries...",
-      "noLibraries": "No libraries configured",
       "defaultLoraRoot": "LoRA Root",
       "defaultLoraRootHelp": "Set default LoRA root directory for downloads, imports and moves",
       "defaultCheckpointRoot": "Checkpoint Root",
@@ -704,7 +740,16 @@
       "pathPlaceholder": "Enter path...",
       "go": "Go",
       "emptyFolder": "No subfolders",
-      "loadError": "Failed to load directory"
+      "loadError": "Failed to load directory",
+      "newFolder": "New Folder",
+      "newFolderPlaceholder": "Folder name",
+      "create": "Create",
+      "cancel": "Cancel",
+      "createError": "Failed to create folder",
+      "nameRequired": "Enter a folder name",
+      "nameInvalid": "Folder name contains invalid characters",
+      "alreadyExists": "A folder with this name already exists",
+      "permissionDenied": "Permission denied"
     },
     "pathValidation": {
       "valid": "Path is valid",
@@ -716,6 +761,13 @@
     "priorityTags": {
       "title": "Priority Tags",
       "description": "Customize the tag priority order for each model type (e.g., character, concept, style(toon|toon_style))",
+      "unsortedFallback": {
+        "label": "Send models that match no priority tag to one folder",
+        "help": "Models that match no priority tag are filed in a single folder instead of a folder built from {first_tag}. Models with no tags are unaffected. Off by default; existing folders stay unchanged until a model is organized again.",
+        "folderLabel": "Folder name",
+        "folderHelp": "Used instead of {first_tag} when no priority tag matches. With the default template {base_model}/{first_tag} the result is {base_model}/<folder name>. Leave it empty to keep the current behavior.",
+        "folderPlaceholder": "unsorted"
+      },
       "placeholder": "character, concept, style(toon|toon_style)",
       "helpLinkLabel": "Open priority tags help",
       "modelTypes": {
@@ -749,10 +801,12 @@
         "customTemplate": "Custom Template"
       },
       "customTemplatePlaceholder": "Enter custom template (e.g., {base_model}/{author}/{first_tag})",
+      "workflowHint": "Applies to workflow downloads and to Auto-Organize on the Workflows page.",
       "modelTypes": {
         "lora": "LoRA",
         "checkpoint": "Checkpoint",
-        "embedding": "Embedding"
+        "embedding": "Embedding",
+        "workflow": "Workflow"
       },
       "baseModelPathMappings": "Base Model Path Mappings",
       "baseModelPathMappingsHelp": "Customize folder names for specific base models (e.g., \"Flux.1 D\" → \"flux\")",
@@ -1769,6 +1823,54 @@
     }
   },
   "modals": {
+    "autoOrganizePreview": {
+      "title": "Preview Auto-Organize",
+      "scopeSelected": "Selected models",
+      "scopeAll": "All models",
+      "scope": "Scope: {scope} · {count} models",
+      "previewNotice": "Preview only. No files have been moved and no directories have been cleaned.",
+      "emptyPreview": "No models are available for this preview.",
+      "alreadyOrganized": "All models are already in the correct location.",
+      "loadingTitle": "Calculating preview...",
+      "loadingMessage": "No files are being changed.",
+      "previewFailed": "Preview failed",
+      "retry": "Retry",
+      "statWillMove": "Will move",
+      "statSkipped": "Skipped",
+      "statIssues": "Issues",
+      "issuesWarning": "{count} model(s) are expected to fail; the remaining models will still be processed.",
+      "detailsLabel": "Preview details",
+      "movesTab": "Moves ({count})",
+      "skippedTab": "Skipped ({count})",
+      "issuesTab": "Issues ({count})",
+      "searchPlaceholder": "Search model or path...",
+      "from": "From",
+      "to": "To",
+      "location": "Location",
+      "organizingWith": "Organizing with:",
+      "flatStructureRule": "Flat structure (library root)",
+      "emptyMoves": "No models need to be moved.",
+      "emptySkipped": "No models will be skipped.",
+      "emptyIssues": "No issues to review.",
+      "emptySearch": "No results match your search.",
+      "replanNote": "Execution recalculates from the latest library state, so actual results may differ from this preview.",
+      "copyReport": "Copy Report",
+      "refresh": "Refresh Preview",
+      "apply": "Organize ({count})",
+      "noMoves": "No Moves to Apply",
+      "pageStatus": "{from}–{to} of {total}",
+      "reasons": {
+        "already_organized": "Already organized",
+        "no_file_path": "No file path",
+        "outside_roots": "Outside library roots",
+        "missing_metadata": "Missing metadata",
+        "path_too_long": "Target path too long",
+        "target_exists": "Target already exists",
+        "planned_collision": "Planned move collision",
+        "move_failed": "Move failed",
+        "error": "Error"
+      }
+    },
     "exclude": {
       "confirm": "Exclude"
     },
@@ -2069,6 +2171,8 @@
         "sendToWorkflow": "Send to ComfyUI",
         "sendToWorkflowText": "Send to ComfyUI",
         "copyHash": "Copy hash",
+        "calculateHash": "Calculate hash",
+        "retryHash": "Retry",
         "copyCivitaiId": "Copy Civitai ID",
         "civitaiIdCopied": "Civitai ID copied to clipboard",
         "deleteModelWithShortcut": "Delete model (Del)"
@@ -2095,6 +2199,10 @@
         "baseModel": "Base Model",
         "size": "Size",
         "hashes": "Hashes",
+        "hashPending": "Not calculated yet",
+        "hashCalculating": "Calculating...",
+        "hashFailed": "Calculation failed",
+        "hashPendingHint": "This SHA256 hash has not been calculated yet. Large models are hashed on demand to keep scanning fast.",
         "civitaiModelId": "Model ID",
         "civitaiVersionId": "Version ID",
         "unknown": "Unknown",
@@ -2105,7 +2213,35 @@
         "aboutThisVersion": "About this version",
         "baseModelSearchPlaceholder": "Search base model…",
         "baseModelSuggested": "Suggested",
-        "baseModelNoMatch": "No matching base models"
+        "baseModelNoMatch": "No matching base models",
+        "creator": "Creator",
+        "creatorAdd": "Add creator",
+        "creatorEdit": "Edit creator",
+        "creatorSearchPlaceholder": "Search creators or type a new name...",
+        "creatorLibraryHeader": "Creators in your library",
+        "creatorMatchingHeader": "Matching creators",
+        "creatorLibraryCount": "{count} in library",
+        "creatorCurrent": "Current: {name}",
+        "creatorCreate": "Create “{name}”",
+        "creatorCreateAnnounce": "Press Enter to create {name}.",
+        "creatorNew": "New creator",
+        "creatorNoMatch": "No existing creator matches “{name}”",
+        "creatorEmptyLibrary": "No creators in your library yet. Type a name to add the first one.",
+        "creatorModelCount": "{count} models",
+        "creatorModelCountOne": "{count} model",
+        "creatorMatchCount": "{count} matches",
+        "creatorMatchCountOne": "{count} match",
+        "creatorShowing": "Showing {shown} of {total} — keep typing",
+        "creatorRemove": "Remove creator",
+        "creatorManual": "Manual",
+        "creatorManualHint": "Added manually. Metadata refresh won't overwrite it.",
+        "creatorSaved": "Creator updated",
+        "creatorRemoved": "Creator removed",
+        "creatorSaveFailed": "Couldn't update creator. Try again.",
+        "creatorLoadFailed": "Couldn't load creators. You can still type a new name.",
+        "creatorTooLong": "Creator name is too long (max 64 characters)",
+        "creatorLoading": "Loading creators...",
+        "creatorKeyboardHint": "↑↓ navigate · ↵ select · esc cancel"
       },
       "notes": {
         "saved": "Notes saved successfully",
@@ -2153,6 +2289,7 @@
       "description": {
         "noDescription": "No model description available",
         "failedToLoad": "Failed to load model description",
+        "offline": "The description is stored with the model file, which is on an offline disk. Reconnect the disk to read it.",
         "editTitle": "Edit model description",
         "validation": {
           "cannotBeEmpty": "Description cannot be empty"
@@ -2184,6 +2321,10 @@
         "noDerivatives": "No sharing merges",
         "noReLicense": "Same permissions required",
         "restrictionsLabel": "License restrictions"
+      },
+      "notices": {
+        "offline": "The disk holding this model is offline. Showing cached information — file actions and edits stay unavailable until it is reconnected.",
+        "partial": "The model metadata file could not be read. Showing cached information — description, examples and creator avatar may be unavailable."
       },
       "loading": {
         "exampleImages": "Loading example images...",
@@ -2527,12 +2668,20 @@
     "title": "Help & Tutorials",
     "tabs": {
       "gettingStarted": "Getting Started",
-      "updateVlogs": "Update Vlogs",
+      "updates": "Updates",
       "documentation": "Documentation",
       "shortcuts": "Shortcuts"
     },
     "gettingStarted": {
       "title": "Getting Started with LoRA Manager",
+      "stepsTitle": "First steps",
+      "steps": {
+        "configure": "Configure your model folders and add a CivitAI API key if you plan to download models.",
+        "find": "Find a model by browsing folders or searching names, tags, and trigger words.",
+        "send": "Use Send to ComfyUI or copy LoRA syntax into a compatible LoRA Manager node.",
+        "refresh": "Use Refresh after changing files outside LoRA Manager; rebuild the cache only for cache inconsistencies."
+      },
+      "readGuide": "Open the Getting Started guide",
       "replayTutorial": "Replay Tutorial"
     },
     "shortcuts": {
@@ -2557,7 +2706,6 @@
         "closeModal": "Close modal / panel",
         "openShortcuts": "Open this shortcuts panel",
         "refresh": "Refresh model list",
-        "fetchMetadata": "Fetch metadata from CivitAI (model pages only)",
         "downloadModel": "Download a model (model pages only)",
         "toggleBulkMode": "Toggle bulk mode",
         "selectAll": "Select all visible models",
@@ -2579,17 +2727,26 @@
       "title": "Latest Updates",
       "watchOnYouTube": "Watch on YouTube",
       "playlistTitle": "LoRA Manager Updates Playlist",
-      "playlistDescription": "Watch all update videos showcasing the latest features and improvements."
+      "playlistDescription": "Watch all update videos showcasing the latest features and improvements.",
+      "releaseNotes": "Read release notes on GitHub"
     },
     "documentation": {
       "title": "Documentation",
-      "general": "General",
+      "startSupport": "Start & Support",
+      "workingWithAssets": "Working with Assets",
+      "integrationConfiguration": "Integration & Configuration",
+      "gettingStarted": "Getting Started",
+      "faq": "FAQ",
       "troubleshooting": "Troubleshooting",
-      "modelManagement": "Model Management",
+      "modelLibrary": "Model Library",
+      "downloadsOrganization": "Downloading and Organizing Models",
       "recipes": "Recipes",
-      "settings": "Settings & Configuration",
-      "extensions": "Extensions",
-      "newBadge": "NEW"
+      "workflowLibrary": "Workflow Library",
+      "comfyuiIntegration": "ComfyUI Integration",
+      "configuration": "Configuration",
+      "loraSyntax": "LoRA Syntax and Duplicate Filenames",
+      "browserExtension": "LM Civitai Extension",
+      "browseAll": "Browse all documentation"
     },
     "newContentBadge": "New"
   },
@@ -2716,6 +2873,7 @@
       "downloadSkippedByBaseModel": "Skipped download because base model {baseModel} is excluded",
       "autoOrganizeSuccess": "Auto-organize completed successfully for {count} {type}",
       "autoOrganizePartialSuccess": "Auto-organize completed with {success} moved, {failures} failed out of {total} models",
+      "autoOrganizeProgressUnavailable": "Auto-organize completed with {success} moved, {failures} failed out of {total} models; live progress was unavailable",
       "autoOrganizeFailed": "Auto-organize failed: {error}",
       "filenameTemplateSuccess": "Filename template applied successfully for {count} {type}",
       "filenameTemplatePartialSuccess": "Filename template applied with {success} renamed, {failures} failed out of {total} models",
@@ -2894,8 +3052,6 @@
       "compactModeToggled": "Compact Mode {state}",
       "settingSaveFailed": "Failed to save setting: {message}",
       "displayDensitySet": "Display Density set to {density}",
-      "libraryLoadFailed": "Failed to load libraries: {message}",
-      "libraryActivateFailed": "Failed to activate library: {message}",
       "languageChangeFailed": "Failed to change language: {message}",
       "cacheCleared": "Cache files have been cleared successfully. Cache will rebuild on next action.",
       "cacheClearFailed": "Failed to clear cache: {error}",
@@ -3028,6 +3184,8 @@
       "refreshFailed": "Failed to {action} {type}s",
       "metadataRefreshed": "Metadata refreshed successfully",
       "metadataRefreshFailed": "Failed to refresh metadata: {message}",
+      "hashCalculated": "SHA256 hash calculated successfully",
+      "hashCalculationFailed": "Failed to calculate hash: {message}",
       "metadataUpdateComplete": "Metadata update complete",
       "operationCancelled": "Operation cancelled by user",
       "operationCancelledPartial": "Operation cancelled. {success} items processed.",

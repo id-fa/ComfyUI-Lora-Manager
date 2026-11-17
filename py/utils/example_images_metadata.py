@@ -12,6 +12,10 @@ from ..services.settings_manager import get_settings_manager
 from ..services.downloader import get_downloader
 from ..utils.constants import SUPPORTED_MEDIA_EXTENSIONS
 from ..utils.exif_utils import ExifUtils
+from ..utils.example_images_paths import (
+    clear_example_completion_marker,
+    get_model_folder,
+)
 from ..utils.metadata_manager import MetadataManager
 from ..utils.video_metadata import get_video_dimensions
 
@@ -286,6 +290,16 @@ class MetadataUpdater:
             )
             
             if success:
+                # Fresh provider metadata can add or replace example images;
+                # make the next example-image pass verify this folder again.
+                try:
+                    clear_example_completion_marker(get_model_folder(model_hash))
+                except Exception as exc:  # pragma: no cover - best effort
+                    logger.debug(
+                        "Could not clear example completion marker for %s: %s",
+                        model_name,
+                        exc,
+                    )
                 logger.info(f"Successfully refreshed metadata for {model_name}")
                 return True
             else:
@@ -301,14 +315,20 @@ class MetadataUpdater:
             return False
     
     @staticmethod
-    async def get_updated_model(model_hash, scanner):
-        """Load the most recent metadata for a model identified by hash."""
-        cache = await scanner.get_cached_data()
-        target = None
-        for item in cache.raw_data:
-            if item.get('sha256') == model_hash:
-                target = item
-                break
+    async def get_updated_model(model_hash, scanner, model=None):
+        """Load the most recent metadata for a model identified by hash.
+
+        ``model`` lets a caller that already holds the cache entry skip the
+        linear scan over the whole cache. That scan is O(N) per model, i.e.
+        O(N²) over a library-wide run (about 1.6 ms per lookup at 81k models).
+        """
+        target = model
+        if target is None:
+            cache = await scanner.get_cached_data()
+            for item in cache.raw_data:
+                if item.get('sha256') == model_hash:
+                    target = item
+                    break
 
         if not target:
             return None
